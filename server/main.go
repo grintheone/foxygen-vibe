@@ -38,7 +38,9 @@ func main() {
 	addr := ":8080"
 	log.Printf("server listening on %s", addr)
 
-	if err := http.ListenAndServe(addr, withCORS(mux)); err != nil {
+	handler := withRequestLogging(withCORS(mux))
+
+	if err := http.ListenAndServe(addr, handler); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -153,6 +155,30 @@ func writeJSON(w http.ResponseWriter, statusCode int, payload any) {
 	if err := json.NewEncoder(w).Encode(payload); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (r *statusRecorder) WriteHeader(statusCode int) {
+	r.statusCode = statusCode
+	r.ResponseWriter.WriteHeader(statusCode)
+}
+
+func withRequestLogging(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		startedAt := time.Now()
+		recorder := &statusRecorder{
+			ResponseWriter: w,
+			statusCode:     http.StatusOK,
+		}
+
+		next.ServeHTTP(recorder, r)
+
+		log.Printf("%s %s %d %s", r.Method, r.URL.Path, recorder.statusCode, time.Since(startedAt))
+	})
 }
 
 func withCORS(next http.Handler) http.Handler {
