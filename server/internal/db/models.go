@@ -25,6 +25,17 @@ type Department struct {
 	Title string
 }
 
+type RefreshToken struct {
+	TokenID    pgtype.UUID
+	UserID     pgtype.UUID
+	TokenHash  string
+	ExpiresAt  pgtype.Timestamptz
+	CreatedAt  pgtype.Timestamptz
+	RotatedAt  pgtype.Timestamptz
+	ReplacedBy pgtype.UUID
+	RevokedAt  pgtype.Timestamptz
+}
+
 type Role struct {
 	ID          int32
 	Name        string

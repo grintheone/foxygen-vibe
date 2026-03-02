@@ -153,11 +153,6 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 	}
 
-	type loginResponse struct {
-		UserID   string `json:"user_id"`
-		Username string `json:"username"`
-	}
-
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -193,7 +188,23 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
 
-	account, err := s.queries.GetAccountByUsername(ctx, input.Username)
+	store := s.queries
+	var tx pgx.Tx
+	var err error
+
+	if s.db != nil {
+		tx, err = s.db.Begin(ctx)
+		if err != nil {
+			log.Printf("begin login transaction failed: %v", err)
+			http.Error(w, "failed to authenticate", http.StatusInternalServerError)
+			return
+		}
+		defer tx.Rollback(ctx)
+
+		store = appdb.New(tx)
+	}
+
+	account, err := store.GetAccountByUsername(ctx, input.Username)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			http.Error(w, "invalid credentials", http.StatusUnauthorized)
@@ -215,9 +226,167 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, loginResponse{
-		UserID:   uuidToString(account.UserID),
-		Username: account.Username,
+	response, err := s.issueTokenPair(ctx, store, account)
+	if err != nil {
+		log.Printf("issue token pair failed: %v", err)
+		http.Error(w, "failed to authenticate", http.StatusInternalServerError)
+		return
+	}
+
+	if tx != nil {
+		if err := tx.Commit(ctx); err != nil {
+			log.Printf("commit login transaction failed: %v", err)
+			http.Error(w, "failed to authenticate", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
+	type refreshRequest struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.queries == nil {
+		http.Error(w, "database not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	defer r.Body.Close()
+
+	var input refreshRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	input.RefreshToken = strings.TrimSpace(input.RefreshToken)
+	if input.RefreshToken == "" {
+		http.Error(w, "refresh_token is required", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	store := s.queries
+	var tx pgx.Tx
+	var err error
+
+	if s.db != nil {
+		tx, err = s.db.Begin(ctx)
+		if err != nil {
+			log.Printf("begin refresh transaction failed: %v", err)
+			http.Error(w, "failed to refresh session", http.StatusInternalServerError)
+			return
+		}
+		defer tx.Rollback(ctx)
+
+		store = appdb.New(tx)
+	}
+
+	current, err := store.GetRefreshTokenByHash(ctx, hashOpaqueToken(input.RefreshToken))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			http.Error(w, "invalid refresh token", http.StatusUnauthorized)
+			return
+		}
+
+		log.Printf("load refresh token failed: %v", err)
+		http.Error(w, "failed to refresh session", http.StatusInternalServerError)
+		return
+	}
+
+	if err := validateStoredRefreshToken(current); err != nil {
+		http.Error(w, "invalid refresh token", http.StatusUnauthorized)
+		return
+	}
+
+	account, err := store.GetAccountByUserID(ctx, current.UserID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			http.Error(w, "invalid refresh token", http.StatusUnauthorized)
+			return
+		}
+
+		log.Printf("load refresh token account failed: %v", err)
+		http.Error(w, "failed to refresh session", http.StatusInternalServerError)
+		return
+	}
+
+	if account.Disabled {
+		http.Error(w, "account is disabled", http.StatusForbidden)
+		return
+	}
+
+	response, err := s.issueTokenPair(ctx, store, account)
+	if err != nil {
+		log.Printf("issue refreshed token pair failed: %v", err)
+		http.Error(w, "failed to refresh session", http.StatusInternalServerError)
+		return
+	}
+
+	replacement, err := store.GetRefreshTokenByHash(ctx, hashOpaqueToken(response.RefreshToken))
+	if err != nil {
+		log.Printf("load replacement refresh token failed: %v", err)
+		http.Error(w, "failed to refresh session", http.StatusInternalServerError)
+		return
+	}
+
+	rows, err := store.RotateRefreshToken(ctx, appdb.RotateRefreshTokenParams{
+		TokenID:    current.TokenID,
+		ReplacedBy: replacement.TokenID,
+	})
+	if err != nil {
+		log.Printf("rotate refresh token failed: %v", err)
+		http.Error(w, "failed to refresh session", http.StatusInternalServerError)
+		return
+	}
+	if err := refreshConflict(rows); err != nil {
+		http.Error(w, "invalid refresh token", http.StatusUnauthorized)
+		return
+	}
+
+	if tx != nil {
+		if err := tx.Commit(ctx); err != nil {
+			log.Printf("commit refresh transaction failed: %v", err)
+			http.Error(w, "failed to refresh session", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
+	type sessionResponse struct {
+		UserID   string `json:"user_id"`
+		Username string `json:"username"`
+	}
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	claims, err := parseAuthorizationHeader(s.auth.jwtSecret, r.Header.Get("Authorization"))
+	if err != nil {
+		http.Error(w, "invalid access token", http.StatusUnauthorized)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, sessionResponse{
+		UserID:   claims.Subject,
+		Username: claims.Username,
 	})
 }
 
@@ -246,22 +415,15 @@ func hashPassword(password string) (string, error) {
 }
 
 func verifyPassword(password string, stored string) bool {
-	parts := strings.Split(stored, "$")
-	if len(parts) != 3 || parts[0] != "sha256" {
-		return false
-	}
-
-	salt, err := hex.DecodeString(parts[1])
+	salt, expected, err := parsePasswordHash(stored)
 	if err != nil {
 		return false
 	}
 
-	expected, err := hex.DecodeString(parts[2])
+	digest, err := hex.DecodeString(hashPasswordWithSalt(password, salt))
 	if err != nil {
 		return false
 	}
-
-	digest := sha256.Sum256(append(salt, []byte(password)...))
 
 	return subtle.ConstantTimeCompare(digest[:], expected) == 1
 }

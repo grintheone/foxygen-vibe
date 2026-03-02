@@ -18,12 +18,17 @@ type Server struct {
 	databaseConfigured bool
 	db                 *pgxpool.Pool
 	queries            accountStore
+	auth               authConfig
 }
 
 type accountStore interface {
 	CreateAccount(context.Context, appdb.CreateAccountParams) (appdb.Account, error)
 	CreateUserProfile(context.Context, pgtype.UUID) (appdb.User, error)
 	GetAccountByUsername(context.Context, string) (appdb.Account, error)
+	GetAccountByUserID(context.Context, pgtype.UUID) (appdb.Account, error)
+	CreateRefreshToken(context.Context, appdb.CreateRefreshTokenParams) (appdb.RefreshToken, error)
+	GetRefreshTokenByHash(context.Context, string) (appdb.RefreshToken, error)
+	RotateRefreshToken(context.Context, appdb.RotateRefreshTokenParams) (int64, error)
 }
 
 func New() (*Server, error) {
@@ -32,7 +37,15 @@ func New() (*Server, error) {
 		return nil, err
 	}
 
-	api := &Server{databaseConfigured: databaseURL != ""}
+	auth, err := resolveAuthConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	api := &Server{
+		databaseConfigured: databaseURL != "",
+		auth:               auth,
+	}
 	if databaseURL == "" {
 		return api, nil
 	}
@@ -71,6 +84,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/health", s.handleHealth)
 	mux.HandleFunc("/api/accounts", s.handleAccounts)
 	mux.HandleFunc("/api/auth/login", s.handleLogin)
+	mux.HandleFunc("/api/auth/refresh", s.handleRefresh)
+	mux.HandleFunc("/api/auth/session", s.handleSession)
 
 	return withRequestLogging(withCORS(mux))
 }

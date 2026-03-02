@@ -56,6 +56,24 @@ func (q *Queries) CreateUserProfile(ctx context.Context, userID pgtype.UUID) (Us
 	return i, err
 }
 
+const getAccountByUserID = `-- name: GetAccountByUserID :one
+SELECT user_id, username, disabled, password_hash
+FROM accounts
+WHERE user_id = $1
+`
+
+func (q *Queries) GetAccountByUserID(ctx context.Context, userID pgtype.UUID) (Account, error) {
+	row := q.db.QueryRow(ctx, getAccountByUserID, userID)
+	var i Account
+	err := row.Scan(
+		&i.UserID,
+		&i.Username,
+		&i.Disabled,
+		&i.PasswordHash,
+	)
+	return i, err
+}
+
 const getAccountByUsername = `-- name: GetAccountByUsername :one
 SELECT user_id, username, disabled, password_hash
 FROM accounts

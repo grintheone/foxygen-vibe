@@ -12,3 +12,8 @@ RETURNING user_id, first_name, last_name, department_id, email, phone, logo, lat
 SELECT user_id, username, disabled, password_hash
 FROM accounts
 WHERE username = $1;
+
+-- name: GetAccountByUserID :one
+SELECT user_id, username, disabled, password_hash
+FROM accounts
+WHERE user_id = $1;

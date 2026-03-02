@@ -5,7 +5,14 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 )
+
+type authConfig struct {
+	jwtSecret       []byte
+	accessTokenTTL  time.Duration
+	refreshTokenTTL time.Duration
+}
 
 func resolveDatabaseURL() (string, error) {
 	fileEnv, err := loadDotEnv(".env")
@@ -76,4 +83,46 @@ func getConfigValue(fileEnv map[string]string, key string) string {
 	}
 
 	return strings.TrimSpace(fileEnv[key])
+}
+
+func resolveAuthConfig() (authConfig, error) {
+	fileEnv, err := loadDotEnv(".env")
+	if err != nil {
+		return authConfig{}, err
+	}
+
+	secret := getConfigValue(fileEnv, "JWT_SECRET")
+	if secret == "" {
+		secret = "dev-only-jwt-secret-change-me"
+	}
+
+	accessTokenTTL, err := resolveDuration(fileEnv, "ACCESS_TOKEN_TTL", 15*time.Minute)
+	if err != nil {
+		return authConfig{}, err
+	}
+
+	refreshTokenTTL, err := resolveDuration(fileEnv, "REFRESH_TOKEN_TTL", 7*24*time.Hour)
+	if err != nil {
+		return authConfig{}, err
+	}
+
+	return authConfig{
+		jwtSecret:       []byte(secret),
+		accessTokenTTL:  accessTokenTTL,
+		refreshTokenTTL: refreshTokenTTL,
+	}, nil
+}
+
+func resolveDuration(fileEnv map[string]string, key string, fallback time.Duration) (time.Duration, error) {
+	value := getConfigValue(fileEnv, key)
+	if value == "" {
+		return fallback, nil
+	}
+
+	duration, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, fmt.Errorf("%s: parse duration: %w", key, err)
+	}
+
+	return duration, nil
 }
