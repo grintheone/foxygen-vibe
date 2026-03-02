@@ -11,9 +11,9 @@ Minimal fullstack starter:
 1. Start PostgreSQL if you want database-backed responses:
    `docker compose up -d postgres`
 2. Start the API:
-   `cd server && DATABASE_URL=postgres://postgres:postgres@localhost:5432/foxygen_vibe?sslmode=disable go run .`
+   `cd server && go run .`
 
-The API runs now with stdlib only and exposes health/message endpoints immediately. `DATABASE_URL` is wired in so the next backend step can add a PostgreSQL driver and persistence.
+The server reads `server/.env` for `DB_*` settings and builds a PostgreSQL connection string from that file. Explicit shell environment variables still override values from `.env`, and `DATABASE_URL` still takes precedence over the split fields.
 
 ## Prepare sqlc
 
