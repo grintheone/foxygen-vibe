@@ -15,6 +15,18 @@ Minimal fullstack starter:
 
 The API runs now with stdlib only and exposes health/message endpoints immediately. `DATABASE_URL` is wired in so the next backend step can add a PostgreSQL driver and persistence.
 
+## Prepare sqlc
+
+The backend now includes `sqlc` input files under `server/db/`.
+
+1. Install the required tools:
+   `cd server && go get github.com/jackc/pgx/v5 github.com/jackc/pgx/v5/stdlib && go mod tidy`
+   `go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest`
+2. Generate Go code:
+   `cd server && sqlc generate`
+
+Generated files will be written to `server/internal/db/`.
+
 ## Run the client
 
 1. Install dependencies:
