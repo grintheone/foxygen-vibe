@@ -1,0 +1,6 @@
+.DS_Store
+.cache
+client/node_modules
+client/dist
+server/bin
+server/server
