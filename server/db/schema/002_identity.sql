@@ -1,0 +1,36 @@
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS citext;
+
+CREATE TABLE IF NOT EXISTS departments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS roles (
+  id INT PRIMARY KEY,
+  name VARCHAR(50) NOT NULL UNIQUE,
+  description VARCHAR(255)
+);
+
+CREATE TABLE IF NOT EXISTS accounts (
+  user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  username CITEXT NOT NULL UNIQUE,
+  disabled BOOLEAN NOT NULL DEFAULT FALSE,
+  password_hash TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS users (
+  user_id UUID PRIMARY KEY REFERENCES accounts(user_id) ON DELETE CASCADE,
+  first_name TEXT NOT NULL DEFAULT '',
+  last_name TEXT NOT NULL DEFAULT '',
+  department_id UUID REFERENCES departments(id) ON DELETE SET NULL,
+  email TEXT NOT NULL DEFAULT '',
+  phone TEXT NOT NULL DEFAULT '',
+  logo TEXT NOT NULL DEFAULT '',
+  latest_ticket UUID DEFAULT NULL
+);
+
+CREATE TABLE IF NOT EXISTS account_roles (
+  user_id UUID PRIMARY KEY REFERENCES accounts(user_id) ON DELETE CASCADE,
+  role_id INT NOT NULL REFERENCES roles(id)
+);
