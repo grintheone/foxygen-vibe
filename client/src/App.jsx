@@ -1,103 +1,144 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
-const initialStatus = {
-  status: "loading",
-  message: "Checking API...",
+const initialForm = {
+  username: "",
+  password: "",
+};
+
+const initialFeedback = {
+  tone: "idle",
+  message: "",
 };
 
 export default function App() {
-  const [health, setHealth] = useState(initialStatus);
+  const [form, setForm] = useState(initialForm);
+  const [feedback, setFeedback] = useState(initialFeedback);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
+  function handleChange(event) {
+    const { name, value } = event.target;
 
-    async function loadHealth() {
-      try {
-        const response = await fetch("/api/health");
+    setForm((current) => ({
+      ...current,
+      [name]: value,
+    }));
+  }
 
-        if (!response.ok) {
-          throw new Error(`Unexpected status: ${response.status}`);
-        }
+  async function handleSubmit(event) {
+    event.preventDefault();
 
-        const data = await response.json();
+    const username = form.username.trim();
+    const password = form.password.trim();
 
-        if (!cancelled) {
-          let message = "API is running. PostgreSQL wiring is ready for the next step.";
-
-          if (data.database.connected) {
-            message = "API and database are connected.";
-          } else if (data.database.configured) {
-            message =
-              "API is running and DATABASE_URL is set. Add a Postgres driver next.";
-          }
-
-          setHealth({
-            status: "ready",
-            message,
-          });
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setHealth({
-            status: "error",
-            message: error.message,
-          });
-        }
-      }
+    if (!username || !password) {
+      setFeedback({
+        tone: "error",
+        message: "Username and password are required.",
+      });
+      return;
     }
 
-    loadHealth();
+    setIsSubmitting(true);
+    setFeedback(initialFeedback);
 
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username,
+          password,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorMessage = await response.text();
+        throw new Error(errorMessage || "Authentication failed.");
+      }
+
+      const data = await response.json();
+
+      setFeedback({
+        tone: "success",
+        message: `Welcome back, ${data.username}.`,
+      });
+    } catch (error) {
+      setFeedback({
+        tone: "error",
+        message: error.message,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-950 px-6 py-12 text-slate-100">
-      <div className="mx-auto flex max-w-4xl flex-col gap-8">
-        <header className="space-y-4">
-          <p className="text-sm font-semibold uppercase tracking-[0.35em] text-cyan-300">
-            Foxygen Vibe
-          </p>
-          <h1 className="max-w-2xl text-4xl font-bold tracking-tight sm:text-6xl">
-            React, Tailwind, Go, and PostgreSQL in one starter.
-          </h1>
-          <p className="max-w-2xl text-base text-slate-300 sm:text-lg">
-            This is the minimal working shell for the fullstack app. The client
-            calls the Go API, and the API already accepts
-            <code className="ml-1 rounded bg-slate-800 px-2 py-1 text-sm">
-              DATABASE_URL
-            </code>
-            for the PostgreSQL layer.
-          </p>
-        </header>
-
-        <section className="grid gap-4 md:grid-cols-2">
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl shadow-cyan-950/50 backdrop-blur">
-            <p className="text-sm font-medium uppercase tracking-[0.3em] text-slate-400">
-              Client status
+      <div className="flex min-h-[calc(100vh-6rem)] items-center justify-center">
+        <section className="w-full max-w-md rounded-3xl border border-white/10 bg-white/10 p-8 shadow-2xl shadow-cyan-950/50 backdrop-blur-xl">
+          <div className="text-center">
+            <p className="text-xs font-semibold uppercase tracking-[0.45em] text-cyan-300">
+              Mobile Engineer V3
             </p>
-            <p className="mt-4 text-2xl font-semibold">Vite is serving React.</p>
-            <p className="mt-2 text-slate-300">
-              Tailwind utilities are active and the frontend is ready for app
-              routes and components.
+            <h1 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">
+              Sign in
+            </h1>
+            <p className="mt-3 text-sm text-slate-300">
+              Enter your username and password to continue.
             </p>
           </div>
 
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl shadow-cyan-950/50 backdrop-blur">
-            <p className="text-sm font-medium uppercase tracking-[0.3em] text-slate-400">
-              API status
-            </p>
-            <p
-              className={`mt-4 text-2xl font-semibold ${
-                health.status === "error" ? "text-rose-300" : "text-emerald-300"
-              }`}
+          <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
+            <label className="block">
+              <span className="mb-2 block text-sm font-medium text-slate-200">
+                Username
+              </span>
+              <input
+                type="text"
+                name="username"
+                value={form.username}
+                onChange={handleChange}
+                autoComplete="username"
+                placeholder="mobile.engineer"
+                className="w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-base text-slate-100 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30"
+              />
+            </label>
+
+            <label className="block">
+              <span className="mb-2 block text-sm font-medium text-slate-200">
+                Password
+              </span>
+              <input
+                type="password"
+                name="password"
+                value={form.password}
+                onChange={handleChange}
+                autoComplete="current-password"
+                placeholder="Enter your password"
+                className="w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-base text-slate-100 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30"
+              />
+            </label>
+
+            {feedback.message ? (
+              <p
+                className={`text-sm ${
+                  feedback.tone === "error" ? "text-rose-300" : "text-emerald-300"
+                }`}
+              >
+                {feedback.message}
+              </p>
+            ) : null}
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full rounded-2xl bg-cyan-400 px-4 py-3 text-sm font-semibold uppercase tracking-[0.25em] text-slate-950 transition hover:bg-cyan-300"
             >
-              {health.status === "loading" ? "Loading..." : health.status}
-            </p>
-            <p className="mt-2 text-slate-300">{health.message}</p>
-          </div>
+              {isSubmitting ? "Working..." : "Authenticate"}
+            </button>
+          </form>
         </section>
       </div>
     </main>

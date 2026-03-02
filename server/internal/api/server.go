@@ -10,17 +10,20 @@ import (
 	"time"
 
 	appdb "foxygen-vibe/server/internal/db"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Server struct {
 	databaseConfigured bool
 	db                 *pgxpool.Pool
-	queries            accountCreator
+	queries            accountStore
 }
 
-type accountCreator interface {
+type accountStore interface {
 	CreateAccount(context.Context, appdb.CreateAccountParams) (appdb.Account, error)
+	CreateUserProfile(context.Context, pgtype.UUID) (appdb.User, error)
+	GetAccountByUsername(context.Context, string) (appdb.Account, error)
 }
 
 func New() (*Server, error) {
@@ -67,6 +70,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/health", s.handleHealth)
 	mux.HandleFunc("/api/accounts", s.handleAccounts)
+	mux.HandleFunc("/api/auth/login", s.handleLogin)
 
 	return withRequestLogging(withCORS(mux))
 }

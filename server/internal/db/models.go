@@ -25,12 +25,6 @@ type Department struct {
 	Title string
 }
 
-type Message struct {
-	ID        int64
-	Content   string
-	CreatedAt pgtype.Timestamptz
-}
-
 type Role struct {
 	ID          int32
 	Name        string

@@ -7,6 +7,8 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createAccount = `-- name: CreateAccount :one
@@ -22,6 +24,46 @@ type CreateAccountParams struct {
 
 func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (Account, error) {
 	row := q.db.QueryRow(ctx, createAccount, arg.Username, arg.PasswordHash)
+	var i Account
+	err := row.Scan(
+		&i.UserID,
+		&i.Username,
+		&i.Disabled,
+		&i.PasswordHash,
+	)
+	return i, err
+}
+
+const createUserProfile = `-- name: CreateUserProfile :one
+INSERT INTO users (user_id)
+VALUES ($1)
+RETURNING user_id, first_name, last_name, department_id, email, phone, logo, latest_ticket
+`
+
+func (q *Queries) CreateUserProfile(ctx context.Context, userID pgtype.UUID) (User, error) {
+	row := q.db.QueryRow(ctx, createUserProfile, userID)
+	var i User
+	err := row.Scan(
+		&i.UserID,
+		&i.FirstName,
+		&i.LastName,
+		&i.DepartmentID,
+		&i.Email,
+		&i.Phone,
+		&i.Logo,
+		&i.LatestTicket,
+	)
+	return i, err
+}
+
+const getAccountByUsername = `-- name: GetAccountByUsername :one
+SELECT user_id, username, disabled, password_hash
+FROM accounts
+WHERE username = $1
+`
+
+func (q *Queries) GetAccountByUsername(ctx context.Context, username string) (Account, error) {
+	row := q.db.QueryRow(ctx, getAccountByUsername, username)
 	var i Account
 	err := row.Scan(
 		&i.UserID,

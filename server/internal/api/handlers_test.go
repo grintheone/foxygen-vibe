@@ -9,21 +9,40 @@ import (
 	"testing"
 
 	appdb "foxygen-vibe/server/internal/db"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type fakeAccountCreator struct {
-	account appdb.Account
-	err     error
-	params  appdb.CreateAccountParams
-	called  bool
+	account          appdb.Account
+	createAccountErr error
+	createUserErr    error
+	getAccountErr    error
+	params           appdb.CreateAccountParams
+	accountCalled    bool
+	userCalled       bool
+	getCalled        bool
+	username         string
+	userID           pgtype.UUID
 }
 
 func (f *fakeAccountCreator) CreateAccount(_ context.Context, params appdb.CreateAccountParams) (appdb.Account, error) {
-	f.called = true
+	f.accountCalled = true
 	f.params = params
-	return f.account, f.err
+	return f.account, f.createAccountErr
+}
+
+func (f *fakeAccountCreator) CreateUserProfile(_ context.Context, userID pgtype.UUID) (appdb.User, error) {
+	f.userCalled = true
+	f.userID = userID
+	return appdb.User{UserID: userID}, f.createUserErr
+}
+
+func (f *fakeAccountCreator) GetAccountByUsername(_ context.Context, username string) (appdb.Account, error) {
+	f.getCalled = true
+	f.username = username
+	return f.account, f.getAccountErr
 }
 
 func TestHealthEndpointReturnsStatus(t *testing.T) {
@@ -164,14 +183,20 @@ func TestAccountsEndpointCreatesAccount(t *testing.T) {
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("expected status %d, got %d", http.StatusCreated, rec.Code)
 	}
-	if !store.called {
+	if !store.accountCalled {
 		t.Fatal("expected CreateAccount to be called")
+	}
+	if !store.userCalled {
+		t.Fatal("expected CreateUserProfile to be called")
 	}
 	if store.params.Username != "alice" {
 		t.Fatalf("expected trimmed username, got %q", store.params.Username)
 	}
 	if store.params.PasswordHash == "" || store.params.PasswordHash == "secret" {
 		t.Fatalf("expected hashed password, got %q", store.params.PasswordHash)
+	}
+	if store.userID != store.account.UserID {
+		t.Fatal("expected CreateUserProfile to receive the created account user ID")
 	}
 
 	body := rec.Body.String()
@@ -190,7 +215,7 @@ func TestAccountsEndpointHandlesDuplicateUsername(t *testing.T) {
 
 	srv := &Server{
 		queries: &fakeAccountCreator{
-			err: &pgconn.PgError{Code: "23505"},
+			createAccountErr: &pgconn.PgError{Code: "23505"},
 		},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/api/accounts", strings.NewReader(`{"username":"alice","password":"secret"}`))
@@ -208,7 +233,7 @@ func TestAccountsEndpointHandlesStoreFailure(t *testing.T) {
 
 	srv := &Server{
 		queries: &fakeAccountCreator{
-			err: errors.New("boom"),
+			createAccountErr: errors.New("boom"),
 		},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/api/accounts", strings.NewReader(`{"username":"alice","password":"secret"}`))
@@ -218,5 +243,177 @@ func TestAccountsEndpointHandlesStoreFailure(t *testing.T) {
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("expected status %d, got %d", http.StatusInternalServerError, rec.Code)
+	}
+}
+
+func TestAccountsEndpointHandlesUserProfileFailure(t *testing.T) {
+	t.Parallel()
+
+	srv := &Server{
+		queries: &fakeAccountCreator{
+			account: appdb.Account{
+				UserID:   pgtype.UUID{Bytes: [16]byte{1, 2, 3}, Valid: true},
+				Username: "alice",
+			},
+			createUserErr: errors.New("boom"),
+		},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/accounts", strings.NewReader(`{"username":"alice","password":"secret"}`))
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status %d, got %d", http.StatusInternalServerError, rec.Code)
+	}
+}
+
+func TestLoginEndpointRequiresDatabase(t *testing.T) {
+	t.Parallel()
+
+	srv := &Server{}
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"username":"alice","password":"secret"}`))
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
+	}
+}
+
+func TestLoginEndpointRejectsInvalidBody(t *testing.T) {
+	t.Parallel()
+
+	srv := &Server{queries: &fakeAccountCreator{}}
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"username":"alice","password":"secret","extra":true}`))
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestLoginEndpointValidatesRequiredFields(t *testing.T) {
+	t.Parallel()
+
+	srv := &Server{queries: &fakeAccountCreator{}}
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"username":" ","password":" "}`))
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestLoginEndpointAuthenticatesValidCredentials(t *testing.T) {
+	t.Parallel()
+
+	passwordHash, err := hashPassword("secret")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+
+	store := &fakeAccountCreator{
+		account: appdb.Account{
+			UserID:       pgtype.UUID{Bytes: [16]byte{1, 2, 3}, Valid: true},
+			Username:     "alice",
+			PasswordHash: passwordHash,
+		},
+	}
+	srv := &Server{queries: store}
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"username":" alice ","password":" secret "}`))
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if !store.getCalled {
+		t.Fatal("expected GetAccountByUsername to be called")
+	}
+	if store.username != "alice" {
+		t.Fatalf("expected trimmed username, got %q", store.username)
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `"username":"alice"`) {
+		t.Fatalf("expected response body to contain username, got %s", body)
+	}
+}
+
+func TestLoginEndpointRejectsUnknownUsername(t *testing.T) {
+	t.Parallel()
+
+	srv := &Server{
+		queries: &fakeAccountCreator{
+			getAccountErr: pgx.ErrNoRows,
+		},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"username":"alice","password":"secret"}`))
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status %d, got %d", http.StatusUnauthorized, rec.Code)
+	}
+}
+
+func TestLoginEndpointRejectsInvalidPassword(t *testing.T) {
+	t.Parallel()
+
+	passwordHash, err := hashPassword("secret")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+
+	srv := &Server{
+		queries: &fakeAccountCreator{
+			account: appdb.Account{
+				Username:     "alice",
+				PasswordHash: passwordHash,
+			},
+		},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"username":"alice","password":"wrong"}`))
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status %d, got %d", http.StatusUnauthorized, rec.Code)
+	}
+}
+
+func TestLoginEndpointRejectsDisabledAccounts(t *testing.T) {
+	t.Parallel()
+
+	passwordHash, err := hashPassword("secret")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+
+	srv := &Server{
+		queries: &fakeAccountCreator{
+			account: appdb.Account{
+				Username:     "alice",
+				Disabled:     true,
+				PasswordHash: passwordHash,
+			},
+		},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"username":"alice","password":"secret"}`))
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
 	}
 }
