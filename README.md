@@ -27,13 +27,26 @@ The backend now includes `sqlc` input files under `server/db/`.
 
 Generated files will be written to `server/internal/db/`.
 
+## Import the full legacy dump
+
+If you want to run the whole legacy import flow in one command, place the dump at `server/dump.json` and run the orchestrator from the `server/` directory:
+
+`go run ./cmd/import-dump -default-password "ChangeMe123!"`
+
+Notes:
+
+- The command defaults to `dump.json`, so it will pick up `server/dump.json` automatically when run from `server/`.
+- It runs the existing importers in dependency order: regions, clients, contacts, research types, manufacturers, classificators, devices, ticket metadata, users, tickets, attachments, then agreements.
+- Use `-only users,tickets` to run a subset, `-dry-run` to validate without writes, and `-keep-going` if you want later steps to continue after a failure.
+- `server/dump.json` is now ignored by git, but if it was already tracked in your local clone you still need to untrack it once with `git rm --cached server/dump.json`.
+
 ## Import legacy users
 
 If you have a legacy CouchDB `_all_docs` export, you can import the `user_*` records into the current PostgreSQL schema:
 
 1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
 2. Run the importer from the `server/` directory:
-   `go run ./cmd/import-users -source "/absolute/path/to/_all_docs.json" -default-password "ChangeMe123!"`
+   `go run ./cmd/import-dump -source "/absolute/path/to/_all_docs.json" -only users -default-password "ChangeMe123!"`
 
 Notes:
 
@@ -48,7 +61,7 @@ If you have the same legacy CouchDB `_all_docs` export, you can import the `regi
 
 1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
 2. Run the importer from the `server/` directory:
-   `go run ./cmd/import-regions -source "/absolute/path/to/_all_docs.json"`
+   `go run ./cmd/import-dump -source "/absolute/path/to/_all_docs.json" -only regions`
 
 Notes:
 
@@ -64,7 +77,7 @@ If you have the same legacy CouchDB `_all_docs` export, you can import the `clie
 1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
 2. Import regions first so client region references can be resolved.
 3. Run the importer from the `server/` directory:
-   `go run ./cmd/import-clients -source "/absolute/path/to/_all_docs.json"`
+   `go run ./cmd/import-dump -source "/absolute/path/to/_all_docs.json" -only clients`
 
 Notes:
 
@@ -81,7 +94,7 @@ If you have the same legacy CouchDB `_all_docs` export, you can import the `cont
 1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
 2. Import clients first so contact client references can be resolved.
 3. Run the importer from the `server/` directory:
-   `go run ./cmd/import-contacts -source "/absolute/path/to/_all_docs.json"`
+   `go run ./cmd/import-dump -source "/absolute/path/to/_all_docs.json" -only contacts`
 
 Notes:
 
@@ -97,7 +110,7 @@ If you have the same legacy CouchDB `_all_docs` export, you can import the `rese
 
 1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
 2. Run the importer from the `server/` directory:
-   `go run ./cmd/import-research-types -source "/absolute/path/to/_all_docs.json"`
+   `go run ./cmd/import-dump -source "/absolute/path/to/_all_docs.json" -only research-types`
 
 Notes:
 
@@ -111,7 +124,7 @@ If you have the same legacy CouchDB `_all_docs` export, you can import the `manu
 
 1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
 2. Run the importer from the `server/` directory:
-   `go run ./cmd/import-manufacturers -source "/absolute/path/to/_all_docs.json"`
+   `go run ./cmd/import-dump -source "/absolute/path/to/_all_docs.json" -only manufacturers`
 
 Notes:
 
@@ -127,7 +140,7 @@ If you have the same legacy CouchDB `_all_docs` export, you can import the `clas
 1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
 2. Import `research_type` and `manufacturers` first so classificator references can be resolved.
 3. Run the importer from the `server/` directory:
-   `go run ./cmd/import-classificators -source "/absolute/path/to/_all_docs.json"`
+   `go run ./cmd/import-dump -source "/absolute/path/to/_all_docs.json" -only classificators`
 
 Notes:
 
@@ -144,7 +157,7 @@ If you have the same legacy CouchDB `_all_docs` export, you can import the `devi
 1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
 2. Import `classificators` first so device classificator references can be resolved.
 3. Run the importer from the `server/` directory:
-   `go run ./cmd/import-devices -source "/absolute/path/to/_all_docs.json"`
+   `go run ./cmd/import-dump -source "/absolute/path/to/_all_docs.json" -only devices`
 
 Notes:
 
@@ -160,7 +173,7 @@ If you have the same legacy CouchDB `_all_docs` export, you can import ticket st
 
 1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
 2. Run the importer from the `server/` directory:
-   `go run ./cmd/import-ticket-statuses -source "/absolute/path/to/_all_docs.json"`
+   `go run ./cmd/import-dump -source "/absolute/path/to/_all_docs.json" -only ticket-statuses`
 
 Notes:
 
@@ -174,7 +187,7 @@ If you have the same legacy CouchDB `_all_docs` export, you can import ticket ty
 
 1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
 2. Run the importer from the `server/` directory:
-   `go run ./cmd/import-ticket-types -source "/absolute/path/to/_all_docs.json"`
+   `go run ./cmd/import-dump -source "/absolute/path/to/_all_docs.json" -only ticket-types`
 
 Notes:
 
@@ -188,7 +201,7 @@ If you have the same legacy CouchDB `_all_docs` export, you can import the `tick
 
 1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
 2. Run the importer from the `server/` directory:
-   `go run ./cmd/import-ticket-reasons -source "/absolute/path/to/_all_docs.json"`
+   `go run ./cmd/import-dump -source "/absolute/path/to/_all_docs.json" -only ticket-reasons`
 
 Notes:
 
@@ -203,7 +216,7 @@ If you have the same legacy CouchDB `_all_docs` export, you can import the `tick
 1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
 2. Import clients, devices, users/accounts, departments, contacts, ticket statuses, ticket types, and ticket reasons first.
 3. Run the importer from the `server/` directory:
-   `go run ./cmd/import-tickets -source "/absolute/path/to/_all_docs.json"`
+   `go run ./cmd/import-dump -source "/absolute/path/to/_all_docs.json" -only tickets`
 
 Notes:
 
@@ -220,7 +233,7 @@ If you have the same legacy CouchDB `_all_docs` export, you can import the attac
 1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
 2. Import tickets first so attachment `ref_id` values can resolve.
 3. Run the importer from the `server/` directory:
-   `go run ./cmd/import-attachments -source "/absolute/path/to/_all_docs.json"`
+   `go run ./cmd/import-dump -source "/absolute/path/to/_all_docs.json" -only attachments`
 
 Notes:
 
@@ -236,7 +249,7 @@ If you have the same legacy CouchDB `_all_docs` export, you can translate device
 1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
 2. Import clients and devices first so binding references can resolve.
 3. Run the importer from the `server/` directory:
-   `go run ./cmd/import-agreements -source "/absolute/path/to/_all_docs.json"`
+   `go run ./cmd/import-dump -source "/absolute/path/to/_all_docs.json" -only agreements`
 
 Notes:
 
