@@ -27,6 +27,21 @@ The backend now includes `sqlc` input files under `server/db/`.
 
 Generated files will be written to `server/internal/db/`.
 
+## Import legacy users
+
+If you have a legacy CouchDB `_all_docs` export, you can import the `user_*` records into the current PostgreSQL schema:
+
+1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
+2. Run the importer from the `server/` directory:
+   `go run ./cmd/import-users -source "/absolute/path/to/_all_docs.json" -default-password "ChangeMe123!"`
+
+Notes:
+
+- The legacy dump does not contain passwords, so the importer assigns the temporary password you provide to every imported account.
+- Imported usernames are assigned deterministically as `user_1`, `user_2`, `user_3`, and so on.
+- The command is safe to rerun. If a username already exists, that user is skipped.
+- Use `-dry-run` first if you want to inspect the planned usernames before writing to the database.
+
 ## Run the client
 
 1. Install dependencies:

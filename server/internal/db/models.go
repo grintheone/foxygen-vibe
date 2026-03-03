@@ -46,7 +46,7 @@ type User struct {
 	UserID       pgtype.UUID
 	FirstName    string
 	LastName     string
-	DepartmentID pgtype.UUID
+	Department   pgtype.UUID
 	Email        string
 	Phone        string
 	Logo         string

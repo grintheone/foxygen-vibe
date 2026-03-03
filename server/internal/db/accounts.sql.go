@@ -37,7 +37,7 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (A
 const createUserProfile = `-- name: CreateUserProfile :one
 INSERT INTO users (user_id)
 VALUES ($1)
-RETURNING user_id, first_name, last_name, department_id, email, phone, logo, latest_ticket
+RETURNING user_id, first_name, last_name, department, email, phone, logo, latest_ticket
 `
 
 func (q *Queries) CreateUserProfile(ctx context.Context, userID pgtype.UUID) (User, error) {
@@ -47,7 +47,7 @@ func (q *Queries) CreateUserProfile(ctx context.Context, userID pgtype.UUID) (Us
 		&i.UserID,
 		&i.FirstName,
 		&i.LastName,
-		&i.DepartmentID,
+		&i.Department,
 		&i.Email,
 		&i.Phone,
 		&i.Logo,
@@ -65,7 +65,7 @@ SELECT
   COALESCE(d.title, '') AS department
 FROM accounts AS a
 JOIN users AS u ON u.user_id = a.user_id
-LEFT JOIN departments AS d ON d.id = u.department_id
+LEFT JOIN departments AS d ON d.id = u.department
 WHERE a.user_id = $1
 `
 
