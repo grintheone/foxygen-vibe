@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -276,6 +277,9 @@ func TestAccountsEndpointCreatesAccount(t *testing.T) {
 	if store.createAccountParams.PasswordHash == "" || store.createAccountParams.PasswordHash == "secret" {
 		t.Fatalf("expected hashed password, got %q", store.createAccountParams.PasswordHash)
 	}
+	if !strings.HasPrefix(store.createAccountParams.PasswordHash, "$2") {
+		t.Fatalf("expected bcrypt password hash, got %q", store.createAccountParams.PasswordHash)
+	}
 	if store.userID != store.account.UserID {
 		t.Fatal("expected CreateUserProfile to receive the created account user ID")
 	}
@@ -521,6 +525,20 @@ func TestLoginEndpointRejectsDisabledAccounts(t *testing.T) {
 
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
+	}
+}
+
+func TestVerifyPasswordSupportsLegacySHA256Hashes(t *testing.T) {
+	t.Parallel()
+
+	salt := []byte("0123456789abcdef")
+	stored := "sha256$" + hex.EncodeToString(salt) + "$" + hashPasswordWithSalt("secret", salt)
+
+	if !verifyPassword("secret", stored) {
+		t.Fatal("expected legacy SHA-256 password hash to verify")
+	}
+	if verifyPassword("wrong", stored) {
+		t.Fatal("expected legacy SHA-256 password hash to reject the wrong password")
 	}
 }
 

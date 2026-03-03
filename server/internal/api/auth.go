@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -267,4 +268,18 @@ func parsePasswordHash(stored string) ([]byte, []byte, error) {
 	}
 
 	return salt, expected, nil
+}
+
+func verifyLegacyPassword(password string, stored string) bool {
+	salt, expected, err := parsePasswordHash(stored)
+	if err != nil {
+		return false
+	}
+
+	digest, err := hex.DecodeString(hashPasswordWithSalt(password, salt))
+	if err != nil {
+		return false
+	}
+
+	return subtle.ConstantTimeCompare(digest[:], expected) == 1
 }

@@ -2,13 +2,8 @@ package api
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
-	"crypto/subtle"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -18,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -499,32 +495,24 @@ func writeJSON(w http.ResponseWriter, statusCode int, payload any) {
 }
 
 func hashPassword(password string) (string, error) {
-	salt := make([]byte, 16)
-	if _, err := rand.Read(salt); err != nil {
+	digest, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
 		return "", err
 	}
 
-	digest := sha256.Sum256(append(salt, []byte(password)...))
-
-	return fmt.Sprintf(
-		"sha256$%s$%s",
-		hex.EncodeToString(salt),
-		hex.EncodeToString(digest[:]),
-	), nil
+	return string(digest), nil
 }
 
 func verifyPassword(password string, stored string) bool {
-	salt, expected, err := parsePasswordHash(stored)
-	if err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(stored), []byte(password)); err == nil {
+		return true
+	}
+
+	if !strings.HasPrefix(stored, "sha256$") {
 		return false
 	}
 
-	digest, err := hex.DecodeString(hashPasswordWithSalt(password, salt))
-	if err != nil {
-		return false
-	}
-
-	return subtle.ConstantTimeCompare(digest[:], expected) == 1
+	return verifyLegacyPassword(password, stored)
 }
 
 func uuidToString(id pgtype.UUID) string {
