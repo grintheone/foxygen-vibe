@@ -42,6 +42,160 @@ Notes:
 - The command is safe to rerun. If a username already exists, that user is skipped.
 - Use `-dry-run` first if you want to inspect the planned usernames before writing to the database.
 
+## Import legacy regions
+
+If you have the same legacy CouchDB `_all_docs` export, you can import the `region_*` records into PostgreSQL:
+
+1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
+2. Run the importer from the `server/` directory:
+   `go run ./cmd/import-regions -source "/absolute/path/to/_all_docs.json"`
+
+Notes:
+
+- The importer creates the `regions` table if it does not exist yet.
+- Legacy region UUIDs are preserved, which keeps later imports compatible with the old references.
+- The command is safe to rerun. Existing region IDs are updated in place.
+- Use `-dry-run` first if you want to inspect the planned region records before writing to the database.
+
+## Import legacy clients
+
+If you have the same legacy CouchDB `_all_docs` export, you can import the `client_*` records into PostgreSQL:
+
+1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
+2. Import regions first so client region references can be resolved.
+3. Run the importer from the `server/` directory:
+   `go run ./cmd/import-clients -source "/absolute/path/to/_all_docs.json"`
+
+Notes:
+
+- The importer creates the `clients` table if it does not exist yet.
+- Legacy client UUIDs are preserved.
+- The importer carries over the legacy `region` UUID only when that region already exists in PostgreSQL; otherwise it stores `NULL` and logs the mismatch.
+- The command is safe to rerun. Existing client IDs are updated in place.
+- Use `-dry-run` first if you want to inspect the planned client records before writing to the database.
+
+## Import legacy contacts
+
+If you have the same legacy CouchDB `_all_docs` export, you can import the `contact_*` records into PostgreSQL:
+
+1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
+2. Import clients first so contact client references can be resolved.
+3. Run the importer from the `server/` directory:
+   `go run ./cmd/import-contacts -source "/absolute/path/to/_all_docs.json"`
+
+Notes:
+
+- The importer creates the `contacts` table if it does not exist yet.
+- Legacy contact UUIDs are preserved.
+- The importer maps each contact `ref` to the imported `clients.id`; if the client is missing it stores `NULL` and logs the mismatch.
+- The command is safe to rerun. Existing contact IDs are updated in place.
+- Use `-dry-run` first if you want to inspect the planned contact records before writing to the database.
+
+## Import legacy research types
+
+If you have the same legacy CouchDB `_all_docs` export, you can import the `researchType_*` records into PostgreSQL:
+
+1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
+2. Run the importer from the `server/` directory:
+   `go run ./cmd/import-research-types -source "/absolute/path/to/_all_docs.json"`
+
+Notes:
+
+- The importer creates the `research_type` table if it does not exist yet.
+- Legacy research type UUIDs are preserved.
+- The command is safe to rerun. Existing rows are updated in place by `id`.
+
+## Import legacy manufacturers
+
+If you have the same legacy CouchDB `_all_docs` export, you can import the `manufacturer_*` records into PostgreSQL:
+
+1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
+2. Run the importer from the `server/` directory:
+   `go run ./cmd/import-manufacturers -source "/absolute/path/to/_all_docs.json"`
+
+Notes:
+
+- The importer creates the `manufacturers` table if it does not exist yet.
+- Legacy manufacturer UUIDs are preserved.
+- Manufacturer titles are not forced unique, matching the legacy schema.
+- The command is safe to rerun. Existing rows are updated in place by `id`.
+
+## Import legacy classificators
+
+If you have the same legacy CouchDB `_all_docs` export, you can import the `classificator_*` records into PostgreSQL:
+
+1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
+2. Import `research_type` and `manufacturers` first so classificator references can be resolved.
+3. Run the importer from the `server/` directory:
+   `go run ./cmd/import-classificators -source "/absolute/path/to/_all_docs.json"`
+
+Notes:
+
+- The importer creates the `classificators` table if it does not exist yet.
+- Legacy classificator UUIDs are preserved.
+- The importer maps `manufacturer` and `researchType` to the imported PostgreSQL rows when present; missing legacy references are stored as `NULL` and logged.
+- `registration_certificate` and `maintenance_regulations` are preserved as JSONB, and `attachments` and `images` are imported as text arrays.
+- The command is safe to rerun. Existing rows are updated in place by `id`.
+
+## Import legacy devices
+
+If you have the same legacy CouchDB `_all_docs` export, you can import the `device_*` records into PostgreSQL:
+
+1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
+2. Import `classificators` first so device classificator references can be resolved.
+3. Run the importer from the `server/` directory:
+   `go run ./cmd/import-devices -source "/absolute/path/to/_all_docs.json"`
+
+Notes:
+
+- The importer creates the `devices` table if it does not exist yet.
+- Legacy device UUIDs are preserved.
+- The importer maps `classificator` to the imported PostgreSQL row when present; missing legacy references are stored as `NULL` and logged.
+- `properties` is preserved as JSONB; `connected_to_lis` and `is_used` are imported as booleans.
+- The command is safe to rerun. Existing rows are updated in place by `id`.
+
+## Import legacy ticket statuses
+
+If you have the same legacy CouchDB `_all_docs` export, you can import ticket statuses into PostgreSQL:
+
+1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
+2. Run the importer from the `server/` directory:
+   `go run ./cmd/import-ticket-statuses -source "/absolute/path/to/_all_docs.json"`
+
+Notes:
+
+- This importer enforces the canonical status set: `created`, `assigned`, `inWork`, `worksDone`, `closed`, `cancelled`.
+- Titles are seeded as: `создан`, `назначен`, `в работе`, `работы завершены`, `закрыт`, `отменен`.
+- Any other existing status rows are removed.
+
+## Import legacy ticket types
+
+If you have the same legacy CouchDB `_all_docs` export, you can import ticket types into PostgreSQL:
+
+1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
+2. Run the importer from the `server/` directory:
+   `go run ./cmd/import-ticket-types -source "/absolute/path/to/_all_docs.json"`
+
+Notes:
+
+- This importer enforces the canonical type set: `internal`, `external`.
+- Titles are seeded as: `внутренний`, `внешний`.
+- Any other existing type rows are removed.
+
+## Import legacy ticket reasons
+
+If you have the same legacy CouchDB `_all_docs` export, you can import the `ticketReason_*` records into PostgreSQL:
+
+1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
+2. Run the importer from the `server/` directory:
+   `go run ./cmd/import-ticket-reasons -source "/absolute/path/to/_all_docs.json"`
+
+Notes:
+
+- The importer creates the `ticket_reasons` table if it does not exist yet.
+- Legacy reason ids are preserved.
+- The command is safe to rerun. Existing rows are updated in place by `id`.
+
 ## Run the client
 
 1. Install dependencies:
