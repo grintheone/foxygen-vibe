@@ -8,7 +8,7 @@ Minimal fullstack starter:
 
 ## Run the server
 
-1. Start PostgreSQL if you want database-backed responses:
+1. Start PostgreSQL:
    `docker compose up -d postgres`
 2. Start the API:
    `cd server && go run .`

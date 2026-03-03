@@ -177,20 +177,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if s.queries == nil {
-		account, ok := findDemoAccount(input.Username)
-		if !ok || account.password != input.Password {
-			http.Error(w, "invalid credentials", http.StatusUnauthorized)
-			return
-		}
-
-		response, err := s.issueTokenPairForIdentity(r.Context(), nil, account.userID, account.username)
-		if err != nil {
-			log.Printf("issue demo token pair failed: %v", err)
-			http.Error(w, "failed to authenticate", http.StatusInternalServerError)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, response)
+		http.Error(w, "database not configured", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -280,26 +267,7 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if s.queries == nil {
-		claims, err := parseRefreshToken(s.auth.jwtSecret, input.RefreshToken)
-		if err != nil {
-			http.Error(w, "invalid refresh token", http.StatusUnauthorized)
-			return
-		}
-
-		account, ok := findDemoAccountByUserID(claims.Subject)
-		if !ok || !strings.EqualFold(account.username, claims.Username) {
-			http.Error(w, "invalid refresh token", http.StatusUnauthorized)
-			return
-		}
-
-		response, err := s.issueTokenPairForIdentity(r.Context(), nil, account.userID, account.username)
-		if err != nil {
-			log.Printf("issue demo refresh token pair failed: %v", err)
-			http.Error(w, "failed to refresh session", http.StatusInternalServerError)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, response)
+		http.Error(w, "database not configured", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -439,19 +407,7 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if s.queries == nil {
-		account, ok := findDemoAccountByUserID(claims.Subject)
-		if !ok || !strings.EqualFold(account.username, claims.Username) {
-			http.Error(w, "profile not found", http.StatusNotFound)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, profileResponse{
-			UserID:     account.userID,
-			Username:   account.username,
-			Name:       strings.TrimSpace(account.firstName + " " + account.lastName),
-			Email:      account.email,
-			Department: account.department,
-		})
+		http.Error(w, "database not configured", http.StatusServiceUnavailable)
 		return
 	}
 

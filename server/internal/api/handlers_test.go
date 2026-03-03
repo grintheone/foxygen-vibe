@@ -353,29 +353,17 @@ func TestAccountsEndpointHandlesUserProfileFailure(t *testing.T) {
 	}
 }
 
-func TestLoginEndpointAuthenticatesDemoAccountsWithoutDatabase(t *testing.T) {
+func TestLoginEndpointRequiresDatabase(t *testing.T) {
 	t.Parallel()
 
 	srv := &Server{auth: testAuthConfig()}
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"username":" mobile.lead ","password":" Alpha123! "}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"username":"alice","password":"secret"}`))
 	rec := httptest.NewRecorder()
 
 	srv.Handler().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
-
-	body := rec.Body.String()
-	for _, want := range []string{
-		`"user_id":"11111111-1111-1111-1111-111111111111"`,
-		`"username":"mobile.lead"`,
-		`"access_token":"`,
-		`"refresh_token":"`,
-	} {
-		if !strings.Contains(body, want) {
-			t.Fatalf("expected response body to contain %q, got %s", want, body)
-		}
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
 	}
 }
 
@@ -542,32 +530,17 @@ func TestVerifyPasswordSupportsLegacySHA256Hashes(t *testing.T) {
 	}
 }
 
-func TestRefreshEndpointSupportsStatelessDemoTokensWithoutDatabase(t *testing.T) {
+func TestRefreshEndpointRequiresDatabase(t *testing.T) {
 	t.Parallel()
 
-	secret := testAuthConfig().jwtSecret
-	refreshToken, err := signJWT(secret, accessTokenClaims{
-		Subject:   "11111111-1111-1111-1111-111111111111",
-		Username:  "mobile.lead",
-		TokenType: refreshTokenType,
-		ExpiresAt: time.Now().Add(time.Minute).Unix(),
-		IssuedAt:  time.Now().Unix(),
-	})
-	if err != nil {
-		t.Fatalf("sign jwt: %v", err)
-	}
-
 	srv := &Server{auth: testAuthConfig()}
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/refresh", strings.NewReader(`{"refresh_token":"`+refreshToken+`"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/refresh", strings.NewReader(`{"refresh_token":"abc"}`))
 	rec := httptest.NewRecorder()
 
 	srv.Handler().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
-	if body := rec.Body.String(); !strings.Contains(body, `"username":"mobile.lead"`) {
-		t.Fatalf("expected response body to contain username, got %s", body)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
 	}
 }
 
@@ -717,7 +690,7 @@ func TestSessionEndpointReturnsClaims(t *testing.T) {
 	}
 }
 
-func TestProfileEndpointReturnsDemoProfileWithoutDatabase(t *testing.T) {
+func TestProfileEndpointRequiresDatabase(t *testing.T) {
 	t.Parallel()
 
 	secret := testAuthConfig().jwtSecret
@@ -739,20 +712,8 @@ func TestProfileEndpointReturnsDemoProfileWithoutDatabase(t *testing.T) {
 
 	srv.Handler().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
-
-	body := rec.Body.String()
-	for _, want := range []string{
-		`"username":"mobile.lead"`,
-		`"name":"Maya Hernandez"`,
-		`"email":"maya.hernandez@foxygen.dev"`,
-		`"department":"Mobile Engineering"`,
-	} {
-		if !strings.Contains(body, want) {
-			t.Fatalf("expected response body to contain %q, got %s", want, body)
-		}
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
 	}
 }
 

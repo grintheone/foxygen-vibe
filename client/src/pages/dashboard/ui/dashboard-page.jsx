@@ -1,7 +1,6 @@
 import { useNavigate } from "react-router";
 import { useAuth } from "../../../features/auth";
 import { routePaths } from "../../../shared/config/routes";
-import { demoAccounts } from "../../../shared/model/demo-accounts";
 import { PageShell } from "../../../shared/ui/page-shell";
 import { StatusMessage } from "../../../shared/ui/status-message";
 import { DashboardOverview } from "../../../widgets/dashboard-overview";
@@ -10,10 +9,6 @@ import { SessionPanel } from "../../../widgets/session-panel";
 export function DashboardPage() {
   const navigate = useNavigate();
   const { feedback, isRefreshing, rotateSession, session, signOut } = useAuth();
-
-  const activeDemo = demoAccounts.find(
-    (account) => account.username === session?.username,
-  );
 
   function handleRotate() {
     rotateSession().catch(() => {});
@@ -30,7 +25,7 @@ export function DashboardPage() {
         <DashboardOverview session={session} />
         <aside className="space-y-6">
           <SessionPanel
-            activeDemo={activeDemo}
+            session={session}
             isRefreshing={isRefreshing}
             onRotate={handleRotate}
             onSignOut={handleSignOut}

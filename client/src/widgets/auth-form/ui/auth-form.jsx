@@ -16,8 +16,8 @@ export function AuthForm({
         Sign In
       </h1>
       <p className="mt-3 max-w-md text-sm text-slate-300 sm:text-base">
-        Use one of the seeded demo accounts or enter another valid username and
-        password. Successful login redirects to the dashboard.
+        Enter a valid username and password from the PostgreSQL-backed account
+        store. Successful login redirects to the dashboard.
       </p>
 
       <form className="mt-8 space-y-5" onSubmit={onSubmit}>

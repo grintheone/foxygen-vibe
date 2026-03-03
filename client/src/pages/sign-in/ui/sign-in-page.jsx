@@ -2,10 +2,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 import { useAuth } from "../../../features/auth";
 import { routePaths } from "../../../shared/config/routes";
-import { demoAccounts } from "../../../shared/model/demo-accounts";
 import { PageShell } from "../../../shared/ui/page-shell";
 import { AuthForm } from "../../../widgets/auth-form";
-import { DemoAccountsPanel } from "../../../widgets/demo-accounts";
 
 const initialForm = {
   username: "",
@@ -51,30 +49,15 @@ export function SignInPage() {
     }
   }
 
-  function autofillDemoAccount(account) {
-    setForm({
-      username: account.username,
-      password: account.password,
-    });
-    setFeedback({
-      tone: "success",
-      message: `Loaded ${account.username}.`,
-    });
-  }
-
   return (
     <PageShell>
-      <section className="grid w-full max-w-5xl gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+      <section className="w-full max-w-2xl">
         <AuthForm
           feedback={feedback}
           form={form}
           isSubmitting={isSubmitting}
           onChange={handleChange}
           onSubmit={handleSubmit}
-        />
-        <DemoAccountsPanel
-          accounts={demoAccounts}
-          onSelect={autofillDemoAccount}
         />
       </section>
     </PageShell>

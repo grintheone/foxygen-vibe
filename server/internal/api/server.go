@@ -71,10 +71,6 @@ func New() (*Server, error) {
 		db.Close()
 		return nil, err
 	}
-	if err := api.ensureDemoAccounts(ctx); err != nil {
-		db.Close()
-		return nil, err
-	}
 
 	return api, nil
 }

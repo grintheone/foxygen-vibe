@@ -1,5 +1,5 @@
 export function SessionPanel({
-  activeDemo,
+  session,
   isRefreshing,
   onRotate,
   onSignOut,
@@ -10,12 +10,10 @@ export function SessionPanel({
         Signed In
       </p>
       <p className="mt-4 text-xl font-semibold text-slate-50">
-        {activeDemo ? activeDemo.title : "Authenticated User"}
+        {session?.username || "Authenticated User"}
       </p>
       <p className="mt-2 text-sm text-slate-300">
-        {activeDemo
-          ? `This session is using the seeded ${activeDemo.username} demo account.`
-          : "This session is using a non-demo account."}
+        This session is using a PostgreSQL-backed account.
       </p>
 
       <div className="mt-5 grid gap-3">
