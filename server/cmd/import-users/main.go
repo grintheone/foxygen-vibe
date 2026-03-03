@@ -43,6 +43,7 @@ type legacyUserDoc struct {
 }
 
 type legacyUser struct {
+	LegacyID         string
 	SourceID         string
 	FirstName        string
 	LastName         string
@@ -198,6 +199,7 @@ func loadLegacyImportPlan(path string) (importPlan, error) {
 		username := uniqueUsername(fmt.Sprintf("user_%d", len(users)+1), used)
 
 		users = append(users, legacyUser{
+			LegacyID:         trimLegacyPrefix(doc.ID),
 			SourceID:         doc.ID,
 			FirstName:        firstName,
 			LastName:         lastName,
@@ -299,7 +301,7 @@ func importDepartments(ctx context.Context, db *pgxpool.Pool, departments map[st
 			continue
 		}
 
-		departmentID, err := findOrCreateDepartment(ctx, db, title)
+		departmentID, err := ensureLegacyDepartment(ctx, db, legacyID, title)
 		if err != nil {
 			return nil, fmt.Errorf("import department %s (%s): %w", legacyID, title, err)
 		}
@@ -336,35 +338,88 @@ func importRoles(ctx context.Context, db *pgxpool.Pool, users []legacyUser) (map
 	return resolved, nil
 }
 
-func findOrCreateDepartment(ctx context.Context, db *pgxpool.Pool, title string) (string, error) {
+func ensureLegacyDepartment(ctx context.Context, db *pgxpool.Pool, legacyID, title string) (string, error) {
 	var id string
-	err := db.QueryRow(ctx, `SELECT id FROM departments WHERE title = $1 ORDER BY id LIMIT 1`, title).Scan(&id)
+	err := db.QueryRow(ctx, `SELECT id FROM departments WHERE id = $1`, legacyID).Scan(&id)
 	if err == nil {
-		return id, nil
+		if _, err := db.Exec(ctx, `UPDATE departments SET title = $1 WHERE id = $2`, title, legacyID); err != nil {
+			return "", fmt.Errorf("update department title: %w", err)
+		}
+		return legacyID, nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
-		return "", fmt.Errorf("query existing department: %w", err)
+		return "", fmt.Errorf("query existing department by id: %w", err)
 	}
 
-	newID, err := newUUID()
-	if err != nil {
-		return "", fmt.Errorf("generate department id: %w", err)
-	}
-
-	err = db.QueryRow(ctx, `INSERT INTO departments (id, title) VALUES ($1, $2) RETURNING id`, newID, title).Scan(&id)
+	err = db.QueryRow(ctx, `SELECT id FROM departments WHERE title = $1 ORDER BY id LIMIT 1`, title).Scan(&id)
 	if err == nil {
-		return id, nil
+		if id == legacyID {
+			return legacyID, nil
+		}
+		if err := migrateDepartmentID(ctx, db, id, legacyID, title); err != nil {
+			return "", err
+		}
+		return legacyID, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return "", fmt.Errorf("query existing department by title: %w", err)
 	}
 
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-		err = db.QueryRow(ctx, `SELECT id FROM departments WHERE title = $1 ORDER BY id LIMIT 1`, title).Scan(&id)
-		if err == nil {
-			return id, nil
+	if _, err := db.Exec(ctx, `INSERT INTO departments (id, title) VALUES ($1, $2)`, legacyID, title); err == nil {
+		return legacyID, nil
+	} else {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			if err := db.QueryRow(ctx, `SELECT id FROM departments WHERE title = $1 ORDER BY id LIMIT 1`, title).Scan(&id); err == nil {
+				if id == legacyID {
+					return legacyID, nil
+				}
+				if err := migrateDepartmentID(ctx, db, id, legacyID, title); err == nil {
+					return legacyID, nil
+				}
+			}
+		}
+		return "", fmt.Errorf("create department: %w", err)
+	}
+}
+
+func migrateDepartmentID(ctx context.Context, db *pgxpool.Pool, fromID, toID, title string) error {
+	tx, err := db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin department migration tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	tempTitle := title + " [legacy-migrate:" + fromID + "]"
+	if _, err := tx.Exec(ctx, `UPDATE departments SET title = $1 WHERE id = $2`, tempTitle, fromID); err != nil {
+		return fmt.Errorf("rename old department: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `INSERT INTO departments (id, title) VALUES ($1, $2)`, toID, title); err != nil {
+		return fmt.Errorf("insert legacy department: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `UPDATE users SET department = $1 WHERE department = $2`, toID, fromID); err != nil {
+		return fmt.Errorf("move users.department references: %w", err)
+	}
+
+	if ok, err := tableExists(ctx, tx, "tickets"); err != nil {
+		return err
+	} else if ok {
+		if _, err := tx.Exec(ctx, `UPDATE tickets SET department = $1 WHERE department = $2`, toID, fromID); err != nil {
+			return fmt.Errorf("move tickets.department references: %w", err)
 		}
 	}
 
-	return "", fmt.Errorf("create department: %w", err)
+	if _, err := tx.Exec(ctx, `DELETE FROM departments WHERE id = $1`, fromID); err != nil {
+		return fmt.Errorf("delete old department: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit department migration: %w", err)
+	}
+
+	return nil
 }
 
 func findOrCreateRole(ctx context.Context, db *pgxpool.Pool, roleName string) (int, error) {
@@ -407,28 +462,9 @@ func importOneUser(ctx context.Context, db *pgxpool.Pool, user legacyUser, passw
 
 	var userID string
 	created := true
-	err = tx.QueryRow(
-		ctx,
-		`INSERT INTO accounts (username, password_hash)
-		 VALUES ($1, $2)
-		 ON CONFLICT (username) DO NOTHING
-		 RETURNING user_id`,
-		user.Username,
-		passwordHash,
-	).Scan(&userID)
+	created, userID, err = ensureLegacyAccount(ctx, tx, user, passwordHash)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			created = false
-			if err := tx.QueryRow(
-				ctx,
-				`SELECT user_id FROM accounts WHERE username = $1`,
-				user.Username,
-			).Scan(&userID); err != nil {
-				return false, fmt.Errorf("load existing account: %w", err)
-			}
-		} else {
-			return false, fmt.Errorf("create account: %w", err)
-		}
+		return false, err
 	}
 
 	if _, err := tx.Exec(
@@ -490,6 +526,160 @@ func importOneUser(ctx context.Context, db *pgxpool.Pool, user legacyUser, passw
 	}
 
 	return created, nil
+}
+
+func ensureLegacyAccount(ctx context.Context, tx pgx.Tx, user legacyUser, passwordHash string) (bool, string, error) {
+	if strings.TrimSpace(user.LegacyID) == "" {
+		return false, "", fmt.Errorf("missing legacy user id for %s", user.SourceID)
+	}
+
+	var existingID string
+	err := tx.QueryRow(ctx, `SELECT user_id FROM accounts WHERE user_id = $1`, user.LegacyID).Scan(&existingID)
+	switch {
+	case err == nil:
+		if _, err := tx.Exec(
+			ctx,
+			`UPDATE accounts
+			 SET username = $1
+			 WHERE user_id = $2`,
+			user.Username,
+			user.LegacyID,
+		); err != nil {
+			return false, "", fmt.Errorf("update legacy account username: %w", err)
+		}
+		return false, user.LegacyID, nil
+	case !errors.Is(err, pgx.ErrNoRows):
+		return false, "", fmt.Errorf("query account by legacy id: %w", err)
+	}
+
+	err = tx.QueryRow(ctx, `SELECT user_id FROM accounts WHERE username = $1`, user.Username).Scan(&existingID)
+	switch {
+	case err == nil:
+		if existingID == user.LegacyID {
+			return false, user.LegacyID, nil
+		}
+		if err := migrateAccountID(ctx, tx, existingID, user.LegacyID, user.Username); err != nil {
+			return false, "", err
+		}
+		return false, user.LegacyID, nil
+	case !errors.Is(err, pgx.ErrNoRows):
+		return false, "", fmt.Errorf("query account by username: %w", err)
+	}
+
+	if _, err := tx.Exec(
+		ctx,
+		`INSERT INTO accounts (user_id, username, password_hash)
+		 VALUES ($1, $2, $3)`,
+		user.LegacyID,
+		user.Username,
+		passwordHash,
+	); err != nil {
+		return false, "", fmt.Errorf("create account: %w", err)
+	}
+
+	return true, user.LegacyID, nil
+}
+
+func migrateAccountID(ctx context.Context, tx pgx.Tx, fromID, toID, username string) error {
+	var passwordHash string
+	var disabled bool
+	if err := tx.QueryRow(
+		ctx,
+		`SELECT password_hash, disabled FROM accounts WHERE user_id = $1`,
+		fromID,
+	).Scan(&passwordHash, &disabled); err != nil {
+		return fmt.Errorf("load existing account for migration: %w", err)
+	}
+
+	tempUsername := username + "__legacy_migrate__" + strings.ReplaceAll(fromID, "-", "")
+	if len(tempUsername) > 120 {
+		tempUsername = tempUsername[:120]
+	}
+
+	if _, err := tx.Exec(
+		ctx,
+		`UPDATE accounts
+		 SET username = $1
+		 WHERE user_id = $2`,
+		tempUsername,
+		fromID,
+	); err != nil {
+		return fmt.Errorf("rename old account username: %w", err)
+	}
+
+	if _, err := tx.Exec(
+		ctx,
+		`INSERT INTO accounts (user_id, username, disabled, password_hash)
+		 VALUES ($1, $2, $3, $4)`,
+		toID,
+		username,
+		disabled,
+		passwordHash,
+	); err != nil {
+		return fmt.Errorf("insert legacy account: %w", err)
+	}
+
+	if _, err := tx.Exec(
+		ctx,
+		`INSERT INTO users (user_id, first_name, last_name, department, email, phone, logo, latest_ticket)
+		 SELECT $1, first_name, last_name, department, email, phone, logo, latest_ticket
+		 FROM users
+		 WHERE user_id = $2
+		 ON CONFLICT (user_id) DO NOTHING`,
+		toID,
+		fromID,
+	); err != nil {
+		return fmt.Errorf("copy user profile to legacy account: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM users WHERE user_id = $1`, fromID); err != nil {
+		return fmt.Errorf("delete old user profile: %w", err)
+	}
+
+	if _, err := tx.Exec(
+		ctx,
+		`INSERT INTO account_roles (user_id, role_id)
+		 SELECT $1, role_id
+		 FROM account_roles
+		 WHERE user_id = $2
+		 ON CONFLICT (user_id) DO UPDATE SET role_id = EXCLUDED.role_id`,
+		toID,
+		fromID,
+	); err != nil {
+		return fmt.Errorf("copy account role to legacy account: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM account_roles WHERE user_id = $1`, fromID); err != nil {
+		return fmt.Errorf("delete old account role: %w", err)
+	}
+
+	if ok, err := tableExists(ctx, tx, "comments"); err != nil {
+		return err
+	} else if ok {
+		if _, err := tx.Exec(ctx, `UPDATE comments SET author_id = $1 WHERE author_id = $2`, toID, fromID); err != nil {
+			return fmt.Errorf("move comments.author_id references: %w", err)
+		}
+	}
+
+	if ok, err := tableExists(ctx, tx, "tickets"); err != nil {
+		return err
+	} else if ok {
+		if _, err := tx.Exec(ctx, `UPDATE tickets SET author = $1 WHERE author = $2`, toID, fromID); err != nil {
+			return fmt.Errorf("move tickets.author references: %w", err)
+		}
+		if _, err := tx.Exec(ctx, `UPDATE tickets SET assigned_by = $1 WHERE assigned_by = $2`, toID, fromID); err != nil {
+			return fmt.Errorf("move tickets.assigned_by references: %w", err)
+		}
+		if _, err := tx.Exec(ctx, `UPDATE tickets SET executor = $1 WHERE executor = $2`, toID, fromID); err != nil {
+			return fmt.Errorf("move tickets.executor references: %w", err)
+		}
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM accounts WHERE user_id = $1`, fromID); err != nil {
+		return fmt.Errorf("delete old account: %w", err)
+	}
+
+	return nil
 }
 
 func preferredRole(roles []string) string {
@@ -614,4 +804,14 @@ func newUUID() (string, error) {
 		b[8], b[9],
 		b[10], b[11], b[12], b[13], b[14], b[15],
 	), nil
+}
+
+func tableExists(ctx context.Context, q interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}, name string) (bool, error) {
+	var exists bool
+	if err := q.QueryRow(ctx, `SELECT to_regclass($1) IS NOT NULL`, name).Scan(&exists); err != nil {
+		return false, fmt.Errorf("check table %s: %w", name, err)
+	}
+	return exists, nil
 }
