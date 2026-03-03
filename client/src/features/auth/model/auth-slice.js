@@ -1,0 +1,219 @@
+import { createSlice } from "@reduxjs/toolkit";
+import {
+  fetchProfile,
+  loginRequest,
+  refreshSessionRequest,
+} from "../../../shared/api/auth";
+import {
+  clearStoredTokens,
+  getAccessToken,
+  getRefreshToken,
+  storeTokens,
+} from "../../../shared/lib/auth-tokens";
+
+const initialFeedback = {
+  tone: "idle",
+  message: "",
+};
+
+const initialState = {
+  feedback: initialFeedback,
+  isBootstrapping: true,
+  isRefreshing: false,
+  isSubmitting: false,
+  session: null,
+};
+
+const authSlice = createSlice({
+  name: "auth",
+  initialState,
+  reducers: {
+    clearFeedback(state) {
+      state.feedback = initialFeedback;
+    },
+    setBootstrapping(state, action) {
+      state.isBootstrapping = action.payload;
+    },
+    setFeedback(state, action) {
+      state.feedback = action.payload;
+    },
+    setRefreshing(state, action) {
+      state.isRefreshing = action.payload;
+    },
+    setSession(state, action) {
+      state.session = action.payload;
+    },
+    setSubmitting(state, action) {
+      state.isSubmitting = action.payload;
+    },
+  },
+});
+
+const {
+  clearFeedback,
+  setBootstrapping,
+  setFeedback,
+  setRefreshing,
+  setSession,
+  setSubmitting,
+} = authSlice.actions;
+
+async function loadSession(dispatch, accessToken) {
+  const data = await fetchProfile(accessToken);
+  dispatch(setSession(data));
+
+  return data;
+}
+
+export function restoreSession() {
+  return async function restoreSessionThunk(dispatch) {
+    const accessToken = getAccessToken();
+    const refreshToken = getRefreshToken();
+
+    if (!accessToken) {
+      dispatch(setBootstrapping(false));
+      return null;
+    }
+
+    try {
+      await loadSession(dispatch, accessToken);
+    } catch {
+      if (!refreshToken) {
+        clearStoredTokens();
+        dispatch(setSession(null));
+      } else {
+        try {
+          await dispatch(rotateSessionWithToken(refreshToken, { silent: true }));
+        } catch {
+          clearStoredTokens();
+          dispatch(setSession(null));
+        }
+      }
+    } finally {
+      dispatch(setBootstrapping(false));
+    }
+
+    return null;
+  };
+}
+
+export function login(credentials) {
+  return async function loginThunk(dispatch) {
+    dispatch(setSubmitting(true));
+    dispatch(clearFeedback());
+
+    try {
+      const data = await loginRequest(credentials);
+      storeTokens(data);
+      await loadSession(dispatch, data.access_token);
+      dispatch(
+        setFeedback({
+          tone: "success",
+          message: `Welcome back, ${data.username}.`,
+        }),
+      );
+
+      return data;
+    } catch (error) {
+      clearStoredTokens();
+      dispatch(setSession(null));
+      dispatch(
+        setFeedback({
+          tone: "error",
+          message: error.message,
+        }),
+      );
+      throw error;
+    } finally {
+      dispatch(setSubmitting(false));
+    }
+  };
+}
+
+export function rotateSessionWithToken(refreshToken, options = {}) {
+  return async function rotateSessionThunk(dispatch) {
+    const { silent = false } = options;
+
+    dispatch(setRefreshing(true));
+
+    try {
+      const data = await refreshSessionRequest(refreshToken);
+      storeTokens(data);
+      await loadSession(dispatch, data.access_token);
+
+      if (!silent) {
+        dispatch(
+          setFeedback({
+            tone: "success",
+            message: "Session rotated successfully.",
+          }),
+        );
+      }
+
+      return data;
+    } catch (error) {
+      clearStoredTokens();
+      dispatch(setSession(null));
+
+      if (!silent) {
+        dispatch(
+          setFeedback({
+            tone: "error",
+            message: error.message,
+          }),
+        );
+      }
+
+      throw error;
+    } finally {
+      dispatch(setRefreshing(false));
+    }
+  };
+}
+
+export function rotateSession() {
+  return async function rotateSessionThunk(dispatch) {
+    const refreshToken = getRefreshToken();
+
+    if (!refreshToken) {
+      const error = new Error("No refresh token available.");
+
+      dispatch(
+        setFeedback({
+          tone: "error",
+          message: error.message,
+        }),
+      );
+
+      throw error;
+    }
+
+    dispatch(clearFeedback());
+
+    return dispatch(rotateSessionWithToken(refreshToken));
+  };
+}
+
+export function signOut() {
+  return function signOutThunk(dispatch) {
+    clearStoredTokens();
+    dispatch(setSession(null));
+    dispatch(
+      setFeedback({
+        tone: "success",
+        message: "Signed out.",
+      }),
+    );
+  };
+}
+
+export function selectAuthState(state) {
+  return state.auth;
+}
+
+export const authActions = {
+  clearFeedback,
+  setFeedback,
+};
+
+export const authReducer = authSlice.reducer;

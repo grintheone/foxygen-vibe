@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	appdb "foxygen-vibe/server/internal/db"
 	"github.com/jackc/pgx/v5"
@@ -11,6 +12,7 @@ import (
 )
 
 type demoAccount struct {
+	userID     string
 	username   string
 	password   string
 	firstName  string
@@ -21,6 +23,7 @@ type demoAccount struct {
 
 var demoAccounts = []demoAccount{
 	{
+		userID:     "11111111-1111-1111-1111-111111111111",
 		username:   "mobile.lead",
 		password:   "Alpha123!",
 		firstName:  "Maya",
@@ -29,6 +32,7 @@ var demoAccounts = []demoAccount{
 		department: "Mobile Engineering",
 	},
 	{
+		userID:     "22222222-2222-2222-2222-222222222222",
 		username:   "qa.runner",
 		password:   "Beta123!",
 		firstName:  "Jordan",
@@ -37,6 +41,7 @@ var demoAccounts = []demoAccount{
 		department: "Quality Assurance",
 	},
 	{
+		userID:     "33333333-3333-3333-3333-333333333333",
 		username:   "ops.viewer",
 		password:   "Gamma123!",
 		firstName:  "Priya",
@@ -44,6 +49,26 @@ var demoAccounts = []demoAccount{
 		email:      "priya.nair@foxygen.dev",
 		department: "Operations",
 	},
+}
+
+func findDemoAccount(username string) (demoAccount, bool) {
+	for _, account := range demoAccounts {
+		if strings.EqualFold(account.username, username) {
+			return account, true
+		}
+	}
+
+	return demoAccount{}, false
+}
+
+func findDemoAccountByUserID(userID string) (demoAccount, bool) {
+	for _, account := range demoAccounts {
+		if account.userID == userID {
+			return account, true
+		}
+	}
+
+	return demoAccount{}, false
 }
 
 func (s *Server) ensureDemoAccounts(ctx context.Context) error {
