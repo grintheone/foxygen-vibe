@@ -390,6 +390,61 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
+	type profileResponse struct {
+		UserID     string `json:"user_id"`
+		Username   string `json:"username"`
+		Name       string `json:"name"`
+		Email      string `json:"email"`
+		Department string `json:"department"`
+	}
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.queries == nil {
+		http.Error(w, "database not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	claims, err := parseAuthorizationHeader(s.auth.jwtSecret, r.Header.Get("Authorization"))
+	if err != nil {
+		http.Error(w, "invalid access token", http.StatusUnauthorized)
+		return
+	}
+
+	var userID pgtype.UUID
+	if err := userID.Scan(claims.Subject); err != nil {
+		http.Error(w, "invalid access token", http.StatusUnauthorized)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	profile, err := s.queries.GetUserProfileByUserID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			http.Error(w, "profile not found", http.StatusNotFound)
+			return
+		}
+
+		log.Printf("load user profile failed: %v", err)
+		http.Error(w, "failed to load profile", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, profileResponse{
+		UserID:     uuidToString(profile.UserID),
+		Username:   profile.Username,
+		Name:       profile.Name,
+		Email:      profile.Email,
+		Department: profile.Department,
+	})
+}
+
 func writeJSON(w http.ResponseWriter, statusCode int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)

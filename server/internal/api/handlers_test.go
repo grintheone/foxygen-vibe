@@ -18,11 +18,13 @@ import (
 type fakeAccountStore struct {
 	account             appdb.Account
 	accountByUserID     appdb.Account
+	profile             appdb.GetUserProfileByUserIDRow
 	refreshTokens       []appdb.RefreshToken
 	createAccountErr    error
 	createUserErr       error
 	getAccountErr       error
 	getAccountByIDErr   error
+	getProfileErr       error
 	createRefreshErr    error
 	getRefreshErrs      []error
 	rotateRefreshErr    error
@@ -33,6 +35,7 @@ type fakeAccountStore struct {
 	userCalled          bool
 	getCalled           bool
 	getByIDCalled       bool
+	getProfileCalled    bool
 	createRefreshCalled bool
 	rotateRefreshCalled bool
 	username            string
@@ -63,6 +66,12 @@ func (f *fakeAccountStore) GetAccountByUserID(_ context.Context, userID pgtype.U
 	f.getByIDCalled = true
 	f.userID = userID
 	return f.accountByUserID, f.getAccountByIDErr
+}
+
+func (f *fakeAccountStore) GetUserProfileByUserID(_ context.Context, userID pgtype.UUID) (appdb.GetUserProfileByUserIDRow, error) {
+	f.getProfileCalled = true
+	f.userID = userID
+	return f.profile, f.getProfileErr
 }
 
 func (f *fakeAccountStore) CreateRefreshToken(_ context.Context, params appdb.CreateRefreshTokenParams) (appdb.RefreshToken, error) {
@@ -660,5 +669,91 @@ func TestSessionEndpointReturnsClaims(t *testing.T) {
 	}
 	if body := rec.Body.String(); !strings.Contains(body, `"username":"alice"`) {
 		t.Fatalf("expected response body to contain username, got %s", body)
+	}
+}
+
+func TestProfileEndpointRequiresDatabase(t *testing.T) {
+	t.Parallel()
+
+	srv := &Server{auth: testAuthConfig()}
+	req := httptest.NewRequest(http.MethodGet, "/api/profile", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
+	}
+}
+
+func TestProfileEndpointRejectsMissingToken(t *testing.T) {
+	t.Parallel()
+
+	srv := &Server{
+		queries: &fakeAccountStore{},
+		auth:    testAuthConfig(),
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/profile", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status %d, got %d", http.StatusUnauthorized, rec.Code)
+	}
+}
+
+func TestProfileEndpointReturnsProfile(t *testing.T) {
+	t.Parallel()
+
+	secret := testAuthConfig().jwtSecret
+	userID := pgtype.UUID{Bytes: [16]byte{4, 5, 6}, Valid: true}
+	token, err := signJWT(secret, accessTokenClaims{
+		Subject:   userID.String(),
+		Username:  "mobile.lead",
+		TokenType: accessTokenType,
+		ExpiresAt: time.Now().Add(time.Minute).Unix(),
+		IssuedAt:  time.Now().Unix(),
+	})
+	if err != nil {
+		t.Fatalf("sign jwt: %v", err)
+	}
+
+	store := &fakeAccountStore{
+		profile: appdb.GetUserProfileByUserIDRow{
+			UserID:     userID,
+			Username:   "mobile.lead",
+			Name:       "Maya Hernandez",
+			Email:      "maya.hernandez@foxygen.dev",
+			Department: "Mobile Engineering",
+		},
+	}
+	srv := &Server{queries: store, auth: testAuthConfig()}
+	req := httptest.NewRequest(http.MethodGet, "/api/profile", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if !store.getProfileCalled {
+		t.Fatal("expected GetUserProfileByUserID to be called")
+	}
+	if store.userID != userID {
+		t.Fatal("expected profile lookup to use token subject")
+	}
+
+	body := rec.Body.String()
+	for _, want := range []string{
+		`"username":"mobile.lead"`,
+		`"name":"Maya Hernandez"`,
+		`"email":"maya.hernandez@foxygen.dev"`,
+		`"department":"Mobile Engineering"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("expected response body to contain %q, got %s", want, body)
+		}
 	}
 }

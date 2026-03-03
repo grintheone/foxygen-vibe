@@ -17,3 +17,15 @@ WHERE username = $1;
 SELECT user_id, username, disabled, password_hash
 FROM accounts
 WHERE user_id = $1;
+
+-- name: GetUserProfileByUserID :one
+SELECT
+  a.user_id,
+  a.username,
+  TRIM(CONCAT(u.first_name, ' ', u.last_name)) AS name,
+  u.email,
+  COALESCE(d.title, '') AS department
+FROM accounts AS a
+JOIN users AS u ON u.user_id = a.user_id
+LEFT JOIN departments AS d ON d.id = u.department_id
+WHERE a.user_id = $1;

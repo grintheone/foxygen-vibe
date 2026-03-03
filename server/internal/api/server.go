@@ -10,6 +10,7 @@ import (
 	"time"
 
 	appdb "foxygen-vibe/server/internal/db"
+
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -26,6 +27,7 @@ type accountStore interface {
 	CreateUserProfile(context.Context, pgtype.UUID) (appdb.User, error)
 	GetAccountByUsername(context.Context, string) (appdb.Account, error)
 	GetAccountByUserID(context.Context, pgtype.UUID) (appdb.Account, error)
+	GetUserProfileByUserID(context.Context, pgtype.UUID) (appdb.GetUserProfileByUserIDRow, error)
 	CreateRefreshToken(context.Context, appdb.CreateRefreshTokenParams) (appdb.RefreshToken, error)
 	GetRefreshTokenByHash(context.Context, string) (appdb.RefreshToken, error)
 	RotateRefreshToken(context.Context, appdb.RotateRefreshTokenParams) (int64, error)
@@ -69,6 +71,10 @@ func New() (*Server, error) {
 		db.Close()
 		return nil, err
 	}
+	if err := api.ensureDemoAccounts(ctx); err != nil {
+		db.Close()
+		return nil, err
+	}
 
 	return api, nil
 }
@@ -86,6 +92,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/auth/login", s.handleLogin)
 	mux.HandleFunc("/api/auth/refresh", s.handleRefresh)
 	mux.HandleFunc("/api/auth/session", s.handleSession)
+	mux.HandleFunc("/api/profile", s.handleProfile)
 
 	return withRequestLogging(withCORS(mux))
 }
