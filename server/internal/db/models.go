@@ -20,7 +20,72 @@ type AccountRole struct {
 	RoleID int32
 }
 
+type Agreement struct {
+	ID           pgtype.UUID
+	Number       pgtype.Int4
+	ActualClient pgtype.UUID
+	Distributor  pgtype.UUID
+	Device       pgtype.UUID
+	AssignedAt   pgtype.Timestamp
+	FinishedAt   pgtype.Timestamp
+	IsActive     bool
+	OnWarranty   bool
+	Type         pgtype.Text
+}
+
+type Attachment struct {
+	ID        string
+	Name      string
+	MediaType string
+	Ext       string
+	RefID     pgtype.UUID
+}
+
+type Classificator struct {
+	ID                      pgtype.UUID
+	Title                   string
+	Manufacturer            pgtype.UUID
+	ResearchType            pgtype.UUID
+	RegistrationCertificate []byte
+	MaintenanceRegulations  []byte
+	Attachments             []string
+	Images                  []string
+}
+
+type Client struct {
+	ID               pgtype.UUID
+	Title            string
+	Region           pgtype.UUID
+	Address          pgtype.Text
+	Location         []byte
+	LaboratorySystem pgtype.UUID
+	Manager          []pgtype.UUID
+}
+
+type Contact struct {
+	ID       pgtype.UUID
+	Name     string
+	Position string
+	Phone    string
+	Email    string
+	ClientID pgtype.UUID
+}
+
 type Department struct {
+	ID    pgtype.UUID
+	Title string
+}
+
+type Device struct {
+	ID             pgtype.UUID
+	Classificator  pgtype.UUID
+	SerialNumber   string
+	Properties     []byte
+	ConnectedToLis bool
+	IsUsed         bool
+}
+
+type Manufacturer struct {
 	ID    pgtype.UUID
 	Title string
 }
@@ -36,10 +101,68 @@ type RefreshToken struct {
 	RevokedAt  pgtype.Timestamptz
 }
 
+type Region struct {
+	ID    pgtype.UUID
+	Title string
+}
+
+type ResearchType struct {
+	ID    pgtype.UUID
+	Title string
+}
+
 type Role struct {
 	ID          int32
 	Name        string
 	Description pgtype.Text
+}
+
+type Ticket struct {
+	ID              pgtype.UUID
+	Number          pgtype.Int4
+	CreatedAt       pgtype.Timestamp
+	AssignedAt      pgtype.Timestamp
+	WorkstartedAt   pgtype.Timestamp
+	WorkfinishedAt  pgtype.Timestamp
+	PlannedStart    pgtype.Timestamp
+	PlannedEnd      pgtype.Timestamp
+	AssignedStart   pgtype.Timestamp
+	AssignedEnd     pgtype.Timestamp
+	Urgent          bool
+	ClosedAt        pgtype.Timestamp
+	Client          pgtype.UUID
+	Device          pgtype.UUID
+	TicketType      pgtype.Text
+	Author          pgtype.UUID
+	Department      pgtype.UUID
+	AssignedBy      pgtype.UUID
+	Reason          pgtype.Text
+	Description     string
+	ContactPerson   pgtype.UUID
+	Executor        pgtype.UUID
+	Status          pgtype.Text
+	Result          string
+	UsedMaterials   []pgtype.UUID
+	ReferenceTicket pgtype.UUID
+	DoubleSigned    bool
+}
+
+type TicketReason struct {
+	ID      string
+	Title   string
+	Past    string
+	Present string
+	Future  string
+}
+
+type TicketStatus struct {
+	Type  string
+	Title string
+}
+
+type TicketType struct {
+	Type  string
+	Title string
 }
 
 type User struct {

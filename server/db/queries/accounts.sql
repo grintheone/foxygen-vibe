@@ -24,8 +24,11 @@ SELECT
   a.username,
   TRIM(CONCAT(u.first_name, ' ', u.last_name)) AS name,
   u.email,
-  COALESCE(d.title, '') AS department
+  COALESCE(d.title, '') AS department,
+  COALESCE(r.name, 'user') AS role
 FROM accounts AS a
 JOIN users AS u ON u.user_id = a.user_id
 LEFT JOIN departments AS d ON d.id = u.department
+LEFT JOIN account_roles AS ar ON ar.user_id = a.user_id
+LEFT JOIN roles AS r ON r.id = ar.role_id
 WHERE a.user_id = $1;

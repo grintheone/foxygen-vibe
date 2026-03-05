@@ -393,6 +393,7 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 		Name       string `json:"name"`
 		Email      string `json:"email"`
 		Department string `json:"department"`
+		Role       string `json:"role"`
 	}
 
 	if r.Method != http.MethodGet {
@@ -438,6 +439,7 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 		Name:       profile.Name,
 		Email:      profile.Email,
 		Department: profile.Department,
+		Role:       profile.Role,
 	})
 }
 

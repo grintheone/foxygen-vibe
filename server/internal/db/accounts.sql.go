@@ -56,40 +56,6 @@ func (q *Queries) CreateUserProfile(ctx context.Context, userID pgtype.UUID) (Us
 	return i, err
 }
 
-const getUserProfileByUserID = `-- name: GetUserProfileByUserID :one
-SELECT
-  a.user_id,
-  a.username,
-  TRIM(CONCAT(u.first_name, ' ', u.last_name)) AS name,
-  u.email,
-  COALESCE(d.title, '') AS department
-FROM accounts AS a
-JOIN users AS u ON u.user_id = a.user_id
-LEFT JOIN departments AS d ON d.id = u.department
-WHERE a.user_id = $1
-`
-
-type GetUserProfileByUserIDRow struct {
-	UserID     pgtype.UUID
-	Username   string
-	Name       string
-	Email      string
-	Department string
-}
-
-func (q *Queries) GetUserProfileByUserID(ctx context.Context, userID pgtype.UUID) (GetUserProfileByUserIDRow, error) {
-	row := q.db.QueryRow(ctx, getUserProfileByUserID, userID)
-	var i GetUserProfileByUserIDRow
-	err := row.Scan(
-		&i.UserID,
-		&i.Username,
-		&i.Name,
-		&i.Email,
-		&i.Department,
-	)
-	return i, err
-}
-
 const getAccountByUserID = `-- name: GetAccountByUserID :one
 SELECT user_id, username, disabled, password_hash
 FROM accounts
@@ -122,6 +88,45 @@ func (q *Queries) GetAccountByUsername(ctx context.Context, username string) (Ac
 		&i.Username,
 		&i.Disabled,
 		&i.PasswordHash,
+	)
+	return i, err
+}
+
+const getUserProfileByUserID = `-- name: GetUserProfileByUserID :one
+SELECT
+  a.user_id,
+  a.username,
+  TRIM(CONCAT(u.first_name, ' ', u.last_name)) AS name,
+  u.email,
+  COALESCE(d.title, '') AS department,
+  COALESCE(r.name, 'user') AS role
+FROM accounts AS a
+JOIN users AS u ON u.user_id = a.user_id
+LEFT JOIN departments AS d ON d.id = u.department
+LEFT JOIN account_roles AS ar ON ar.user_id = a.user_id
+LEFT JOIN roles AS r ON r.id = ar.role_id
+WHERE a.user_id = $1
+`
+
+type GetUserProfileByUserIDRow struct {
+	UserID     pgtype.UUID
+	Username   string
+	Name       string
+	Email      string
+	Department string
+	Role       string
+}
+
+func (q *Queries) GetUserProfileByUserID(ctx context.Context, userID pgtype.UUID) (GetUserProfileByUserIDRow, error) {
+	row := q.db.QueryRow(ctx, getUserProfileByUserID, userID)
+	var i GetUserProfileByUserIDRow
+	err := row.Scan(
+		&i.UserID,
+		&i.Username,
+		&i.Name,
+		&i.Email,
+		&i.Department,
+		&i.Role,
 	)
 	return i, err
 }
