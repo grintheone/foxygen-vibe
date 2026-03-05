@@ -3,6 +3,7 @@ import { GuestRoute, ProtectedRoute } from "../../features/auth";
 import { DashboardPage } from "../../pages/dashboard";
 import { ProfilePage } from "../../pages/profile";
 import { SignInPage } from "../../pages/sign-in";
+import { TicketPage } from "../../pages/ticket";
 import { routePaths } from "../../shared/config/routes";
 
 export function AppRouter() {
@@ -15,6 +16,7 @@ export function AppRouter() {
         <Route element={<ProtectedRoute />}>
           <Route path={routePaths.dashboard} element={<DashboardPage />} />
           <Route path={routePaths.profile} element={<ProfilePage />} />
+          <Route path={routePaths.ticketPattern} element={<TicketPage />} />
         </Route>
         <Route
           path="*"
