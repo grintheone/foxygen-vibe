@@ -33,7 +33,7 @@ export function SignInPage() {
     if (!username || !password) {
       setFeedback({
         tone: "error",
-        message: "Username and password are required.",
+        message: "Требуются имя пользователя и пароль.",
       });
       return;
     }

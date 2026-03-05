@@ -7,7 +7,7 @@ export function ProtectedRoute() {
   const { isBootstrapping, session } = useAuth();
 
   if (isBootstrapping) {
-    return <RouteLoader message="Restoring your session..." />;
+    return <RouteLoader message="Восстанавливаем вашу сессию..." />;
   }
 
   if (!session) {

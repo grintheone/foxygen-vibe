@@ -14,7 +14,7 @@ export async function loginRequest(credentials) {
   });
 
   if (!response.ok) {
-    throw new Error(await readError(response, "Authentication failed."));
+    throw new Error(await readError(response, "Ошибка аутентификации."));
   }
 
   return response.json();
@@ -28,7 +28,7 @@ export async function fetchProfile(accessToken) {
   });
 
   if (!response.ok) {
-    throw new Error(await readError(response, "Session validation failed."));
+    throw new Error(await readError(response, "Не удалось проверить сессию."));
   }
 
   return response.json();
@@ -46,7 +46,7 @@ export async function refreshSessionRequest(refreshToken) {
   });
 
   if (!response.ok) {
-    throw new Error(await readError(response, "Token rotation failed."));
+    throw new Error(await readError(response, "Не удалось обновить токен."));
   }
 
   return response.json();

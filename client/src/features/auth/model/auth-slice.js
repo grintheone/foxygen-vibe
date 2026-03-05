@@ -109,7 +109,7 @@ export function login(credentials) {
       dispatch(
         setFeedback({
           tone: "success",
-          message: `Welcome back, ${data.username}.`,
+          message: `С возвращением, ${data.username}.`,
         }),
       );
 
@@ -145,7 +145,7 @@ export function rotateSessionWithToken(refreshToken, options = {}) {
         dispatch(
           setFeedback({
             tone: "success",
-            message: "Session rotated successfully.",
+            message: "Сессия успешно обновлена.",
           }),
         );
       }
@@ -176,7 +176,7 @@ export function rotateSession() {
     const refreshToken = getRefreshToken();
 
     if (!refreshToken) {
-      const error = new Error("No refresh token available.");
+      const error = new Error("Refresh token отсутствует.");
 
       dispatch(
         setFeedback({
@@ -201,7 +201,7 @@ export function signOut() {
     dispatch(
       setFeedback({
         tone: "success",
-        message: "Signed out.",
+        message: "Вы вышли из системы.",
       }),
     );
   };

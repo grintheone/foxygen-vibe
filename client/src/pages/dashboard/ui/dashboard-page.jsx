@@ -1,37 +1,22 @@
 import { useNavigate } from "react-router";
-import { useAuth } from "../../../features/auth";
 import { routePaths } from "../../../shared/config/routes";
 import { PageShell } from "../../../shared/ui/page-shell";
-import { StatusMessage } from "../../../shared/ui/status-message";
-import { DashboardOverview } from "../../../widgets/dashboard-overview";
-import { SessionPanel } from "../../../widgets/session-panel";
 
 export function DashboardPage() {
   const navigate = useNavigate();
-  const { feedback, isRefreshing, rotateSession, session, signOut } = useAuth();
-
-  function handleRotate() {
-    rotateSession().catch(() => {});
-  }
-
-  function handleSignOut() {
-    signOut();
-    navigate(routePaths.signIn);
-  }
 
   return (
     <PageShell>
-      <section className="grid w-full gap-6 lg:grid-cols-[1.35fr_0.85fr]">
-        <DashboardOverview session={session} />
-        <aside className="space-y-6">
-          <SessionPanel
-            session={session}
-            isRefreshing={isRefreshing}
-            onRotate={handleRotate}
-            onSignOut={handleSignOut}
-          />
-          {feedback.message ? <StatusMessage feedback={feedback} /> : null}
-        </aside>
+      <section className="w-full">
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => navigate(routePaths.profile)}
+            className="rounded-2xl bg-[#6A3BF2] px-5 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-white transition hover:bg-[#7C52F5]"
+          >
+            Открыть профиль
+          </button>
+        </div>
       </section>
     </PageShell>
   );

@@ -8,22 +8,23 @@ export function AuthForm({
   onSubmit,
 }) {
   return (
-    <div className="rounded-[2rem] border border-white/10 bg-white/10 p-8 shadow-2xl shadow-cyan-950/50 backdrop-blur-xl">
-      <p className="text-xs font-semibold uppercase tracking-[0.45em] text-cyan-300">
+    <div className="rounded-[2rem] border border-white/10 bg-white/10 p-8 shadow-2xl shadow-[#6A3BF2]/25 backdrop-blur-xl">
+      <p className="text-xs font-semibold uppercase tracking-[0.45em] text-[#6A3BF2]">
         Mobile Engineer V3
       </p>
       <h1 className="mt-4 text-4xl font-bold tracking-tight sm:text-5xl">
-        Sign In
+        Вход
       </h1>
       <p className="mt-3 max-w-md text-sm text-slate-300 sm:text-base">
-        Enter a valid username and password from the PostgreSQL-backed account
-        store. Successful login redirects to the dashboard.
+        Введите действительные имя пользователя и пароль из хранилища учетных
+        записей PostgreSQL. После успешного входа вы перейдете на главную
+        страницу.
       </p>
 
       <form className="mt-8 space-y-5" onSubmit={onSubmit}>
         <label className="block">
           <span className="mb-2 block text-sm font-medium text-slate-200">
-            Username
+            Имя пользователя
           </span>
           <input
             type="text"
@@ -32,13 +33,13 @@ export function AuthForm({
             onChange={onChange}
             autoComplete="username"
             placeholder="mobile.engineer"
-            className="w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-base text-slate-100 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30"
+            className="w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-base text-slate-100 outline-none transition focus:border-[#6A3BF2] focus:ring-2 focus:ring-[#6A3BF2]/30"
           />
         </label>
 
         <label className="block">
           <span className="mb-2 block text-sm font-medium text-slate-200">
-            Password
+            Пароль
           </span>
           <input
             type="password"
@@ -46,8 +47,8 @@ export function AuthForm({
             value={form.password}
             onChange={onChange}
             autoComplete="current-password"
-            placeholder="Enter your password"
-            className="w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-base text-slate-100 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30"
+            placeholder="Введите пароль"
+            className="w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-base text-slate-100 outline-none transition focus:border-[#6A3BF2] focus:ring-2 focus:ring-[#6A3BF2]/30"
           />
         </label>
 
@@ -56,9 +57,9 @@ export function AuthForm({
         <button
           type="submit"
           disabled={isSubmitting}
-          className="w-full rounded-2xl bg-cyan-400 px-4 py-3 text-sm font-semibold uppercase tracking-[0.25em] text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:bg-cyan-200"
+          className="w-full rounded-2xl bg-[#6A3BF2] px-4 py-3 text-sm font-semibold uppercase tracking-[0.25em] text-white transition hover:bg-[#7C52F5] disabled:cursor-not-allowed disabled:bg-[#6A3BF2]/60"
         >
-          {isSubmitting ? "Working..." : "Authenticate"}
+          {isSubmitting ? "Выполняется..." : "Войти"}
         </button>
       </form>
     </div>
