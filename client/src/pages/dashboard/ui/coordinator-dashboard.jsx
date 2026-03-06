@@ -1,9 +1,29 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router";
 import { routePaths } from "../../../shared/config/routes";
-import { MOCK_DEPARTMENT_MEMBERS, MOCK_TICKETS } from "../model/mock-dashboard-data";
+import { useGetDepartmentTicketsQuery } from "../../../shared/api/tickets-api";
+import { MOCK_DEPARTMENT_MEMBERS } from "../model/mock-dashboard-data";
 import { TicketCardWithExecutor } from "./ticket-card-with-executor";
 import { TicketCardWithStatus } from "./ticket-card-with-status";
+
+function toTimestampOrMin(value) {
+    if (!value) {
+        return Number.NEGATIVE_INFINITY;
+    }
+
+    const timestamp = new Date(value).getTime();
+    if (Number.isNaN(timestamp)) {
+        return Number.NEGATIVE_INFINITY;
+    }
+
+    return timestamp;
+}
+
+function sortByAssignedEndDesc(tickets) {
+    return [...tickets].sort((a, b) => {
+        return toTimestampOrMin(b.assigned_end) - toTimestampOrMin(a.assigned_end);
+    });
+}
 
 function PersonIcon({ className }) {
     return (
@@ -102,16 +122,14 @@ function MemberCard({ member, totalTickets }) {
 export function CoordinatorDashboard({ department }) {
     const navigate = useNavigate();
     const normalizedDepartment = (department || "").trim();
+    const { data: departmentTickets = [], isError, isFetching, isLoading } = useGetDepartmentTicketsQuery(
+        normalizedDepartment || "__no_department__",
+        { skip: !normalizedDepartment },
+    );
 
     const unassignedTickets = useMemo(() => {
-        const createdTickets = MOCK_TICKETS.filter((ticket) => ticket.status === "created");
-
-        if (!normalizedDepartment) {
-            return createdTickets;
-        }
-
-        return createdTickets.filter((ticket) => (ticket.department || "").trim() === normalizedDepartment);
-    }, [normalizedDepartment]);
+        return sortByAssignedEndDesc(departmentTickets.filter((ticket) => ticket.status === "created"));
+    }, [departmentTickets]);
 
     const departmentMembers = useMemo(() => {
         if (!normalizedDepartment) {
@@ -122,17 +140,11 @@ export function CoordinatorDashboard({ department }) {
     }, [normalizedDepartment]);
 
     const activeDepartmentTickets = useMemo(() => {
-        const excludedStatuses = new Set(["created", "cancelled", "closed"]);
-        const departmentMemberIds = new Set(departmentMembers.map((member) => member.userId));
-
-        return MOCK_TICKETS.filter((ticket) => {
-            if (!ticket.executor || !departmentMemberIds.has(ticket.executor)) {
-                return false;
-            }
-
-            return !excludedStatuses.has(ticket.status);
-        });
-    }, [departmentMembers]);
+        const excludedStatuses = new Set(["canceled", "cancelled", "closed"]);
+        return sortByAssignedEndDesc(
+            departmentTickets.filter((ticket) => !excludedStatuses.has(ticket.status) && ticket.status !== "created"),
+        );
+    }, [departmentTickets]);
 
     const departmentMemberById = useMemo(() => {
         return departmentMembers.reduce((accumulator, member) => {
@@ -142,7 +154,7 @@ export function CoordinatorDashboard({ department }) {
     }, [departmentMembers]);
 
     const ticketsByExecutor = useMemo(() => {
-        return MOCK_TICKETS.reduce((accumulator, ticket) => {
+        return departmentTickets.reduce((accumulator, ticket) => {
             if (!ticket.executor) {
                 return accumulator;
             }
@@ -151,7 +163,7 @@ export function CoordinatorDashboard({ department }) {
             accumulator[ticket.executor] = currentCount + 1;
             return accumulator;
         }, {});
-    }, []);
+    }, [departmentTickets]);
 
     function handleOpenTicket(ticketId) {
         navigate(routePaths.ticketById(ticketId));
@@ -161,7 +173,15 @@ export function CoordinatorDashboard({ department }) {
         <section className="space-y-6">
             <section className="space-y-3">
                 <h2 className="text-sm font-semibold tracking-[0.02em] text-slate-200">{`Ждут распределения - ${unassignedTickets.length}`}</h2>
-                {unassignedTickets.length > 0 ? (
+                {isLoading || isFetching ? (
+                    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+                        Загружаем тикеты...
+                    </div>
+                ) : isError ? (
+                    <div className="rounded-2xl border border-rose-300/30 bg-rose-500/10 p-4 text-sm text-rose-100">
+                        Не удалось загрузить тикеты.
+                    </div>
+                ) : unassignedTickets.length > 0 ? (
                     <div className="grid gap-3">
                         {unassignedTickets.map((ticket) => (
                             <TicketCardWithStatus key={ticket.id} ticket={ticket} onOpenTicket={handleOpenTicket} />
@@ -197,16 +217,35 @@ export function CoordinatorDashboard({ department }) {
 
             <section className="space-y-3">
                 <h2 className="text-sm font-semibold tracking-[0.02em] text-slate-200">{`Назначены и в работе - ${activeDepartmentTickets.length}`}</h2>
-                {activeDepartmentTickets.length > 0 ? (
+                {isLoading || isFetching ? (
+                    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+                        Загружаем тикеты...
+                    </div>
+                ) : isError ? (
+                    <div className="rounded-2xl border border-rose-300/30 bg-rose-500/10 p-4 text-sm text-rose-100">
+                        Не удалось загрузить тикеты.
+                    </div>
+                ) : activeDepartmentTickets.length > 0 ? (
                     <div className="grid gap-3">
-                        {activeDepartmentTickets.map((ticket) => (
+                        {activeDepartmentTickets.map((ticket) => {
+                            const fallbackExecutor =
+                                ticket.executorName || ticket.executorDepartment
+                                    ? {
+                                          name: ticket.executorName || "Исполнитель не назначен",
+                                          department: ticket.executorDepartment || "Отдел не указан",
+                                          avatarUrl: "",
+                                      }
+                                    : null;
+
+                            return (
                             <TicketCardWithExecutor
                                 key={ticket.id}
                                 ticket={ticket}
-                                executor={departmentMemberById[ticket.executor]}
+                                executor={departmentMemberById[ticket.executor] || fallbackExecutor}
                                 onOpenTicket={handleOpenTicket}
                             />
-                        ))}
+                            );
+                        })}
                     </div>
                 ) : (
                     <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">

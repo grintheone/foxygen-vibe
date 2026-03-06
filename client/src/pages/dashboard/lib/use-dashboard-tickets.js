@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useGetMyTicketsQuery } from "../../../shared/api/tickets-api";
 
 export function useDashboardTickets(executorId) {
-  const { data = [], isError, isFetching, isLoading } = useGetMyTicketsQuery(undefined, {
+  const { data = [], isError, isFetching, isLoading } = useGetMyTicketsQuery(executorId, {
     skip: !executorId,
   });
 

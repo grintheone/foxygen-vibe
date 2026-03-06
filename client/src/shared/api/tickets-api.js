@@ -18,7 +18,10 @@ export const ticketsApi = createApi({
     getMyTickets: builder.query({
       query: () => "api/tickets",
     }),
+    getDepartmentTickets: builder.query({
+      query: () => "api/tickets/department",
+    }),
   }),
 });
 
-export const { useGetMyTicketsQuery } = ticketsApi;
+export const { useGetDepartmentTicketsQuery, useGetMyTicketsQuery } = ticketsApi;

@@ -3,7 +3,7 @@ import { MOCK_TICKET_REASONS } from "../model/mock-dashboard-data";
 export function resolveTicketReason(ticket) {
   const reason = MOCK_TICKET_REASONS.find((item) => item.id === ticket.reason);
   if (!reason) {
-    return "Не указано";
+    return ticket?.reason || "Не указано";
   }
 
   if (ticket.status === "assigned") {

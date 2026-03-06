@@ -10,6 +10,7 @@ import {
   getRefreshToken,
   storeTokens,
 } from "../../../shared/lib/auth-tokens";
+import { ticketsApi } from "../../../shared/api/tickets-api";
 
 const initialFeedback = {
   tone: "idle",
@@ -198,6 +199,7 @@ export function signOut() {
   return function signOutThunk(dispatch) {
     clearStoredTokens();
     dispatch(setSession(null));
+    dispatch(ticketsApi.util.resetApiState());
     dispatch(
       setFeedback({
         tone: "success",
