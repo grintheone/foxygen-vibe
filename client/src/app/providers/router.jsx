@@ -1,6 +1,8 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 import { GuestRoute, ProtectedRoute } from "../../features/auth";
+import { ClientPage } from "../../pages/client";
 import { DashboardPage } from "../../pages/dashboard";
+import { DevicePage } from "../../pages/device";
 import { ProfilePage } from "../../pages/profile";
 import { SignInPage } from "../../pages/sign-in";
 import { TicketPage } from "../../pages/ticket";
@@ -16,6 +18,8 @@ export function AppRouter() {
         <Route element={<ProtectedRoute />}>
           <Route path={routePaths.dashboard} element={<DashboardPage />} />
           <Route path={routePaths.profile} element={<ProfilePage />} />
+          <Route path={routePaths.clientPattern} element={<ClientPage />} />
+          <Route path={routePaths.devicePattern} element={<DevicePage />} />
           <Route path={routePaths.ticketPattern} element={<TicketPage />} />
         </Route>
         <Route

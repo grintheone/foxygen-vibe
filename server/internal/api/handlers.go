@@ -644,6 +644,7 @@ func (s *Server) handleTicketByID(w http.ResponseWriter, r *http.Request) {
 		AssignedByName     string   `json:"assignedByName"`
 		ContactPerson      *string  `json:"contactPerson"`
 		ContactName        string   `json:"contactName"`
+		ContactPosition    string   `json:"contactPosition"`
 		ContactPhone       string   `json:"contactPhone"`
 		ContactEmail       string   `json:"contactEmail"`
 		Executor           *string  `json:"executor"`
@@ -738,6 +739,7 @@ func (s *Server) handleTicketByID(w http.ResponseWriter, r *http.Request) {
 			TRIM(CONCAT(COALESCE(u_assigned.first_name, ''), ' ', COALESCE(u_assigned.last_name, ''))),
 			t.contact_person,
 			COALESCE(cp.name, ''),
+			COALESCE(cp.position, ''),
 			COALESCE(cp.phone, ''),
 			COALESCE(cp.email, ''),
 			t.executor,
@@ -807,6 +809,7 @@ func (s *Server) handleTicketByID(w http.ResponseWriter, r *http.Request) {
 		assignedByName     string
 		contactPerson      pgtype.UUID
 		contactName        string
+		contactPosition    string
 		contactPhone       string
 		contactEmail       string
 		executor           pgtype.UUID
@@ -852,6 +855,7 @@ func (s *Server) handleTicketByID(w http.ResponseWriter, r *http.Request) {
 		&assignedByName,
 		&contactPerson,
 		&contactName,
+		&contactPosition,
 		&contactPhone,
 		&contactEmail,
 		&executor,
@@ -906,6 +910,7 @@ func (s *Server) handleTicketByID(w http.ResponseWriter, r *http.Request) {
 		AssignedByName:     assignedByName,
 		ContactPerson:      nullableUUIDToString(contactPerson),
 		ContactName:        contactName,
+		ContactPosition:    contactPosition,
 		ContactPhone:       contactPhone,
 		ContactEmail:       contactEmail,
 		Executor:           nullableUUIDToString(executor),
