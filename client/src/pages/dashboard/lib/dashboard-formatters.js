@@ -70,3 +70,34 @@ export function isTodayOrPast(value) {
 
   return todayStart >= targetStart;
 }
+
+export function resolveTicketDeadlineDisplay(ticket) {
+  if (ticket?.workfinished_at) {
+    return {
+      dateValue: formatDateDayMonth(ticket.workfinished_at),
+      isOverdue: false,
+      shouldUseFireIcon: false,
+      isPlaceholder: false,
+      isFinishedDate: true,
+    };
+  }
+
+  if (!ticket?.assigned_end) {
+    return {
+      dateValue: formatDateDayMonth(ticket?.assigned_end),
+      isOverdue: false,
+      shouldUseFireIcon: false,
+      isPlaceholder: true,
+      isFinishedDate: false,
+    };
+  }
+
+  const isOverdue = isTodayOrPast(ticket.assigned_end);
+  return {
+    dateValue: formatDateDayMonth(ticket.assigned_end),
+    isOverdue,
+    shouldUseFireIcon: isOverdue,
+    isPlaceholder: false,
+    isFinishedDate: false,
+  };
+}

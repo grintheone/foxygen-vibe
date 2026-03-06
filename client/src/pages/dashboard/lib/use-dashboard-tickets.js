@@ -1,29 +1,30 @@
 import { useMemo } from "react";
-import { MOCK_EXECUTOR_ID, MOCK_TICKETS } from "../model/mock-dashboard-data";
+import { useGetMyTicketsQuery } from "../../../shared/api/tickets-api";
 
 export function useDashboardTickets(executorId) {
-  const resolvedExecutorId = executorId || MOCK_EXECUTOR_ID;
+  const { data = [], isError, isFetching, isLoading } = useGetMyTicketsQuery(undefined, {
+    skip: !executorId,
+  });
 
   const tickets = useMemo(
     () =>
-      MOCK_TICKETS.filter(
+      data.filter(
         (ticket) =>
-          ticket.executor === resolvedExecutorId &&
           (ticket.status === "inWork" || ticket.status === "worksDone"),
       ),
-    [resolvedExecutorId],
+    [data],
   );
 
   const assignedTickets = useMemo(
     () =>
-      MOCK_TICKETS.filter(
-        (ticket) => ticket.executor === resolvedExecutorId && ticket.status === "assigned",
-      ),
-    [resolvedExecutorId],
+      data.filter((ticket) => ticket.status === "assigned"),
+    [data],
   );
 
   return {
-    tickets,
     assignedTickets,
+    isError,
+    isLoading: isLoading || isFetching,
+    tickets,
   };
 }

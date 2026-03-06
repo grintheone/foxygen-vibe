@@ -443,6 +443,141 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleTickets(w http.ResponseWriter, r *http.Request) {
+	type ticketResponse struct {
+		ID                 string  `json:"id"`
+		Number             int32   `json:"number"`
+		Status             string  `json:"status"`
+		Description        string  `json:"description"`
+		Reason             string  `json:"reason"`
+		Urgent             bool    `json:"urgent"`
+		AssignedEnd        *string `json:"assigned_end"`
+		WorkstartedAt      *string `json:"workstarted_at"`
+		WorkfinishedAt     *string `json:"workfinished_at"`
+		DeviceName         string  `json:"deviceName"`
+		DeviceSerialNumber string  `json:"deviceSerialNumber"`
+		ClientName         string  `json:"clientName"`
+		ClientAddress      string  `json:"clientAddress"`
+	}
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	claims, err := parseAuthorizationHeader(s.auth.jwtSecret, r.Header.Get("Authorization"))
+	if err != nil {
+		http.Error(w, "invalid access token", http.StatusUnauthorized)
+		return
+	}
+
+	if s.db == nil {
+		http.Error(w, "database not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	var executorID pgtype.UUID
+	if err := executorID.Scan(claims.Subject); err != nil {
+		http.Error(w, "invalid access token", http.StatusUnauthorized)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	rows, err := s.db.Query(ctx, `
+		SELECT
+			t.id,
+			t.number,
+			COALESCE(t.status, ''),
+			t.description,
+			COALESCE(t.reason, ''),
+			t.urgent,
+			t.assigned_end,
+			t.workstarted_at,
+			t.workfinished_at,
+			COALESCE(cls.title, ''),
+			COALESCE(d.serial_number, ''),
+			COALESCE(c.title, ''),
+			COALESCE(c.address, '')
+		FROM tickets t
+		LEFT JOIN clients c ON c.id = t.client
+		LEFT JOIN devices d ON d.id = t.device
+		LEFT JOIN classificators cls ON cls.id = d.classificator
+		WHERE t.executor = $1
+		ORDER BY t.urgent DESC, t.created_at DESC, t.number DESC
+	`, executorID)
+	if err != nil {
+		log.Printf("query tickets failed: %v", err)
+		http.Error(w, "failed to load tickets", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	tickets := make([]ticketResponse, 0)
+	for rows.Next() {
+		var (
+			id             pgtype.UUID
+			number         pgtype.Int4
+			status         string
+			description    string
+			reason         string
+			urgent         bool
+			assignedEnd    pgtype.Timestamp
+			workstartedAt  pgtype.Timestamp
+			workfinishedAt pgtype.Timestamp
+			deviceName     string
+			deviceSerial   string
+			clientName     string
+			clientAddress  string
+		)
+
+		if err := rows.Scan(
+			&id,
+			&number,
+			&status,
+			&description,
+			&reason,
+			&urgent,
+			&assignedEnd,
+			&workstartedAt,
+			&workfinishedAt,
+			&deviceName,
+			&deviceSerial,
+			&clientName,
+			&clientAddress,
+		); err != nil {
+			log.Printf("scan ticket failed: %v", err)
+			http.Error(w, "failed to load tickets", http.StatusInternalServerError)
+			return
+		}
+
+		tickets = append(tickets, ticketResponse{
+			ID:                 uuidToString(id),
+			Number:             number.Int32,
+			Status:             status,
+			Description:        description,
+			Reason:             reason,
+			Urgent:             urgent,
+			AssignedEnd:        timestampToRFC3339(assignedEnd),
+			WorkstartedAt:      timestampToRFC3339(workstartedAt),
+			WorkfinishedAt:     timestampToRFC3339(workfinishedAt),
+			DeviceName:         deviceName,
+			DeviceSerialNumber: deviceSerial,
+			ClientName:         clientName,
+			ClientAddress:      clientAddress,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("iterate tickets failed: %v", err)
+		http.Error(w, "failed to load tickets", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, tickets)
+}
+
 func writeJSON(w http.ResponseWriter, statusCode int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
@@ -479,4 +614,13 @@ func uuidToString(id pgtype.UUID) string {
 	}
 
 	return id.String()
+}
+
+func timestampToRFC3339(value pgtype.Timestamp) *string {
+	if !value.Valid {
+		return nil
+	}
+
+	formatted := value.Time.UTC().Format(time.RFC3339)
+	return &formatted
 }

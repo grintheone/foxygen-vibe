@@ -1,16 +1,25 @@
-import { formatDateDayMonth, isTodayOrPast, resolveTicketReason } from "../lib/dashboard-formatters";
+import fireIcon from "../../../assets/icons/fire-icon.svg";
+import { resolveTicketDeadlineDisplay, resolveTicketReason } from "../lib/dashboard-formatters";
 
 export function TicketCardWithStatus({ ticket, onOpenTicket }) {
   const reasonValue = resolveTicketReason(ticket);
-  const dueValue = formatDateDayMonth(ticket.assigned_end);
-  const isOverdue = isTodayOrPast(ticket.assigned_end);
-  const deadlineText = isOverdue ? `🔥 ${dueValue}` : `до ${dueValue}`;
+  const deadlineDisplay = resolveTicketDeadlineDisplay(ticket);
+  const deadlineValue = deadlineDisplay.shouldUseFireIcon ? (
+    <span className="inline-flex items-center gap-1">
+      <img src={fireIcon} alt="" className="h-4 w-4" />
+      <span>{deadlineDisplay.dateValue}</span>
+    </span>
+  ) : deadlineDisplay.isFinishedDate || deadlineDisplay.isPlaceholder ? (
+    deadlineDisplay.dateValue
+  ) : (
+    `до ${deadlineDisplay.dateValue}`
+  );
   const shouldShowBadge = ticket.urgent;
-  const shouldShowGradient = isOverdue || ticket.urgent;
-  const badgeClassName = isOverdue
+  const shouldShowGradient = !deadlineDisplay.isFinishedDate && (deadlineDisplay.isOverdue || ticket.urgent);
+  const badgeClassName = deadlineDisplay.isOverdue
     ? "border-rose-200/40 bg-rose-500/25 text-rose-50"
     : "border-cyan-200/40 bg-cyan-500/25 text-cyan-50";
-  const gradientClassName = isOverdue
+  const gradientClassName = deadlineDisplay.isOverdue
     ? "from-rose-500/0 via-rose-400/80 to-rose-300/0"
     : "from-cyan-500/0 via-cyan-400/80 to-cyan-300/0";
 
@@ -28,7 +37,7 @@ export function TicketCardWithStatus({ ticket, onOpenTicket }) {
         </div>
         <div className="flex flex-col justify-between">
           <div className="flex flex-col items-end justify-start">
-            <p className="font-semibold text-white">{deadlineText}</p>
+            <p className="font-semibold text-white">{deadlineValue}</p>
             <p className="text-sm text-white">#{ticket.number}</p>
           </div>
           {shouldShowBadge ? (

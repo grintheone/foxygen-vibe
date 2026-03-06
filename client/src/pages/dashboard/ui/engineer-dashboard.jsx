@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { routePaths } from "../../../shared/config/routes";
 import { formatWorkDuration, resolveTicketReason } from "../lib/dashboard-formatters";
@@ -10,7 +10,13 @@ export function EngineerDashboard({ executorId }) {
   const [activeSlide, setActiveSlide] = useState(0);
   const pointerStartXRef = useRef(null);
   const suppressClickRef = useRef(false);
-  const { tickets, assignedTickets } = useDashboardTickets(executorId);
+  const { tickets, assignedTickets, isLoading, isError } = useDashboardTickets(executorId);
+
+  useEffect(() => {
+    if (activeSlide >= tickets.length) {
+      setActiveSlide(0);
+    }
+  }, [activeSlide, tickets.length]);
 
   function goToPreviousSlide() {
     setActiveSlide((prev) => (prev - 1 + tickets.length) % tickets.length);
@@ -56,7 +62,17 @@ export function EngineerDashboard({ executorId }) {
 
   return (
     <section className="space-y-6">
-      {tickets.length > 0 ? (
+      {isLoading ? (
+        <section className="rounded-3xl border border-white/10 bg-white/5 p-6">
+          <p className="text-sm text-slate-300">Загружаем тикеты...</p>
+        </section>
+      ) : null}
+      {isError ? (
+        <section className="rounded-3xl border border-rose-300/30 bg-rose-500/10 p-6">
+          <p className="text-sm text-rose-100">Не удалось загрузить тикеты. Попробуйте обновить страницу.</p>
+        </section>
+      ) : null}
+      {!isLoading && !isError && tickets.length > 0 ? (
         <>
           <div
             className="overflow-hidden rounded-3xl"
@@ -144,25 +160,25 @@ export function EngineerDashboard({ executorId }) {
             })}
           </div>
         </>
-      ) : (
+      ) : !isLoading && !isError ? (
         <section className="rounded-3xl border border-white/10 bg-white/5 p-6">
           <p className="text-sm text-slate-300">Для текущего инженера нет тикетов в процессе.</p>
         </section>
-      )}
+      ) : null}
 
       <section className="space-y-3">
         <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-300">Назначенные тикеты</h2>
-        {assignedTickets.length > 0 ? (
+        {!isLoading && !isError && assignedTickets.length > 0 ? (
           <div className="grid gap-3">
             {assignedTickets.map((ticket) => (
               <TicketCardWithStatus key={ticket.id} ticket={ticket} onOpenTicket={handleOpenTicket} />
             ))}
           </div>
-        ) : (
+        ) : !isLoading && !isError ? (
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
             Нет назначенных тикетов.
           </div>
-        )}
+        ) : null}
       </section>
     </section>
   );

@@ -89,6 +89,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/auth/refresh", s.handleRefresh)
 	mux.HandleFunc("/api/auth/session", s.handleSession)
 	mux.HandleFunc("/api/profile", s.handleProfile)
+	mux.HandleFunc("/api/tickets", s.handleTickets)
 
 	return withRequestLogging(withCORS(mux))
 }
