@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useGetDepartmentsQuery } from "../../../../shared/api/tickets-api";
 
 function createPreviewItems(files) {
     return files.map((file) => ({
@@ -56,11 +57,21 @@ export function TicketReportSheet({
     submitError,
     ticketNumber,
 }) {
+    const {
+        data: departments = [],
+        isError: isDepartmentsError,
+        isFetching: isDepartmentsFetching,
+    } = useGetDepartmentsQuery(undefined, {
+        skip: !isOpen,
+    });
     const [isDoubleSigned, setIsDoubleSigned] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
     const [localError, setLocalError] = useState("");
     const [mediaPreviews, setMediaPreviews] = useState([]);
+    const [recommendationDepartmentId, setRecommendationDepartmentId] = useState("");
+    const [recommendationValue, setRecommendationValue] = useState("");
     const [resultValue, setResultValue] = useState("");
+    const [submitSuccessMessage, setSubmitSuccessMessage] = useState("");
     const mediaPreviewsRef = useRef(mediaPreviews);
 
     useEffect(() => {
@@ -82,7 +93,10 @@ export function TicketReportSheet({
                 previous.forEach((item) => URL.revokeObjectURL(item.previewUrl));
                 return [];
             });
+            setRecommendationDepartmentId("");
+            setRecommendationValue("");
             setResultValue("");
+            setSubmitSuccessMessage("");
         }
     }, [isOpen]);
 
@@ -144,6 +158,7 @@ export function TicketReportSheet({
         }
 
         const trimmedResult = resultValue.trim();
+        const trimmedRecommendation = recommendationValue.trim();
         if (!trimmedResult) {
             setLocalError("Заполните поле результата работы.");
             return;
@@ -154,7 +169,13 @@ export function TicketReportSheet({
             return;
         }
 
+        if (Boolean(trimmedRecommendation) !== Boolean(recommendationDepartmentId)) {
+            setLocalError("Чтобы создать рекомендацию, заполните описание и выберите отдел.");
+            return;
+        }
+
         setLocalError("");
+        setSubmitSuccessMessage("");
         if (!onUploadAttachment) {
             setLocalError("Загрузка вложений не настроена.");
             return;
@@ -211,12 +232,19 @@ export function TicketReportSheet({
         }
 
         try {
-            await onSubmitClose({
+            const response = await onSubmitClose({
                 closed_at: new Date().toISOString(),
                 double_signed: isDoubleSigned,
+                recommendation: trimmedRecommendation || undefined,
+                recommendation_department: recommendationDepartmentId || undefined,
                 result: trimmedResult,
                 status: "closed",
             });
+            setSubmitSuccessMessage(
+                response?.followUpTicket?.number
+                    ? `Тикет закрыт, создана новая заявка #${response.followUpTicket.number}.`
+                    : "Тикет закрыт, вложения загружены.",
+            );
             setIsSubmitted(true);
         } catch {
             return;
@@ -396,7 +424,56 @@ export function TicketReportSheet({
                         <div className="h-px w-full bg-white/15" />
                     </div>
 
-                    <div className="sticky bottom-0 -mx-6 border-t border-white/15 bg-slate-950/95 px-6 pb-1 pt-5 backdrop-blur">
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <label
+                                htmlFor="ticket-report-recommendation"
+                                className="block text-3xl font-semibold text-slate-100"
+                            >
+                                Рекомендация
+                            </label>
+                            <p className="max-w-xl text-lg leading-8 text-slate-300">
+                                Если требуется дополнительная работа других сотрудников, направьте рекомендацию в
+                                соответствующий отдел.
+                            </p>
+                        </div>
+
+                        <textarea
+                            id="ticket-report-recommendation"
+                            name="recommendation"
+                            value={recommendationValue}
+                            onChange={(event) => setRecommendationValue(event.target.value)}
+                            disabled={isSubmitting || isSubmitted}
+                            placeholder="Опишите суть задачи"
+                            className="min-h-44 w-full resize-y rounded-2xl border border-slate-400/35 bg-transparent px-4 py-4 text-xl text-slate-100 outline-none transition placeholder:text-slate-400 focus:border-[#9fb5d6] focus:ring-2 focus:ring-[#9fb5d6]/30 disabled:opacity-80"
+                        />
+
+                        <div className="space-y-2">
+                            <select
+                                id="ticket-report-recommendation-department"
+                                name="recommendation_department"
+                                value={recommendationDepartmentId}
+                                onChange={(event) => setRecommendationDepartmentId(event.target.value)}
+                                disabled={isSubmitting || isSubmitted || isDepartmentsFetching}
+                                className="min-h-16 w-full rounded-2xl border border-slate-400/35 bg-slate-950 px-4 py-3 text-xl text-slate-100 outline-none transition focus:border-[#9fb5d6] focus:ring-2 focus:ring-[#9fb5d6]/30 disabled:opacity-80"
+                            >
+                                <option value="">
+                                    {isDepartmentsFetching ? "Загружаем отделы..." : "Выберите отдел"}
+                                </option>
+                                {departments.map((department) => (
+                                    <option key={department.id} value={department.id}>
+                                        {department.title}
+                                    </option>
+                                ))}
+                            </select>
+
+                            {isDepartmentsError ? (
+                                <p className="text-sm text-rose-200">Не удалось загрузить список отделов.</p>
+                            ) : null}
+                        </div>
+                    </div>
+
+                    <div className="sticky -bottom-6 -mx-6 border-t border-white/15 bg-slate-950/95 px-6 py-5 backdrop-blur">
                         <button
                             type="submit"
                             disabled={isSubmitting || isSubmitted}
@@ -425,9 +502,7 @@ export function TicketReportSheet({
                         {localError ? <p className="mt-2 text-center text-xs text-rose-200">{localError}</p> : null}
                         {submitError ? <p className="mt-2 text-center text-xs text-rose-200">{submitError}</p> : null}
                         {isSubmitted ? (
-                            <p className="mt-2 text-center text-xs text-emerald-200">
-                                Тикет закрыт, вложения загружены.
-                            </p>
+                            <p className="mt-2 text-center text-xs text-emerald-200">{submitSuccessMessage}</p>
                         ) : null}
                     </div>
                 </form>

@@ -36,6 +36,8 @@ export function TicketPage() {
         skip: !ticketId,
     });
 
+    console.log(ticket);
+
     const {
         ticketNumber,
         statusIcon,
@@ -53,7 +55,9 @@ export function TicketPage() {
     const [patchTicket, { isLoading: isPatching }] = usePatchTicketMutation();
     const [uploadTicketAttachment, { isLoading: isUploadingAttachment }] = useUploadTicketAttachmentMutation();
     const hasWorkResult = Boolean(ticket?.result?.trim());
-    const hasContactData = Boolean(ticket?.contactName?.trim() || ticket?.contactPosition?.trim() || phoneHref || emailHref);
+    const hasContactData = Boolean(
+        ticket?.contactName?.trim() || ticket?.contactPosition?.trim() || phoneHref || emailHref,
+    );
 
     const actionState = resolveTicketActionState({
         currentUserId: session?.id || session?.user_id || "",

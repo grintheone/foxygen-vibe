@@ -453,6 +453,70 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleDepartments(w http.ResponseWriter, r *http.Request) {
+	type departmentResponse struct {
+		ID    string `json:"id"`
+		Title string `json:"title"`
+	}
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if _, err := parseAuthorizationHeader(s.auth.jwtSecret, r.Header.Get("Authorization")); err != nil {
+		http.Error(w, "invalid access token", http.StatusUnauthorized)
+		return
+	}
+
+	if s.db == nil {
+		http.Error(w, "database not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	rows, err := s.db.Query(ctx, `
+		SELECT id, COALESCE(title, '')
+		FROM departments
+		ORDER BY title ASC, id ASC
+	`)
+	if err != nil {
+		log.Printf("query departments failed: %v", err)
+		http.Error(w, "failed to load departments", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	response := make([]departmentResponse, 0)
+	for rows.Next() {
+		var (
+			id    pgtype.UUID
+			title string
+		)
+
+		if err := rows.Scan(&id, &title); err != nil {
+			log.Printf("scan department failed: %v", err)
+			http.Error(w, "failed to load departments", http.StatusInternalServerError)
+			return
+		}
+
+		response = append(response, departmentResponse{
+			ID:    uuidToString(id),
+			Title: title,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("iterate departments failed: %v", err)
+		http.Error(w, "failed to load departments", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
 func (s *Server) handleTickets(w http.ResponseWriter, r *http.Request) {
 	type ticketResponse struct {
 		ID                 string  `json:"id"`
@@ -982,18 +1046,27 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 	}
 
 	type patchTicketRequest struct {
-		Attachments    []patchTicketAttachmentRequest `json:"attachments"`
-		ClosedAt       string                         `json:"closed_at"`
-		DoubleSigned   bool                           `json:"double_signed"`
-		Result         string                         `json:"result"`
-		Status         string                         `json:"status"`
-		WorkstartedAt  string                         `json:"workstarted_at"`
-		WorkfinishedAt string                         `json:"workfinished_at"`
+		Attachments              []patchTicketAttachmentRequest `json:"attachments"`
+		ClosedAt                 string                         `json:"closed_at"`
+		DoubleSigned             bool                           `json:"double_signed"`
+		Recommendation           string                         `json:"recommendation"`
+		RecommendationDepartment string                         `json:"recommendation_department"`
+		Result                   string                         `json:"result"`
+		Status                   string                         `json:"status"`
+		WorkstartedAt            string                         `json:"workstarted_at"`
+		WorkfinishedAt           string                         `json:"workfinished_at"`
+	}
+
+	type patchTicketFollowUpResponse struct {
+		ID     string `json:"id"`
+		Number int32  `json:"number"`
+		Status string `json:"status"`
 	}
 
 	type patchTicketResponse struct {
 		Attachments    []patchTicketAttachmentResponse `json:"attachments,omitempty"`
 		ClosedAt       *string                         `json:"closed_at,omitempty"`
+		FollowUpTicket *patchTicketFollowUpResponse    `json:"followUpTicket,omitempty"`
 		ID             string                          `json:"id"`
 		Status         string                          `json:"status"`
 		WorkfinishedAt *string                         `json:"workfinished_at,omitempty"`
@@ -1020,6 +1093,8 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 	input.WorkfinishedAt = strings.TrimSpace(input.WorkfinishedAt)
 	input.ClosedAt = strings.TrimSpace(input.ClosedAt)
 	input.Result = strings.TrimSpace(input.Result)
+	input.Recommendation = strings.TrimSpace(input.Recommendation)
+	input.RecommendationDepartment = strings.TrimSpace(input.RecommendationDepartment)
 
 	for index := range input.Attachments {
 		input.Attachments[index].ClientID = strings.TrimSpace(input.Attachments[index].ClientID)
@@ -1102,6 +1177,10 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 			http.Error(w, "result is required", http.StatusBadRequest)
 			return
 		}
+		if (input.Recommendation == "") != (input.RecommendationDepartment == "") {
+			http.Error(w, "recommendation and recommendation_department must be provided together", http.StatusBadRequest)
+			return
+		}
 
 		closedAt, parseErr := time.Parse(time.RFC3339Nano, input.ClosedAt)
 		if parseErr != nil {
@@ -1135,6 +1214,68 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 		if err == nil {
 			formatted := closedAt.UTC().Format(time.RFC3339)
 			response.ClosedAt = &formatted
+		}
+
+		if err != nil || result.RowsAffected() == 0 || input.Recommendation == "" {
+			break
+		}
+
+		var recommendationDepartmentID pgtype.UUID
+		if scanErr := recommendationDepartmentID.Scan(input.RecommendationDepartment); scanErr != nil {
+			http.Error(w, "recommendation_department must be a valid UUID", http.StatusBadRequest)
+			return
+		}
+
+		var departmentExists bool
+		if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM departments WHERE id = $1)`, recommendationDepartmentID).Scan(&departmentExists); err != nil {
+			break
+		}
+		if !departmentExists {
+			http.Error(w, "recommendation_department not found", http.StatusBadRequest)
+			return
+		}
+
+		var (
+			followUpID     pgtype.UUID
+			followUpNumber int32
+			followUpStatus string
+		)
+		err = tx.QueryRow(ctx, `
+			INSERT INTO tickets (
+				client,
+				device,
+				ticket_type,
+				author,
+				department,
+				reason,
+				description,
+				contact_person,
+				status,
+				urgent,
+				reference_ticket
+			)
+			SELECT
+				client,
+				device,
+				ticket_type,
+				author,
+				$1,
+				reason,
+				$2,
+				contact_person,
+				'created',
+				urgent,
+				id
+			FROM tickets
+			WHERE id = $3
+			RETURNING id, number, COALESCE(status, '')
+		`, recommendationDepartmentID, input.Recommendation, ticketID).Scan(&followUpID, &followUpNumber, &followUpStatus)
+		if err == nil {
+			response.FollowUpTicket = &patchTicketFollowUpResponse{
+				ID:     uuidToString(followUpID),
+				Number: followUpNumber,
+				Status: followUpStatus,
+			}
 		}
 	default:
 		http.Error(w, "supported transitions: assigned->inWork, inWork->worksDone, worksDone->closed", http.StatusBadRequest)

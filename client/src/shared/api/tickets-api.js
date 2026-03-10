@@ -8,7 +8,7 @@ async function readError(response, fallbackMessage) {
 }
 
 export const ticketsApi = createApi({
-  tagTypes: ["Ticket", "Tickets"],
+  tagTypes: ["Department", "Ticket", "Tickets"],
   reducerPath: "ticketsApi",
   baseQuery: fetchBaseQuery({
     baseUrl: "/",
@@ -22,6 +22,10 @@ export const ticketsApi = createApi({
     },
   }),
   endpoints: (builder) => ({
+    getDepartments: builder.query({
+      query: () => "api/departments",
+      providesTags: ["Department"],
+    }),
     getMyTickets: builder.query({
       query: () => "api/tickets",
       providesTags: ["Tickets"],
@@ -116,6 +120,7 @@ export async function loadTicketAttachmentPreviewUrl(downloadUrl) {
 }
 
 export const {
+  useGetDepartmentsQuery,
   useGetDepartmentTicketsQuery,
   useGetMyTicketsQuery,
   useGetTicketByIdQuery,
