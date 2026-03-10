@@ -664,7 +664,7 @@ func (s *Server) handleTicketByID(w http.ResponseWriter, r *http.Request) {
 		UsedMaterials      []string `json:"usedMaterials"`
 	}
 
-	if r.Method != http.MethodGet {
+	if r.Method != http.MethodGet && r.Method != http.MethodPatch {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -695,6 +695,11 @@ func (s *Server) handleTicketByID(w http.ResponseWriter, r *http.Request) {
 	var userID pgtype.UUID
 	if err := userID.Scan(claims.Subject); err != nil {
 		http.Error(w, "invalid access token", http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method == http.MethodPatch {
+		s.handleTicketByIDPatch(w, r, ticketID, userID)
 		return
 	}
 
@@ -929,6 +934,243 @@ func (s *Server) handleTicketByID(w http.ResponseWriter, r *http.Request) {
 		ReferenceTicket:    nullableUUIDToString(referenceTicket),
 		UsedMaterials:      uuidSliceToString(usedMaterials),
 	})
+}
+
+func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, ticketID pgtype.UUID, userID pgtype.UUID) {
+	type patchTicketAttachmentRequest struct {
+		ClientID  string `json:"client_id"`
+		Ext       string `json:"ext"`
+		MediaType string `json:"media_type"`
+		Name      string `json:"name"`
+	}
+
+	type patchTicketAttachmentResponse struct {
+		ClientID string `json:"client_id"`
+		ID       string `json:"id"`
+		Status   string `json:"status"`
+	}
+
+	type patchTicketRequest struct {
+		Attachments    []patchTicketAttachmentRequest `json:"attachments"`
+		ClosedAt       string                         `json:"closed_at"`
+		DoubleSigned   bool                           `json:"double_signed"`
+		Result         string                         `json:"result"`
+		Status         string                         `json:"status"`
+		WorkstartedAt  string                         `json:"workstarted_at"`
+		WorkfinishedAt string                         `json:"workfinished_at"`
+	}
+
+	type patchTicketResponse struct {
+		Attachments    []patchTicketAttachmentResponse `json:"attachments,omitempty"`
+		ClosedAt       *string                         `json:"closed_at,omitempty"`
+		ID             string                          `json:"id"`
+		Status         string                          `json:"status"`
+		WorkfinishedAt *string                         `json:"workfinished_at,omitempty"`
+		WorkstartedAt  *string                         `json:"workstarted_at,omitempty"`
+	}
+
+	if s.db == nil {
+		http.Error(w, "database not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	defer r.Body.Close()
+
+	var input patchTicketRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	input.Status = strings.TrimSpace(input.Status)
+	input.WorkstartedAt = strings.TrimSpace(input.WorkstartedAt)
+	input.WorkfinishedAt = strings.TrimSpace(input.WorkfinishedAt)
+	input.ClosedAt = strings.TrimSpace(input.ClosedAt)
+	input.Result = strings.TrimSpace(input.Result)
+
+	for index := range input.Attachments {
+		input.Attachments[index].ClientID = strings.TrimSpace(input.Attachments[index].ClientID)
+		input.Attachments[index].Name = strings.TrimSpace(input.Attachments[index].Name)
+		input.Attachments[index].MediaType = strings.TrimSpace(input.Attachments[index].MediaType)
+		input.Attachments[index].Ext = strings.TrimSpace(input.Attachments[index].Ext)
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	var (
+		err                   error
+		result                pgconn.CommandTag
+		expectedCurrentStatus string
+		response              patchTicketResponse
+		tx                    pgx.Tx
+	)
+
+	response.ID = ticketID.String()
+	response.Status = input.Status
+
+	switch input.Status {
+	case "inWork":
+		if input.WorkstartedAt == "" {
+			http.Error(w, "workstarted_at is required", http.StatusBadRequest)
+			return
+		}
+
+		workstartedAt, parseErr := time.Parse(time.RFC3339Nano, input.WorkstartedAt)
+		if parseErr != nil {
+			http.Error(w, "workstarted_at must be an ISO timestamp", http.StatusBadRequest)
+			return
+		}
+
+		expectedCurrentStatus = "assigned"
+		result, err = s.db.Exec(ctx, `
+			UPDATE tickets
+			SET status = $1,
+				workstarted_at = $2
+			WHERE id = $3
+			  AND executor = $4
+			  AND status = $5
+		`, input.Status, workstartedAt.UTC(), ticketID, userID, expectedCurrentStatus)
+		if err == nil {
+			formatted := workstartedAt.UTC().Format(time.RFC3339)
+			response.WorkstartedAt = &formatted
+		}
+	case "worksDone":
+		if input.WorkfinishedAt == "" {
+			http.Error(w, "workfinished_at is required", http.StatusBadRequest)
+			return
+		}
+
+		workfinishedAt, parseErr := time.Parse(time.RFC3339Nano, input.WorkfinishedAt)
+		if parseErr != nil {
+			http.Error(w, "workfinished_at must be an ISO timestamp", http.StatusBadRequest)
+			return
+		}
+
+		expectedCurrentStatus = "inWork"
+		result, err = s.db.Exec(ctx, `
+			UPDATE tickets
+			SET status = $1,
+				workfinished_at = $2
+			WHERE id = $3
+			  AND executor = $4
+			  AND status = $5
+		`, input.Status, workfinishedAt.UTC(), ticketID, userID, expectedCurrentStatus)
+		if err == nil {
+			formatted := workfinishedAt.UTC().Format(time.RFC3339)
+			response.WorkfinishedAt = &formatted
+		}
+	case "closed":
+		if input.ClosedAt == "" {
+			http.Error(w, "closed_at is required", http.StatusBadRequest)
+			return
+		}
+		if input.Result == "" {
+			http.Error(w, "result is required", http.StatusBadRequest)
+			return
+		}
+		if len(input.Attachments) == 0 {
+			http.Error(w, "at least one attachment is required", http.StatusBadRequest)
+			return
+		}
+
+		closedAt, parseErr := time.Parse(time.RFC3339Nano, input.ClosedAt)
+		if parseErr != nil {
+			http.Error(w, "closed_at must be an ISO timestamp", http.StatusBadRequest)
+			return
+		}
+
+		tx, err = s.db.Begin(ctx)
+		if err != nil {
+			log.Printf("begin patch ticket transaction failed: %v", err)
+			http.Error(w, "failed to update ticket", http.StatusInternalServerError)
+			return
+		}
+		defer tx.Rollback(ctx)
+
+		expectedCurrentStatus = "worksDone"
+		result, err = tx.Exec(ctx, `
+			UPDATE tickets
+			SET status = $1,
+				closed_at = $2,
+				result = $3,
+				double_signed = $4
+			WHERE id = $5
+			  AND executor = $6
+			  AND status = $7
+		`, input.Status, closedAt.UTC(), input.Result, input.DoubleSigned, ticketID, userID, expectedCurrentStatus)
+		if err != nil {
+			break
+		}
+
+		if result.RowsAffected() > 0 {
+			response.Attachments = make([]patchTicketAttachmentResponse, 0, len(input.Attachments))
+			for _, attachment := range input.Attachments {
+				if attachment.ClientID == "" || attachment.Name == "" || attachment.MediaType == "" {
+					http.Error(w, "attachment client_id, name and media_type are required", http.StatusBadRequest)
+					return
+				}
+
+				var attachmentID string
+				if err = tx.QueryRow(ctx, `
+					INSERT INTO attachments (id, name, media_type, ext, ref_id)
+					VALUES (gen_random_uuid()::text, $1, $2, $3, $4)
+					RETURNING id
+				`, attachment.Name, attachment.MediaType, attachment.Ext, ticketID).Scan(&attachmentID); err != nil {
+					break
+				}
+
+				response.Attachments = append(response.Attachments, patchTicketAttachmentResponse{
+					ClientID: attachment.ClientID,
+					ID:       attachmentID,
+					Status:   "queued",
+				})
+			}
+		}
+
+		if err == nil {
+			formatted := closedAt.UTC().Format(time.RFC3339)
+			response.ClosedAt = &formatted
+		}
+	default:
+		http.Error(w, "supported transitions: assigned->inWork, inWork->worksDone, worksDone->closed", http.StatusBadRequest)
+		return
+	}
+
+	if err != nil {
+		log.Printf("patch ticket failed: %v", err)
+		http.Error(w, "failed to update ticket", http.StatusInternalServerError)
+		return
+	}
+
+	if result.RowsAffected() == 0 {
+		var ticketExists bool
+		if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM tickets WHERE id = $1)`, ticketID).Scan(&ticketExists); err != nil {
+			log.Printf("check ticket existence failed: %v", err)
+			http.Error(w, "failed to update ticket", http.StatusInternalServerError)
+			return
+		}
+
+		if !ticketExists {
+			http.Error(w, "ticket not found", http.StatusNotFound)
+			return
+		}
+
+		http.Error(w, "ticket must be assigned to you and in expected status", http.StatusConflict)
+		return
+	}
+
+	if tx != nil {
+		if err := tx.Commit(ctx); err != nil {
+			log.Printf("commit patch ticket transaction failed: %v", err)
+			http.Error(w, "failed to update ticket", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (s *Server) handleDepartmentTickets(w http.ResponseWriter, r *http.Request) {
