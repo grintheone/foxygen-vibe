@@ -182,7 +182,7 @@ func TestOptionsRequestReturnsNoContent(t *testing.T) {
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("expected status %d, got %d", http.StatusNoContent, rec.Code)
 	}
-	if got := rec.Header().Get("Access-Control-Allow-Methods"); got != "GET, POST, OPTIONS" {
+	if got := rec.Header().Get("Access-Control-Allow-Methods"); got != "GET, POST, PATCH, OPTIONS" {
 		t.Fatalf("unexpected allow methods header %q", got)
 	}
 	if got := rec.Header().Get("Access-Control-Allow-Headers"); got != "Authorization, Content-Type" {
