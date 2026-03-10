@@ -10,6 +10,7 @@ import (
 	"time"
 
 	appdb "foxygen-vibe/server/internal/db"
+	"foxygen-vibe/server/internal/storage"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -17,9 +18,11 @@ import (
 
 type Server struct {
 	databaseConfigured bool
+	storageConfigured  bool
 	db                 *pgxpool.Pool
 	queries            accountStore
 	auth               authConfig
+	storage            *storage.Client
 }
 
 type accountStore interface {
@@ -44,10 +47,28 @@ func New() (*Server, error) {
 		return nil, err
 	}
 
+	storageConfig, err := resolveStorageConfig()
+	if err != nil {
+		return nil, err
+	}
+
 	api := &Server{
 		databaseConfigured: databaseURL != "",
+		storageConfigured:  storageConfig.Enabled(),
 		auth:               auth,
 	}
+
+	if storageConfig.Enabled() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		client, err := storage.NewMinIO(ctx, storageConfig)
+		if err != nil {
+			return nil, err
+		}
+		api.storage = client
+	}
+
 	if databaseURL == "" {
 		return api, nil
 	}

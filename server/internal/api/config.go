@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
+
+	"foxygen-vibe/server/internal/storage"
 )
 
 type authConfig struct {
@@ -113,6 +116,38 @@ func resolveAuthConfig() (authConfig, error) {
 	}, nil
 }
 
+func resolveStorageConfig() (storage.Config, error) {
+	fileEnv, err := loadDotEnv(".env")
+	if err != nil {
+		return storage.Config{}, err
+	}
+
+	useSSLValue := getConfigValue(fileEnv, "MINIO_USE_SSL")
+	config := storage.Config{
+		Endpoint:        getConfigValue(fileEnv, "MINIO_ENDPOINT"),
+		AccessKeyID:     getConfigValue(fileEnv, "MINIO_ACCESS_KEY"),
+		SecretAccessKey: getConfigValue(fileEnv, "MINIO_SECRET_KEY"),
+		Bucket:          getConfigValue(fileEnv, "MINIO_BUCKET"),
+		Region:          getConfigValue(fileEnv, "MINIO_REGION"),
+	}
+
+	useSSL, err := resolveBool(fileEnv, "MINIO_USE_SSL", false)
+	if err != nil {
+		return storage.Config{}, err
+	}
+	config.UseSSL = useSSL
+
+	if !config.Enabled() && useSSLValue == "" {
+		return config, nil
+	}
+
+	if err := config.Validate(); err != nil {
+		return storage.Config{}, err
+	}
+
+	return config, nil
+}
+
 func resolveDuration(fileEnv map[string]string, key string, fallback time.Duration) (time.Duration, error) {
 	value := getConfigValue(fileEnv, key)
 	if value == "" {
@@ -125,4 +160,18 @@ func resolveDuration(fileEnv map[string]string, key string, fallback time.Durati
 	}
 
 	return duration, nil
+}
+
+func resolveBool(fileEnv map[string]string, key string, fallback bool) (bool, error) {
+	value := getConfigValue(fileEnv, key)
+	if value == "" {
+		return fallback, nil
+	}
+
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return false, fmt.Errorf("%s: parse bool: %w", key, err)
+	}
+
+	return parsed, nil
 }

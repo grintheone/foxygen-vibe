@@ -142,6 +142,7 @@ func TestHealthEndpointReturnsStatus(t *testing.T) {
 		`"status":"ok"`,
 		`"configured":true`,
 		`"connected":false`,
+		`"storage":{"configured":false,"connected":false}`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("expected response body to contain %q, got %s", want, body)

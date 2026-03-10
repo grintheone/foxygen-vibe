@@ -4,7 +4,7 @@ Minimal fullstack starter:
 
 - `client/`: React + Tailwind (Vite)
 - `server/`: Go API with PostgreSQL-ready environment wiring
-- `docker-compose.yml`: local PostgreSQL service
+- `docker-compose.yml`: local PostgreSQL and MinIO services
 
 ## Run the server
 
@@ -14,6 +14,28 @@ Minimal fullstack starter:
    `cd server && go run .`
 
 The server reads `server/.env` for `DB_*` settings and builds a PostgreSQL connection string from that file. Explicit shell environment variables still override values from `.env`, and `DATABASE_URL` still takes precedence over the split fields.
+
+## Enable MinIO object storage
+
+The backend now supports the MinIO Go SDK for S3-compatible object storage. Storage stays disabled unless `MINIO_*` variables are configured.
+
+1. Start MinIO locally:
+   `docker compose up -d minio`
+2. Uncomment or add these values in `server/.env`:
+   `MINIO_ENDPOINT=localhost:9000`
+   `MINIO_ACCESS_KEY=minioadmin`
+   `MINIO_SECRET_KEY=minioadmin`
+   `MINIO_BUCKET=foxygen-vibe`
+   `MINIO_USE_SSL=false`
+   `MINIO_REGION=us-east-1`
+3. Start the API from `server/`:
+   `go run .`
+
+Notes:
+
+- On startup, the API creates a MinIO client and verifies the configured bucket exists.
+- If the bucket is missing, the API creates it automatically with the configured region.
+- The health endpoint at `/api/health` now reports storage configuration state alongside the database status.
 
 ## Prepare sqlc
 

@@ -23,6 +23,11 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 			Configured bool `json:"configured"`
 			Connected  bool `json:"connected"`
 		} `json:"database"`
+		Storage struct {
+			Configured bool   `json:"configured"`
+			Connected  bool   `json:"connected"`
+			Bucket     string `json:"bucket,omitempty"`
+		} `json:"storage"`
 	}
 
 	if r.Method != http.MethodGet {
@@ -33,6 +38,11 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	payload := response{Status: "ok"}
 	payload.Database.Configured = s.databaseConfigured
 	payload.Database.Connected = s.db != nil
+	payload.Storage.Configured = s.storageConfigured
+	payload.Storage.Connected = s.storage != nil
+	if s.storage != nil {
+		payload.Storage.Bucket = s.storage.Bucket()
+	}
 
 	writeJSON(w, http.StatusOK, payload)
 }
