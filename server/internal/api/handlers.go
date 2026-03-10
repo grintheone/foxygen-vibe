@@ -619,54 +619,50 @@ func (s *Server) handleTickets(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleTicketByID(w http.ResponseWriter, r *http.Request) {
 	type ticketResponse struct {
-		ID                 string   `json:"id"`
-		Number             int32    `json:"number"`
-		Status             string   `json:"status"`
-		StatusTitle        string   `json:"statusTitle"`
-		Description        string   `json:"description"`
-		Result             string   `json:"result"`
-		Reason             string   `json:"reason"`
-		ResolvedReason     string   `json:"resolvedReason"`
-		TicketType         *string  `json:"ticketType"`
-		TicketTypeTitle    string   `json:"ticketTypeTitle"`
-		Urgent             bool     `json:"urgent"`
-		DoubleSigned       bool     `json:"doubleSigned"`
-		CreatedAt          *string  `json:"created_at"`
-		AssignedAt         *string  `json:"assigned_at"`
-		WorkstartedAt      *string  `json:"workstarted_at"`
-		WorkfinishedAt     *string  `json:"workfinished_at"`
-		PlannedStart       *string  `json:"planned_start"`
-		PlannedEnd         *string  `json:"planned_end"`
-		AssignedStart      *string  `json:"assigned_start"`
-		AssignedEnd        *string  `json:"assigned_end"`
-		ClosedAt           *string  `json:"closed_at"`
-		Client             *string  `json:"client"`
-		ClientName         string   `json:"clientName"`
-		ClientAddress      string   `json:"clientAddress"`
-		Device             *string  `json:"device"`
-		DeviceName         string   `json:"deviceName"`
-		DeviceSerialNumber string   `json:"deviceSerialNumber"`
-		Author             *string  `json:"author"`
-		AuthorName         string   `json:"authorName"`
-		Department         *string  `json:"department"`
-		DepartmentTitle    string   `json:"departmentTitle"`
-		AssignedBy         *string  `json:"assignedBy"`
-		AssignedByName     string   `json:"assignedByName"`
-		ContactPerson      *string  `json:"contactPerson"`
-		ContactName        string   `json:"contactName"`
-		ContactPosition    string   `json:"contactPosition"`
-		ContactPhone       string   `json:"contactPhone"`
-		ContactEmail       string   `json:"contactEmail"`
-		Executor           *string  `json:"executor"`
-		ExecutorName       string   `json:"executorName"`
-		ExecutorDepartment string   `json:"executorDepartment"`
-		ReferenceTicket    *string  `json:"referenceTicket"`
-		UsedMaterials      []string `json:"usedMaterials"`
-	}
-
-	if r.Method != http.MethodGet && r.Method != http.MethodPatch {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
+		ID                 string                     `json:"id"`
+		Attachments        []ticketAttachmentResponse `json:"attachments"`
+		Number             int32                      `json:"number"`
+		Status             string                     `json:"status"`
+		StatusTitle        string                     `json:"statusTitle"`
+		Description        string                     `json:"description"`
+		Result             string                     `json:"result"`
+		Reason             string                     `json:"reason"`
+		ResolvedReason     string                     `json:"resolvedReason"`
+		TicketType         *string                    `json:"ticketType"`
+		TicketTypeTitle    string                     `json:"ticketTypeTitle"`
+		Urgent             bool                       `json:"urgent"`
+		DoubleSigned       bool                       `json:"doubleSigned"`
+		CreatedAt          *string                    `json:"created_at"`
+		AssignedAt         *string                    `json:"assigned_at"`
+		WorkstartedAt      *string                    `json:"workstarted_at"`
+		WorkfinishedAt     *string                    `json:"workfinished_at"`
+		PlannedStart       *string                    `json:"planned_start"`
+		PlannedEnd         *string                    `json:"planned_end"`
+		AssignedStart      *string                    `json:"assigned_start"`
+		AssignedEnd        *string                    `json:"assigned_end"`
+		ClosedAt           *string                    `json:"closed_at"`
+		Client             *string                    `json:"client"`
+		ClientName         string                     `json:"clientName"`
+		ClientAddress      string                     `json:"clientAddress"`
+		Device             *string                    `json:"device"`
+		DeviceName         string                     `json:"deviceName"`
+		DeviceSerialNumber string                     `json:"deviceSerialNumber"`
+		Author             *string                    `json:"author"`
+		AuthorName         string                     `json:"authorName"`
+		Department         *string                    `json:"department"`
+		DepartmentTitle    string                     `json:"departmentTitle"`
+		AssignedBy         *string                    `json:"assignedBy"`
+		AssignedByName     string                     `json:"assignedByName"`
+		ContactPerson      *string                    `json:"contactPerson"`
+		ContactName        string                     `json:"contactName"`
+		ContactPosition    string                     `json:"contactPosition"`
+		ContactPhone       string                     `json:"contactPhone"`
+		ContactEmail       string                     `json:"contactEmail"`
+		Executor           *string                    `json:"executor"`
+		ExecutorName       string                     `json:"executorName"`
+		ExecutorDepartment string                     `json:"executorDepartment"`
+		ReferenceTicket    *string                    `json:"referenceTicket"`
+		UsedMaterials      []string                   `json:"usedMaterials"`
 	}
 
 	claims, err := parseAuthorizationHeader(s.auth.jwtSecret, r.Header.Get("Authorization"))
@@ -680,14 +676,15 @@ func (s *Server) handleTicketByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ticketIDPath := strings.TrimPrefix(r.URL.Path, "/api/tickets/")
-	if ticketIDPath == "" || strings.Contains(ticketIDPath, "/") {
+	ticketPath := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/tickets/"), "/")
+	if ticketPath == "" {
 		http.NotFound(w, r)
 		return
 	}
+	pathParts := strings.Split(ticketPath, "/")
 
 	var ticketID pgtype.UUID
-	if err := ticketID.Scan(ticketIDPath); err != nil {
+	if err := ticketID.Scan(pathParts[0]); err != nil {
 		http.Error(w, "invalid ticket id", http.StatusBadRequest)
 		return
 	}
@@ -698,8 +695,34 @@ func (s *Server) handleTicketByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.Method == http.MethodPatch {
-		s.handleTicketByIDPatch(w, r, ticketID, userID)
+	switch {
+	case len(pathParts) == 1:
+		if r.Method == http.MethodPatch {
+			s.handleTicketByIDPatch(w, r, ticketID, userID)
+			return
+		}
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+	case len(pathParts) == 2 && pathParts[1] == "attachments":
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		s.handleTicketAttachmentUpload(w, r, ticketID, userID)
+		return
+	case len(pathParts) == 4 && pathParts[1] == "attachments" && pathParts[3] == "download":
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		s.handleTicketAttachmentDownload(w, r, ticketID, pathParts[2], userID)
+		return
+	default:
+		http.NotFound(w, r)
 		return
 	}
 
@@ -889,8 +912,16 @@ func (s *Server) handleTicketByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	attachments, err := s.loadTicketAttachments(ctx, ticketID)
+	if err != nil {
+		log.Printf("load ticket attachments failed: %v", err)
+		http.Error(w, "failed to load ticket", http.StatusInternalServerError)
+		return
+	}
+
 	writeJSON(w, http.StatusOK, ticketResponse{
 		ID:                 uuidToString(id),
+		Attachments:        attachments,
 		Number:             number.Int32,
 		Status:             status,
 		StatusTitle:        statusTitle,
@@ -1071,10 +1102,6 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 			http.Error(w, "result is required", http.StatusBadRequest)
 			return
 		}
-		if len(input.Attachments) == 0 {
-			http.Error(w, "at least one attachment is required", http.StatusBadRequest)
-			return
-		}
 
 		closedAt, parseErr := time.Parse(time.RFC3339Nano, input.ClosedAt)
 		if parseErr != nil {
@@ -1103,31 +1130,6 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 		`, input.Status, closedAt.UTC(), input.Result, input.DoubleSigned, ticketID, userID, expectedCurrentStatus)
 		if err != nil {
 			break
-		}
-
-		if result.RowsAffected() > 0 {
-			response.Attachments = make([]patchTicketAttachmentResponse, 0, len(input.Attachments))
-			for _, attachment := range input.Attachments {
-				if attachment.ClientID == "" || attachment.Name == "" || attachment.MediaType == "" {
-					http.Error(w, "attachment client_id, name and media_type are required", http.StatusBadRequest)
-					return
-				}
-
-				var attachmentID string
-				if err = tx.QueryRow(ctx, `
-					INSERT INTO attachments (id, name, media_type, ext, ref_id)
-					VALUES (gen_random_uuid()::text, $1, $2, $3, $4)
-					RETURNING id
-				`, attachment.Name, attachment.MediaType, attachment.Ext, ticketID).Scan(&attachmentID); err != nil {
-					break
-				}
-
-				response.Attachments = append(response.Attachments, patchTicketAttachmentResponse{
-					ClientID: attachment.ClientID,
-					ID:       attachmentID,
-					Status:   "queued",
-				})
-			}
 		}
 
 		if err == nil {
@@ -1378,6 +1380,15 @@ func uuidToString(id pgtype.UUID) string {
 }
 
 func timestampToRFC3339(value pgtype.Timestamp) *string {
+	if !value.Valid {
+		return nil
+	}
+
+	formatted := value.Time.UTC().Format(time.RFC3339)
+	return &formatted
+}
+
+func timestamptzToRFC3339(value pgtype.Timestamptz) *string {
 	if !value.Valid {
 		return nil
 	}

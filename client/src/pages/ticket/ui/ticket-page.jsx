@@ -2,7 +2,12 @@ import { useNavigate, useParams } from "react-router";
 import { useEffect, useState } from "react";
 import { useAuth } from "../../../features/auth";
 import { routePaths } from "../../../shared/config/routes";
-import { useGetTicketByIdQuery, usePatchTicketMutation } from "../../../shared/api/tickets-api";
+import {
+    downloadTicketAttachmentFile,
+    useGetTicketByIdQuery,
+    usePatchTicketMutation,
+    useUploadTicketAttachmentMutation,
+} from "../../../shared/api/tickets-api";
 import { PageShell } from "../../../shared/ui/page-shell";
 import { useTicketViewModel } from "../lib/use-ticket-view-model";
 import { buildTicketPatchPayload, resolveTicketActionState } from "../model/ticket-action-widget-model";
@@ -47,11 +52,13 @@ export function TicketPage() {
         historyActorName,
     } = useTicketViewModel(ticket);
     const [patchTicket, { isLoading: isPatching }] = usePatchTicketMutation();
+    const [uploadTicketAttachment, { isLoading: isUploadingAttachment }] = useUploadTicketAttachmentMutation();
 
     const actionState = resolveTicketActionState({
         currentUserId: session?.id || session?.user_id || "",
         ticket,
     });
+    const isReportSubmitting = isPatching || isUploadingAttachment;
 
     useEffect(() => {
         if (!isReportSheetOpen) {
@@ -148,6 +155,29 @@ export function TicketPage() {
         }
     }
 
+    async function handleUploadAttachment(file) {
+        if (!ticket?.id) {
+            return null;
+        }
+
+        return uploadTicketAttachment({
+            file,
+            ticketId: ticket.id,
+        }).unwrap();
+    }
+
+    async function handleDownloadAttachment(attachment) {
+        if (!ticket?.id || !attachment?.id) {
+            return;
+        }
+
+        await downloadTicketAttachmentFile({
+            attachmentId: attachment.id,
+            fileName: attachment.name,
+            ticketId: ticket.id,
+        });
+    }
+
     return (
         <PageShell>
             <section className={`w-full space-y-6 pb-28 transition ${isReportSheetOpen ? "brightness-75" : ""}`}>
@@ -206,7 +236,11 @@ export function TicketPage() {
                             />
                         </section>
 
-                        <TicketWorkResultSection ticket={ticket} workDuration={workDuration} />
+                        <TicketWorkResultSection
+                            ticket={ticket}
+                            workDuration={workDuration}
+                            onDownloadAttachment={handleDownloadAttachment}
+                        />
                         <TicketHistorySection historyActorName={historyActorName} />
                     </>
                 ) : null}
@@ -221,12 +255,14 @@ export function TicketPage() {
 
             <TicketReportSheet
                 isOpen={isReportSheetOpen}
-                isSubmitting={isPatching}
+                isSubmitting={isReportSubmitting}
                 onClose={() => {
                     setReportSubmitError("");
                     setIsReportSheetOpen(false);
                 }}
+                onDownloadAttachment={handleDownloadAttachment}
                 onSubmitClose={handleCloseTicketReport}
+                onUploadAttachment={handleUploadAttachment}
                 resolvedReason={ticket?.resolvedReason}
                 deviceName={ticket?.deviceName}
                 clientName={ticket?.clientName}

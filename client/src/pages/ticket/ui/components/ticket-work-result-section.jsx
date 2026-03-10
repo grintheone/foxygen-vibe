@@ -1,6 +1,40 @@
+import { useState } from "react";
 import { MOCK_WORK_RESULT } from "../../model/ticket-page-model";
 
-export function TicketWorkResultSection({ ticket, workDuration }) {
+function formatAttachmentSize(sizeBytes) {
+    if (!sizeBytes) {
+        return "0 B";
+    }
+
+    if (sizeBytes < 1024) {
+        return `${sizeBytes} B`;
+    }
+
+    if (sizeBytes < 1024 * 1024) {
+        return `${Math.round(sizeBytes / 1024)} KB`;
+    }
+
+    return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function TicketWorkResultSection({ ticket, workDuration, onDownloadAttachment }) {
+    const [downloadError, setDownloadError] = useState("");
+    const attachments = Array.isArray(ticket?.attachments) ? ticket.attachments : [];
+
+    async function handleDownload(attachment) {
+        if (!onDownloadAttachment || !attachment?.downloadUrl) {
+            return;
+        }
+
+        setDownloadError("");
+
+        try {
+            await onDownloadAttachment(attachment);
+        } catch (error) {
+            setDownloadError(error?.message || "Не удалось скачать вложение.");
+        }
+    }
+
     return (
         <section className="space-y-3 rounded-3xl border border-emerald-300/25 bg-emerald-500/10 p-5 sm:p-6">
             <div className="flex items-center justify-between gap-4">
@@ -40,17 +74,37 @@ export function TicketWorkResultSection({ ticket, workDuration }) {
                 <p className="mt-4 text-2xl leading-relaxed text-slate-200">{ticket.result || MOCK_WORK_RESULT}</p>
             </div>
 
-            <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                <div className="flex aspect-[4/3] items-center justify-center rounded-xl border border-white/15 bg-slate-900/25 text-sm font-semibold text-slate-200">
-                    Фото 1
+            {attachments.length > 0 ? (
+                <div className="grid gap-2 sm:grid-cols-2">
+                    {attachments.map((attachment) => (
+                        <button
+                            key={attachment.id}
+                            type="button"
+                            onClick={() => {
+                                void handleDownload(attachment);
+                            }}
+                            disabled={!attachment.downloadUrl}
+                            className="flex items-center justify-between gap-4 rounded-2xl border border-white/15 bg-slate-900/25 px-4 py-3 text-left transition hover:bg-slate-900/40 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                            <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-slate-100">{attachment.name}</p>
+                                <p className="text-xs text-slate-300">
+                                    {attachment.mediaType || "Файл"} · {formatAttachmentSize(attachment.sizeBytes)}
+                                </p>
+                            </div>
+                            <span className="shrink-0 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-100">
+                                Скачать
+                            </span>
+                        </button>
+                    ))}
                 </div>
-                <div className="flex aspect-[4/3] items-center justify-center rounded-xl border border-white/15 bg-slate-900/25 text-sm font-semibold text-slate-200">
-                    Фото 2
+            ) : (
+                <div className="rounded-2xl border border-dashed border-white/15 bg-slate-900/15 px-4 py-5 text-sm text-slate-200">
+                    Вложения появятся после загрузки отчета.
                 </div>
-                <div className="flex aspect-[4/3] items-center justify-center rounded-xl border border-white/15 bg-slate-900/25 text-sm font-semibold text-slate-200">
-                    Фото 3
-                </div>
-            </div>
+            )}
+
+            {downloadError ? <p className="text-xs text-rose-100">{downloadError}</p> : null}
         </section>
     );
 }

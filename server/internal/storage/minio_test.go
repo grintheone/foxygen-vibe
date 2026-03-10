@@ -26,3 +26,12 @@ func TestConfigEnabledDetectsConfiguredStorage(t *testing.T) {
 		t.Fatal("expected config with any MinIO setting to be enabled")
 	}
 }
+
+func TestTicketAttachmentObjectKeyKeepsSafeExtension(t *testing.T) {
+	t.Parallel()
+
+	key := TicketAttachmentObjectKey("ticket-1", "attachment-2", "photo.final.JPG")
+	if key != "tickets/ticket-1/attachment-2.jpg" {
+		t.Fatalf("expected sanitized object key, got %q", key)
+	}
+}

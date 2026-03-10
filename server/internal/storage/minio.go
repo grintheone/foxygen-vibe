@@ -3,7 +3,9 @@ package storage
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
+	"unicode"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -104,4 +106,68 @@ func (c *Client) MinIO() *minio.Client {
 	}
 
 	return c.client
+}
+
+func (c *Client) PutObject(ctx context.Context, objectKey string, reader io.Reader, size int64, contentType string) (minio.UploadInfo, error) {
+	if c == nil || c.client == nil {
+		return minio.UploadInfo{}, fmt.Errorf("MinIO client is not configured")
+	}
+
+	return c.client.PutObject(ctx, c.bucket, objectKey, reader, size, minio.PutObjectOptions{
+		ContentType: contentType,
+	})
+}
+
+func (c *Client) GetObject(ctx context.Context, objectKey string) (*minio.Object, minio.ObjectInfo, error) {
+	if c == nil || c.client == nil {
+		return nil, minio.ObjectInfo{}, fmt.Errorf("MinIO client is not configured")
+	}
+
+	object, err := c.client.GetObject(ctx, c.bucket, objectKey, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, minio.ObjectInfo{}, err
+	}
+
+	info, err := object.Stat()
+	if err != nil {
+		_ = object.Close()
+		return nil, minio.ObjectInfo{}, err
+	}
+
+	return object, info, nil
+}
+
+func (c *Client) RemoveObject(ctx context.Context, objectKey string) error {
+	if c == nil || c.client == nil {
+		return fmt.Errorf("MinIO client is not configured")
+	}
+
+	return c.client.RemoveObject(ctx, c.bucket, objectKey, minio.RemoveObjectOptions{})
+}
+
+func TicketAttachmentObjectKey(ticketID string, attachmentID string, fileName string) string {
+	base := fmt.Sprintf("tickets/%s/%s", strings.TrimSpace(ticketID), strings.TrimSpace(attachmentID))
+	ext := sanitizeObjectKeyExtension(fileName)
+	if ext == "" {
+		return base
+	}
+
+	return base + "." + ext
+}
+
+func sanitizeObjectKeyExtension(fileName string) string {
+	trimmed := strings.TrimSpace(fileName)
+	dotIndex := strings.LastIndex(trimmed, ".")
+	if dotIndex < 0 || dotIndex == len(trimmed)-1 {
+		return ""
+	}
+
+	var builder strings.Builder
+	for _, char := range strings.ToLower(trimmed[dotIndex+1:]) {
+		if unicode.IsDigit(char) || (char >= 'a' && char <= 'z') {
+			builder.WriteRune(char)
+		}
+	}
+
+	return builder.String()
 }

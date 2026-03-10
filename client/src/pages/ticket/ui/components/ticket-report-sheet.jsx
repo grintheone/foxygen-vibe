@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 function createPreviewItems(files) {
     return files.map((file) => ({
+        downloadUrl: "",
         file,
         id: `${file.name}-${file.lastModified}-${file.size}-${Math.random().toString(36).slice(2)}`,
         previewUrl: URL.createObjectURL(file),
@@ -10,21 +11,12 @@ function createPreviewItems(files) {
     }));
 }
 
-function resolveFileExtension(fileName) {
-    const dotIndex = fileName.lastIndexOf(".");
-    if (dotIndex < 0 || dotIndex === fileName.length - 1) {
-        return "";
-    }
-
-    return fileName.slice(dotIndex + 1).toLowerCase();
-}
-
 function resolveUploadStatusClassName(status) {
     if (status === "submitting") {
         return "bg-sky-500/80";
     }
 
-    if (status === "queued") {
+    if (status === "uploaded") {
         return "bg-emerald-500/80";
     }
 
@@ -40,8 +32,8 @@ function resolveUploadStatusLabel(status) {
         return "Сохраняем";
     }
 
-    if (status === "queued") {
-        return "В очереди";
+    if (status === "uploaded") {
+        return "Загружено";
     }
 
     if (status === "failed") {
@@ -57,7 +49,9 @@ export function TicketReportSheet({
     isOpen,
     isSubmitting,
     onClose,
+    onDownloadAttachment,
     onSubmitClose,
+    onUploadAttachment,
     resolvedReason,
     submitError,
     ticketNumber,
@@ -124,6 +118,24 @@ export function TicketReportSheet({
         });
     }
 
+    async function handleDownloadPreview(preview) {
+        if (!preview.serverAttachmentId || !onDownloadAttachment) {
+            return;
+        }
+
+        setLocalError("");
+
+        try {
+            await onDownloadAttachment({
+                downloadUrl: preview.downloadUrl,
+                id: preview.serverAttachmentId,
+                name: preview.file.name,
+            });
+        } catch (error) {
+            setLocalError(error?.message || "Не удалось скачать вложение.");
+        }
+    }
+
     async function handleSubmit(event) {
         event.preventDefault();
 
@@ -143,57 +155,71 @@ export function TicketReportSheet({
         }
 
         setLocalError("");
-        setMediaPreviews((previous) =>
-            previous.map((item) => ({
-                ...item,
-                uploadStatus: "submitting",
-            })),
-        );
+        if (!onUploadAttachment) {
+            setLocalError("Загрузка вложений не настроена.");
+            return;
+        }
+
+        const previewsToUpload = mediaPreviewsRef.current.filter((item) => !item.serverAttachmentId);
+        if (previewsToUpload.length > 0) {
+            setMediaPreviews((previous) =>
+                previous.map((item) =>
+                    item.serverAttachmentId
+                        ? item
+                        : {
+                              ...item,
+                              uploadStatus: "submitting",
+                          },
+                ),
+            );
+        }
+
+        let uploadFailed = false;
+        for (const item of previewsToUpload) {
+            try {
+                const uploadedAttachment = await onUploadAttachment(item.file);
+                setMediaPreviews((previous) =>
+                    previous.map((current) =>
+                        current.id !== item.id
+                            ? current
+                            : {
+                                  ...current,
+                                  downloadUrl: uploadedAttachment?.downloadUrl || "",
+                                  serverAttachmentId: uploadedAttachment?.id || "",
+                                  uploadStatus: "uploaded",
+                              },
+                    ),
+                );
+            } catch {
+                uploadFailed = true;
+                setMediaPreviews((previous) =>
+                    previous.map((current) =>
+                        current.id !== item.id
+                            ? current
+                            : {
+                                  ...current,
+                                  uploadStatus: "failed",
+                              },
+                    ),
+                );
+            }
+        }
+
+        if (uploadFailed) {
+            setLocalError("Не удалось загрузить все вложения.");
+            return;
+        }
 
         try {
-            const response = await onSubmitClose({
-                attachments: mediaPreviews.map((item) => ({
-                    client_id: item.id,
-                    ext: resolveFileExtension(item.file.name),
-                    media_type: item.file.type || "application/octet-stream",
-                    name: item.file.name,
-                })),
+            await onSubmitClose({
                 closed_at: new Date().toISOString(),
                 double_signed: isDoubleSigned,
                 result: trimmedResult,
                 status: "closed",
             });
-
-            const attachmentByClientId = {};
-            (response?.attachments || []).forEach((attachment) => {
-                attachmentByClientId[attachment.client_id] = attachment;
-            });
-
-            setMediaPreviews((previous) =>
-                previous.map((item) => {
-                    const mapped = attachmentByClientId[item.id];
-                    if (!mapped) {
-                        return {
-                            ...item,
-                            uploadStatus: "failed",
-                        };
-                    }
-
-                    return {
-                        ...item,
-                        serverAttachmentId: mapped.id,
-                        uploadStatus: mapped.status || "queued",
-                    };
-                }),
-            );
             setIsSubmitted(true);
         } catch {
-            setMediaPreviews((previous) =>
-                previous.map((item) => ({
-                    ...item,
-                    uploadStatus: "pending",
-                })),
-            );
+            return;
         }
     }
 
@@ -302,7 +328,7 @@ export function TicketReportSheet({
                                     <button
                                         type="button"
                                         onClick={() => handleRemovePreview(item.id)}
-                                        disabled={isSubmitting || isSubmitted}
+                                        disabled={isSubmitting || isSubmitted || Boolean(item.serverAttachmentId)}
                                         className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white transition hover:bg-black/80 disabled:opacity-60"
                                         aria-label={`Удалить ${item.file.name}`}
                                     >
@@ -327,6 +353,17 @@ export function TicketReportSheet({
                                     >
                                         {resolveUploadStatusLabel(item.uploadStatus)}
                                     </span>
+
+                                    {item.serverAttachmentId ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDownloadPreview(item)}
+                                            disabled={isSubmitting}
+                                            className="absolute bottom-2 right-2 rounded-full bg-black/60 px-3 py-1 text-[11px] font-semibold text-white transition hover:bg-black/80 disabled:opacity-60"
+                                        >
+                                            Скачать
+                                        </button>
+                                    ) : null}
                                 </div>
                             ))}
                         </div>
@@ -337,7 +374,7 @@ export function TicketReportSheet({
                             type="file"
                             accept="image/*"
                             multiple
-                            disabled={isSubmitted}
+                            disabled={isSubmitting || isSubmitted}
                             className="sr-only"
                             onChange={handleMediaSelect}
                         />
@@ -348,7 +385,7 @@ export function TicketReportSheet({
                                 name="double_signed"
                                 className="h-5 w-5 rounded border border-slate-400/60 bg-transparent text-[#6A3BF2] accent-[#6A3BF2]"
                                 checked={isDoubleSigned}
-                                disabled={isSubmitted}
+                                disabled={isSubmitting || isSubmitted}
                                 onChange={(event) => setIsDoubleSigned(event.target.checked)}
                             />
                             <span className="text-lg text-slate-100">Акт подписан с двух сторон</span>
@@ -389,7 +426,7 @@ export function TicketReportSheet({
                         {submitError ? <p className="mt-2 text-center text-xs text-rose-200">{submitError}</p> : null}
                         {isSubmitted ? (
                             <p className="mt-2 text-center text-xs text-emerald-200">
-                                Тикет закрыт, вложения поставлены в очередь на загрузку.
+                                Тикет закрыт, вложения загружены.
                             </p>
                         ) : null}
                     </div>
