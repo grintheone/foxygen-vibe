@@ -1,3 +1,5 @@
+import { ticketSurfaceClassName } from "./ticket-surface";
+
 function PhoneIcon() {
     return (
         <svg
@@ -45,7 +47,7 @@ export function TicketContactCard({ contactName, contactPosition, phoneHref, ema
     }
 
     return (
-        <div className="flex items-center gap-4 rounded-3xl border border-white/15 bg-white/10 p-5 text-left shadow-lg shadow-black/20">
+        <div className={`${ticketSurfaceClassName} flex items-center gap-4 p-5 text-left`}>
             <div className="min-w-0 flex-1">
                 <p className="text-2xl font-semibold leading-tight text-slate-100">{contactName || "Не указано"}</p>
                 <p className="mt-2 text-2xl text-slate-400">{contactPosition || "Не указано"}</p>
@@ -55,7 +57,7 @@ export function TicketContactCard({ contactName, contactPosition, phoneHref, ema
                     <a
                         href={phoneHref}
                         aria-label={`Позвонить ${contactName || "контакту"}`}
-                        className="inline-flex h-16 w-16 items-center justify-center rounded-full border border-white/20 text-white transition hover:border-white/40 hover:bg-white/10"
+                        className="inline-flex h-16 w-16 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white transition hover:border-white/30 hover:bg-white/10"
                     >
                         <PhoneIcon />
                     </a>
@@ -64,7 +66,7 @@ export function TicketContactCard({ contactName, contactPosition, phoneHref, ema
                     <a
                         href={emailHref}
                         aria-label={`Написать ${contactName || "контакту"}`}
-                        className="inline-flex h-16 w-16 items-center justify-center rounded-full border border-white/20 text-white transition hover:border-white/40 hover:bg-white/10"
+                        className="inline-flex h-16 w-16 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white transition hover:border-white/30 hover:bg-white/10"
                     >
                         <MailIcon />
                     </a>

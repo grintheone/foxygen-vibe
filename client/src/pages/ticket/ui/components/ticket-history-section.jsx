@@ -2,6 +2,7 @@ import ticketAssignedIcon from "../../../../assets/icons/ticket-assigned.svg";
 import ticketClosedIcon from "../../../../assets/icons/ticket-closed.svg";
 import ticketDoneIcon from "../../../../assets/icons/ticket-done.svg";
 import ticketInWorkIcon from "../../../../assets/icons/ticket-inwork.svg";
+import { ticketSurfaceClassName } from "./ticket-surface";
 
 function formatHistoryDate(value) {
     if (!value) {
@@ -87,7 +88,7 @@ export function TicketHistorySection({ ticket }) {
     }
 
     return (
-        <section className="space-y-5 rounded-3xl border border-white/15 bg-white/10 p-5 sm:p-6">
+        <section className={`${ticketSurfaceClassName} space-y-5 p-5 sm:p-6`}>
             <h2 className="text-4xl font-semibold tracking-tight text-slate-300">История тикета</h2>
             <div className="space-y-6">
                 {historyEntries.map((entry, index) => {

@@ -1,10 +1,12 @@
+import { ticketSurfaceInteractiveClassName } from "./ticket-surface";
+
 export function TicketNavigationCard({ value, subtitle, onClick, disabled }) {
     return (
         <button
             type="button"
             onClick={onClick}
             disabled={disabled}
-            className="flex w-full items-center gap-4 rounded-3xl border border-white/15 bg-white/10 p-5 text-left shadow-lg shadow-black/20 transition hover:border-white/30 disabled:cursor-not-allowed disabled:opacity-70"
+            className={`${ticketSurfaceInteractiveClassName} flex w-full items-center gap-4 p-5 text-left disabled:cursor-not-allowed disabled:opacity-70`}
         >
             <div className="min-w-0 flex-1">
                 <p className="text-2xl font-semibold leading-tight text-slate-100">{value || "Не указано"}</p>

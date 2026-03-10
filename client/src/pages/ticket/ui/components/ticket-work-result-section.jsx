@@ -112,9 +112,9 @@ export function TicketWorkResultSection({ ticket, workDuration, onDownloadAttach
                 </p>
             </div>
 
-            <div className="rounded-2xl border border-white/15 bg-white/10 p-5 shadow-lg shadow-black/15">
+            <div className="rounded-2xl border border-white/15 bg-slate-900/35 p-5 shadow-lg shadow-black/20 backdrop-blur-sm">
                 <div className="flex items-start gap-4">
-                    <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-950 text-sm font-semibold text-slate-100">
+                    <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-950/90 text-sm font-semibold text-slate-100">
                         {ticket.executorName ? ticket.executorName.trim().charAt(0).toUpperCase() : "?"}
                     </span>
                     <div className="min-w-0">

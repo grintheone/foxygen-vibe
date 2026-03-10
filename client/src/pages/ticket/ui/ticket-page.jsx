@@ -218,6 +218,7 @@ export function TicketPage() {
                             reasonValue={reasonValue}
                             deadlineDisplay={deadlineDisplay}
                             description={ticket.description}
+                            referenceTicket={ticket.referenceTicket}
                         />
 
                         <section className="space-y-3">
