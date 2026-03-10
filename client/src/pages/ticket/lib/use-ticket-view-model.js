@@ -38,7 +38,6 @@ export function useTicketViewModel(ticket) {
     const phoneHref = phoneHrefValue ? `tel:${phoneHrefValue}` : null;
     const emailHref = ticket?.contactEmail ? `mailto:${ticket.contactEmail}` : null;
     const workDuration = formatWorkDuration(ticket?.workstarted_at, ticket?.workfinished_at);
-    const historyActorName = ticket?.executorName || "Имя Фамилия";
 
     return {
         ticketNumber,
@@ -53,6 +52,5 @@ export function useTicketViewModel(ticket) {
         phoneHref,
         emailHref,
         workDuration,
-        historyActorName,
     };
 }

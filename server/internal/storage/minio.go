@@ -145,8 +145,8 @@ func (c *Client) RemoveObject(ctx context.Context, objectKey string) error {
 	return c.client.RemoveObject(ctx, c.bucket, objectKey, minio.RemoveObjectOptions{})
 }
 
-func TicketAttachmentObjectKey(ticketID string, attachmentID string, fileName string) string {
-	base := fmt.Sprintf("tickets/%s/%s", strings.TrimSpace(ticketID), strings.TrimSpace(attachmentID))
+func TicketAttachmentObjectKey(_ string, attachmentID string, fileName string) string {
+	base := strings.TrimSpace(attachmentID)
 	ext := sanitizeObjectKeyExtension(fileName)
 	if ext == "" {
 		return base

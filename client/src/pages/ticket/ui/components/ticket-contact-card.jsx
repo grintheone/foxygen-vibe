@@ -38,6 +38,12 @@ function MailIcon() {
 }
 
 export function TicketContactCard({ contactName, contactPosition, phoneHref, emailHref }) {
+    const hasContactData = Boolean(contactName?.trim() || contactPosition?.trim() || phoneHref || emailHref);
+
+    if (!hasContactData) {
+        return null;
+    }
+
     return (
         <div className="flex items-center gap-4 rounded-3xl border border-white/15 bg-white/10 p-5 text-left shadow-lg shadow-black/20">
             <div className="min-w-0 flex-1">

@@ -49,15 +49,17 @@ export function TicketPage() {
         phoneHref,
         emailHref,
         workDuration,
-        historyActorName,
     } = useTicketViewModel(ticket);
     const [patchTicket, { isLoading: isPatching }] = usePatchTicketMutation();
     const [uploadTicketAttachment, { isLoading: isUploadingAttachment }] = useUploadTicketAttachmentMutation();
+    const hasWorkResult = Boolean(ticket?.result?.trim());
+    const hasContactData = Boolean(ticket?.contactName?.trim() || ticket?.contactPosition?.trim() || phoneHref || emailHref);
 
     const actionState = resolveTicketActionState({
         currentUserId: session?.id || session?.user_id || "",
         ticket,
     });
+    const hasVisibleActionWidget = Boolean(actionState?.isVisible);
     const isReportSubmitting = isPatching || isUploadingAttachment;
 
     useEffect(() => {
@@ -180,7 +182,11 @@ export function TicketPage() {
 
     return (
         <PageShell>
-            <section className={`w-full space-y-6 pb-28 transition ${isReportSheetOpen ? "brightness-75" : ""}`}>
+            <section
+                className={`w-full space-y-6 transition ${hasVisibleActionWidget ? "pb-28" : ""} ${
+                    isReportSheetOpen ? "brightness-75" : ""
+                }`}
+            >
                 <TicketHeader
                     ticketNumber={ticketNumber}
                     isInWork={isInWork}
@@ -228,20 +234,24 @@ export function TicketPage() {
                                 value={ticket.clientName}
                                 subtitle={ticket.clientAddress}
                             />
-                            <TicketContactCard
-                                contactName={ticket.contactName}
-                                contactPosition={ticket.contactPosition}
-                                phoneHref={phoneHref}
-                                emailHref={emailHref}
-                            />
+                            {hasContactData ? (
+                                <TicketContactCard
+                                    contactName={ticket.contactName}
+                                    contactPosition={ticket.contactPosition}
+                                    phoneHref={phoneHref}
+                                    emailHref={emailHref}
+                                />
+                            ) : null}
                         </section>
 
-                        <TicketWorkResultSection
-                            ticket={ticket}
-                            workDuration={workDuration}
-                            onDownloadAttachment={handleDownloadAttachment}
-                        />
-                        <TicketHistorySection historyActorName={historyActorName} />
+                        {hasWorkResult ? (
+                            <TicketWorkResultSection
+                                ticket={ticket}
+                                workDuration={workDuration}
+                                onDownloadAttachment={handleDownloadAttachment}
+                            />
+                        ) : null}
+                        <TicketHistorySection ticket={ticket} />
                     </>
                 ) : null}
             </section>

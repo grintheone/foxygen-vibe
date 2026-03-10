@@ -93,6 +93,28 @@ export async function downloadTicketAttachmentFile({ attachmentId, fileName, tic
   }, 0);
 }
 
+export async function loadTicketAttachmentPreviewUrl(downloadUrl) {
+  if (!downloadUrl) {
+    return null;
+  }
+
+  const accessToken = getAccessToken();
+  const response = await fetch(downloadUrl, {
+    headers: accessToken
+      ? {
+          Authorization: `Bearer ${accessToken}`,
+        }
+      : undefined,
+  });
+
+  if (!response.ok) {
+    throw new Error(await readError(response, "Не удалось загрузить превью вложения."));
+  }
+
+  const blob = await response.blob();
+  return window.URL.createObjectURL(blob);
+}
+
 export const {
   useGetDepartmentTicketsQuery,
   useGetMyTicketsQuery,
