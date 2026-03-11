@@ -17,11 +17,15 @@ export function TicketSummaryCard({ reasonValue, deadlineDisplay, description, r
 
     return (
         <div className={`${ticketSurfaceClassName} p-6 text-sm text-slate-200`}>
-            <div className="flex items-start gap-2 text-xl font-semibold text-white">
-                {reasonValue} {deadlineValue}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+                <div className="min-w-0">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Сводка</p>
+                    <h2 className="mt-3 text-2xl font-semibold leading-tight text-white sm:text-3xl">{reasonValue}</h2>
+                </div>
+                <p className="text-sm font-semibold text-slate-100 sm:pt-1 sm:text-base">{deadlineValue}</p>
             </div>
             {referenceTicket ? (
-                <p className="mt-4 text-sm text-slate-300">
+                <p className="mt-4 text-sm text-slate-300 sm:text-base">
                     Создано из:{" "}
                     <Link
                         className="break-all text-sky-300 underline decoration-sky-300/60 underline-offset-2 transition hover:text-sky-200"
@@ -31,7 +35,7 @@ export function TicketSummaryCard({ reasonValue, deadlineDisplay, description, r
                     </Link>
                 </p>
             ) : null}
-            <p className="mt-4 text-sm text-slate-200">{description || "Не указано"}</p>
+            <p className="mt-4 text-sm leading-relaxed text-slate-200 sm:text-base">{description || "Не указано"}</p>
         </div>
     );
 }

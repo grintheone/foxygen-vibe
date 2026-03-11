@@ -222,7 +222,7 @@ export function TicketPage() {
                         />
 
                         <section className="space-y-3">
-                            <h2 className="text-3xl font-semibold tracking-tight text-slate-300">Оборудование</h2>
+                            <h2 className="text-xl font-semibold tracking-tight text-slate-300 sm:text-2xl">Оборудование</h2>
                             <TicketNavigationCard
                                 onClick={handleOpenDevice}
                                 disabled={!canOpenDevice}
@@ -232,7 +232,7 @@ export function TicketPage() {
                         </section>
 
                         <section className="space-y-3">
-                            <h2 className="text-3xl font-semibold tracking-tight text-slate-300">Клиент</h2>
+                            <h2 className="text-xl font-semibold tracking-tight text-slate-300 sm:text-2xl">Клиент</h2>
                             <TicketNavigationCard
                                 onClick={handleOpenClient}
                                 disabled={!canOpenClient}

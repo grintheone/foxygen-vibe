@@ -49,15 +49,15 @@ export function TicketContactCard({ contactName, contactPosition, phoneHref, ema
     return (
         <div className={`${ticketSurfaceClassName} flex items-center gap-4 p-5 text-left`}>
             <div className="min-w-0 flex-1">
-                <p className="text-2xl font-semibold leading-tight text-slate-100">{contactName || "Не указано"}</p>
-                <p className="mt-2 text-2xl text-slate-400">{contactPosition || "Не указано"}</p>
+                <p className="text-lg font-semibold leading-tight text-slate-100 sm:text-2xl">{contactName || "Не указано"}</p>
+                <p className="mt-2 text-sm text-slate-400 sm:text-xl">{contactPosition || "Не указано"}</p>
             </div>
             <div className="flex items-center gap-3">
                 {phoneHref ? (
                     <a
                         href={phoneHref}
                         aria-label={`Позвонить ${contactName || "контакту"}`}
-                        className="inline-flex h-16 w-16 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white transition hover:border-white/30 hover:bg-white/10"
+                        className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white transition hover:border-white/30 hover:bg-white/10 sm:h-16 sm:w-16"
                     >
                         <PhoneIcon />
                     </a>
@@ -66,7 +66,7 @@ export function TicketContactCard({ contactName, contactPosition, phoneHref, ema
                     <a
                         href={emailHref}
                         aria-label={`Написать ${contactName || "контакту"}`}
-                        className="inline-flex h-16 w-16 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white transition hover:border-white/30 hover:bg-white/10"
+                        className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white transition hover:border-white/30 hover:bg-white/10 sm:h-16 sm:w-16"
                     >
                         <MailIcon />
                     </a>

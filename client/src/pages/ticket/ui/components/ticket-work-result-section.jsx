@@ -92,8 +92,8 @@ export function TicketWorkResultSection({ ticket, workDuration, onDownloadAttach
     return (
         <section className="space-y-3 rounded-3xl border border-emerald-300/25 bg-emerald-500/10 p-5 sm:p-6">
             <div className="flex items-center justify-between gap-4">
-                <h2 className="text-3xl font-semibold tracking-tight text-emerald-100">Результат работы</h2>
-                <p className="inline-flex items-center gap-2 text-2xl font-semibold text-emerald-100">
+                <h2 className="text-xl font-semibold tracking-tight text-emerald-100 sm:text-2xl">Результат работы</h2>
+                <p className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-100 sm:text-lg">
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
                         viewBox="0 0 24 24"
@@ -118,14 +118,14 @@ export function TicketWorkResultSection({ ticket, workDuration, onDownloadAttach
                         {ticket.executorName ? ticket.executorName.trim().charAt(0).toUpperCase() : "?"}
                     </span>
                     <div className="min-w-0">
-                        <p className="text-2xl font-semibold leading-tight text-slate-100">
+                        <p className="text-lg font-semibold leading-tight text-slate-100 sm:text-2xl">
                             {ticket.executorName || "Исполнитель не назначен"}
                         </p>
-                        <p className="text-2xl text-slate-400">{ticket.executorDepartment || "Отдел не указан"}</p>
+                        <p className="text-sm text-slate-400 sm:text-xl">{ticket.executorDepartment || "Отдел не указан"}</p>
                     </div>
                 </div>
 
-                <p className="mt-4 text-2xl leading-relaxed text-slate-200">{ticket.result}</p>
+                <p className="mt-4 text-sm leading-relaxed text-slate-200 sm:text-lg">{ticket.result}</p>
             </div>
 
             {attachments.length > 0 ? (
