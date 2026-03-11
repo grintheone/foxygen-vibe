@@ -114,6 +114,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/devices/", s.handleDeviceByID)
 	mux.HandleFunc("/api/comments", s.handleComments)
 	mux.HandleFunc("/api/departments", s.handleDepartments)
+	mux.HandleFunc("/api/departments/members", s.handleDepartmentMembers)
+	mux.HandleFunc("/api/ticket-reasons", s.handleTicketReasons)
 	mux.HandleFunc("/api/tickets", s.handleTickets)
 	mux.HandleFunc("/api/tickets/", s.handleTicketByID)
 	mux.HandleFunc("/api/tickets/department", s.handleDepartmentTickets)

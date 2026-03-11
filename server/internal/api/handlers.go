@@ -1708,6 +1708,181 @@ func (s *Server) handleDepartments(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, response)
 }
 
+func (s *Server) handleDepartmentMembers(w http.ResponseWriter, r *http.Request) {
+	type departmentMemberResponse struct {
+		ID         string `json:"id"`
+		Name       string `json:"name"`
+		Username   string `json:"username"`
+		Department string `json:"department"`
+	}
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	claims, err := parseAuthorizationHeader(s.auth.jwtSecret, r.Header.Get("Authorization"))
+	if err != nil {
+		http.Error(w, "invalid access token", http.StatusUnauthorized)
+		return
+	}
+
+	if s.db == nil {
+		http.Error(w, "database not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	var requesterID pgtype.UUID
+	if err := requesterID.Scan(claims.Subject); err != nil {
+		http.Error(w, "invalid access token", http.StatusUnauthorized)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	rows, err := s.db.Query(ctx, `
+		SELECT
+			u.user_id,
+			TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))) AS name,
+			a.username,
+			COALESCE(d.title, '')
+		FROM users u
+		JOIN accounts a ON a.user_id = u.user_id
+		LEFT JOIN departments d ON d.id = u.department
+		WHERE u.department = (
+			SELECT department
+			FROM users
+			WHERE user_id = $1
+		)
+		  AND u.department IS NOT NULL
+		  AND a.disabled = FALSE
+		ORDER BY
+			TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))) ASC,
+			a.username ASC,
+			u.user_id ASC
+	`, requesterID)
+	if err != nil {
+		log.Printf("query department members failed: %v", err)
+		http.Error(w, "failed to load department members", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	response := make([]departmentMemberResponse, 0)
+	for rows.Next() {
+		var (
+			id         pgtype.UUID
+			name       string
+			username   string
+			department string
+		)
+
+		if err := rows.Scan(&id, &name, &username, &department); err != nil {
+			log.Printf("scan department member failed: %v", err)
+			http.Error(w, "failed to load department members", http.StatusInternalServerError)
+			return
+		}
+
+		response = append(response, departmentMemberResponse{
+			ID:         uuidToString(id),
+			Name:       name,
+			Username:   username,
+			Department: department,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("iterate department members failed: %v", err)
+		http.Error(w, "failed to load department members", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (s *Server) handleTicketReasons(w http.ResponseWriter, r *http.Request) {
+	type ticketReasonResponse struct {
+		ID    string `json:"id"`
+		Title string `json:"title"`
+	}
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if _, err := parseAuthorizationHeader(s.auth.jwtSecret, r.Header.Get("Authorization")); err != nil {
+		http.Error(w, "invalid access token", http.StatusUnauthorized)
+		return
+	}
+
+	if s.db == nil {
+		http.Error(w, "database not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	rows, err := s.db.Query(ctx, `
+		SELECT COALESCE(id, ''), COALESCE(title, '')
+		FROM ticket_reasons
+		ORDER BY title ASC, id ASC
+	`)
+	if err != nil {
+		log.Printf("query ticket reasons failed: %v", err)
+		http.Error(w, "failed to load ticket reasons", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	response := make([]ticketReasonResponse, 0)
+	for rows.Next() {
+		var (
+			id    string
+			title string
+		)
+
+		if err := rows.Scan(&id, &title); err != nil {
+			log.Printf("scan ticket reason failed: %v", err)
+			http.Error(w, "failed to load ticket reasons", http.StatusInternalServerError)
+			return
+		}
+
+		response = append(response, ticketReasonResponse{
+			ID:    id,
+			Title: title,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("iterate ticket reasons failed: %v", err)
+		http.Error(w, "failed to load ticket reasons", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+func parseTicketDateInput(value string) (time.Time, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return time.Time{}, errors.New("empty date")
+	}
+
+	if parsedDate, err := time.Parse("2006-01-02", value); err == nil {
+		return time.Date(parsedDate.Year(), parsedDate.Month(), parsedDate.Day(), 12, 0, 0, 0, time.UTC), nil
+	}
+
+	parsedTimestamp, err := time.Parse(time.RFC3339Nano, value)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	return parsedTimestamp.UTC(), nil
+}
+
 func (s *Server) handleTickets(w http.ResponseWriter, r *http.Request) {
 	type ticketResponse struct {
 		ID                 string  `json:"id"`
@@ -1728,7 +1903,7 @@ func (s *Server) handleTickets(w http.ResponseWriter, r *http.Request) {
 		ClientAddress      string  `json:"clientAddress"`
 	}
 
-	if r.Method != http.MethodGet {
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -1741,6 +1916,11 @@ func (s *Server) handleTickets(w http.ResponseWriter, r *http.Request) {
 
 	if s.db == nil {
 		http.Error(w, "database not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	if r.Method == http.MethodPost {
+		s.handleTicketsCreate(w, r, claims.Subject)
 		return
 	}
 
@@ -1870,6 +2050,300 @@ func (s *Server) handleTickets(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, tickets)
+}
+
+func (s *Server) handleTicketsCreate(w http.ResponseWriter, r *http.Request, requesterSubject string) {
+	type createTicketRequest struct {
+		AssignedEnd   string `json:"assigned_end"`
+		AssignedStart string `json:"assigned_start"`
+		Client        string `json:"client"`
+		ContactPerson string `json:"contact_person"`
+		Description   string `json:"description"`
+		Device        string `json:"device"`
+		Executor      string `json:"executor"`
+		Reason        string `json:"reason"`
+		Urgent        bool   `json:"urgent"`
+	}
+
+	type createTicketResponse struct {
+		AssignedAt    *string `json:"assigned_at,omitempty"`
+		AssignedEnd   *string `json:"assigned_end,omitempty"`
+		AssignedStart *string `json:"assigned_start,omitempty"`
+		ID            string  `json:"id"`
+		Number        int32   `json:"number"`
+		Status        string  `json:"status"`
+	}
+
+	defer r.Body.Close()
+
+	var input createTicketRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	input.AssignedEnd = strings.TrimSpace(input.AssignedEnd)
+	input.AssignedStart = strings.TrimSpace(input.AssignedStart)
+	input.Client = strings.TrimSpace(input.Client)
+	input.ContactPerson = strings.TrimSpace(input.ContactPerson)
+	input.Description = strings.TrimSpace(input.Description)
+	input.Device = strings.TrimSpace(input.Device)
+	input.Executor = strings.TrimSpace(input.Executor)
+	input.Reason = strings.TrimSpace(input.Reason)
+
+	switch {
+	case input.Device == "":
+		http.Error(w, "device is required", http.StatusBadRequest)
+		return
+	case input.Client == "":
+		http.Error(w, "client is required", http.StatusBadRequest)
+		return
+	case input.Reason == "":
+		http.Error(w, "reason is required", http.StatusBadRequest)
+		return
+	case input.Description == "":
+		http.Error(w, "description is required", http.StatusBadRequest)
+		return
+	case input.ContactPerson == "":
+		http.Error(w, "contact_person is required", http.StatusBadRequest)
+		return
+	case input.Executor == "":
+		http.Error(w, "executor is required", http.StatusBadRequest)
+		return
+	case input.AssignedStart == "":
+		http.Error(w, "assigned_start is required", http.StatusBadRequest)
+		return
+	case input.AssignedEnd == "":
+		http.Error(w, "assigned_end is required", http.StatusBadRequest)
+		return
+	}
+
+	assignedStart, err := parseTicketDateInput(input.AssignedStart)
+	if err != nil {
+		http.Error(w, "assigned_start must be a date or ISO timestamp", http.StatusBadRequest)
+		return
+	}
+
+	assignedEnd, err := parseTicketDateInput(input.AssignedEnd)
+	if err != nil {
+		http.Error(w, "assigned_end must be a date or ISO timestamp", http.StatusBadRequest)
+		return
+	}
+
+	if assignedStart.After(assignedEnd) {
+		http.Error(w, "assigned_end must be greater than or equal to assigned_start", http.StatusBadRequest)
+		return
+	}
+
+	var (
+		requesterID pgtype.UUID
+		clientID    pgtype.UUID
+		contactID   pgtype.UUID
+		deviceID    pgtype.UUID
+		executorID  pgtype.UUID
+	)
+
+	if err := requesterID.Scan(requesterSubject); err != nil {
+		http.Error(w, "invalid access token", http.StatusUnauthorized)
+		return
+	}
+	if err := clientID.Scan(input.Client); err != nil {
+		http.Error(w, "client must be a valid UUID", http.StatusBadRequest)
+		return
+	}
+	if err := contactID.Scan(input.ContactPerson); err != nil {
+		http.Error(w, "contact_person must be a valid UUID", http.StatusBadRequest)
+		return
+	}
+	if err := deviceID.Scan(input.Device); err != nil {
+		http.Error(w, "device must be a valid UUID", http.StatusBadRequest)
+		return
+	}
+	if err := executorID.Scan(input.Executor); err != nil {
+		http.Error(w, "executor must be a valid UUID", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	var (
+		requesterDepartment pgtype.UUID
+		requesterRole       string
+	)
+	if err := s.db.QueryRow(ctx, `
+		SELECT
+			u.department,
+			COALESCE(r.name, 'user')
+		FROM users u
+		LEFT JOIN account_roles ar ON ar.user_id = u.user_id
+		LEFT JOIN roles r ON r.id = ar.role_id
+		WHERE u.user_id = $1
+	`, requesterID).Scan(&requesterDepartment, &requesterRole); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			http.Error(w, "profile not found", http.StatusNotFound)
+			return
+		}
+
+		log.Printf("load requester profile failed: %v", err)
+		http.Error(w, "failed to create ticket", http.StatusInternalServerError)
+		return
+	}
+
+	if requesterRole != "admin" && requesterRole != "coordinator" {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if !requesterDepartment.Valid {
+		http.Error(w, "requester department is required", http.StatusBadRequest)
+		return
+	}
+
+	var reasonExists bool
+	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM ticket_reasons WHERE id = $1)`, input.Reason).Scan(&reasonExists); err != nil {
+		log.Printf("validate ticket reason failed: %v", err)
+		http.Error(w, "failed to create ticket", http.StatusInternalServerError)
+		return
+	}
+	if !reasonExists {
+		http.Error(w, "reason not found", http.StatusBadRequest)
+		return
+	}
+
+	var resolvedClientID pgtype.UUID
+	if err := s.db.QueryRow(ctx, `
+		SELECT a.actual_client
+		FROM devices d
+		LEFT JOIN LATERAL (
+			SELECT a.actual_client
+			FROM agreements a
+			WHERE a.device = d.id
+			ORDER BY a.is_active DESC, a.assigned_at DESC NULLS LAST, a.number DESC
+			LIMIT 1
+		) a ON TRUE
+		WHERE d.id = $1
+	`, deviceID).Scan(&resolvedClientID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			http.Error(w, "device not found", http.StatusNotFound)
+			return
+		}
+
+		log.Printf("load device client failed: %v", err)
+		http.Error(w, "failed to create ticket", http.StatusInternalServerError)
+		return
+	}
+	if !resolvedClientID.Valid {
+		http.Error(w, "device has no client", http.StatusBadRequest)
+		return
+	}
+	if resolvedClientID != clientID {
+		http.Error(w, "client does not match device", http.StatusBadRequest)
+		return
+	}
+
+	var contactExists bool
+	if err := s.db.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1
+			FROM contacts
+			WHERE id = $1
+			  AND client_id = $2
+		)
+	`, contactID, clientID).Scan(&contactExists); err != nil {
+		log.Printf("validate contact failed: %v", err)
+		http.Error(w, "failed to create ticket", http.StatusInternalServerError)
+		return
+	}
+	if !contactExists {
+		http.Error(w, "contact_person not found", http.StatusBadRequest)
+		return
+	}
+
+	var executorExists bool
+	if err := s.db.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1
+			FROM users u
+			JOIN accounts a ON a.user_id = u.user_id
+			WHERE u.user_id = $1
+			  AND u.department = $2
+			  AND a.disabled = FALSE
+		)
+	`, executorID, requesterDepartment).Scan(&executorExists); err != nil {
+		log.Printf("validate executor failed: %v", err)
+		http.Error(w, "failed to create ticket", http.StatusInternalServerError)
+		return
+	}
+	if !executorExists {
+		http.Error(w, "executor not found in requester department", http.StatusBadRequest)
+		return
+	}
+
+	var (
+		createdTicketID    pgtype.UUID
+		createdTicketNo    int32
+		createdTicketState string
+		assignedAt         pgtype.Timestamp
+		storedStart        pgtype.Timestamp
+		storedEnd          pgtype.Timestamp
+	)
+	if err := s.db.QueryRow(ctx, `
+		INSERT INTO tickets (
+			assigned_at,
+			assigned_start,
+			assigned_end,
+			urgent,
+			client,
+			device,
+			author,
+			department,
+			assigned_by,
+			reason,
+			description,
+			contact_person,
+			executor,
+			status
+		)
+		VALUES (
+			(NOW() AT TIME ZONE 'UTC'),
+			$1,
+			$2,
+			$3,
+			$4,
+			$5,
+			$6,
+			$7,
+			$8,
+			$9,
+			$10,
+			$11,
+			$12,
+			'assigned'
+		)
+		RETURNING id, number, COALESCE(status, ''), assigned_at, assigned_start, assigned_end
+	`, assignedStart, assignedEnd, input.Urgent, clientID, deviceID, requesterID, requesterDepartment, requesterID, input.Reason, input.Description, contactID, executorID).Scan(
+		&createdTicketID,
+		&createdTicketNo,
+		&createdTicketState,
+		&assignedAt,
+		&storedStart,
+		&storedEnd,
+	); err != nil {
+		log.Printf("create ticket failed: %v", err)
+		http.Error(w, "failed to create ticket", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, createTicketResponse{
+		AssignedAt:    timestampToRFC3339(assignedAt),
+		AssignedEnd:   timestampToRFC3339(storedEnd),
+		AssignedStart: timestampToRFC3339(storedStart),
+		ID:            uuidToString(createdTicketID),
+		Number:        createdTicketNo,
+		Status:        createdTicketState,
+	})
 }
 
 func (s *Server) handleTicketByID(w http.ResponseWriter, r *http.Request) {

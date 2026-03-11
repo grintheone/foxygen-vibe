@@ -12,13 +12,21 @@ export function isMissingCommentReferenceError(error) {
 }
 
 export const ticketsApi = createApi({
-  tagTypes: ["Client", "Comment", "Department", "Device", "Ticket", "Tickets"],
+  tagTypes: ["Client", "Comment", "Department", "DepartmentMember", "Device", "Ticket", "TicketReason", "Tickets"],
   reducerPath: "ticketsApi",
   baseQuery: baseQueryWithAuth,
   endpoints: (builder) => ({
     getDepartments: builder.query({
       query: () => "api/departments",
       providesTags: ["Department"],
+    }),
+    getDepartmentMembers: builder.query({
+      query: () => "api/departments/members",
+      providesTags: ["DepartmentMember"],
+    }),
+    getTicketReasons: builder.query({
+      query: () => "api/ticket-reasons",
+      providesTags: ["TicketReason"],
     }),
     getClientById: builder.query({
       query: (clientId) => `api/clients/${clientId}`,
@@ -95,6 +103,21 @@ export const ticketsApi = createApi({
     getDepartmentTickets: builder.query({
       query: () => "api/tickets/department",
       providesTags: ["Tickets"],
+    }),
+    createTicket: builder.mutation({
+      query: (ticket) => ({
+        body: ticket,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+        url: "api/tickets",
+      }),
+      invalidatesTags: (_, __, { client, device }) => [
+        "Tickets",
+        ...(client ? [{ type: "Client", id: client }] : []),
+        ...(device ? [{ type: "Device", id: device }] : []),
+      ],
     }),
     patchTicket: builder.mutation({
       query: ({ ticketId, patch }) => ({
@@ -191,8 +214,11 @@ export const {
   useGetDeviceTicketsQuery,
   useGetDepartmentsQuery,
   useGetDepartmentTicketsQuery,
+  useGetDepartmentMembersQuery,
   useGetMyTicketsQuery,
   useGetTicketByIdQuery,
+  useGetTicketReasonsQuery,
+  useCreateTicketMutation,
   usePatchTicketMutation,
   useUploadTicketAttachmentMutation,
 } = ticketsApi;
