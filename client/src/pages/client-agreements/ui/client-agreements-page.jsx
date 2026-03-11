@@ -30,13 +30,13 @@ export function ClientAgreementsPage() {
               <path d="M15 18l-6-6 6-6" />
             </svg>
           </button>
-          <p className="mt-4 text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Оборудование</p>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Все оборудование</h1>
+          <p className="mt-4 text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Сервисные услуги</p>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Истекшие сервисные услуги</h1>
         </header>
 
         <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
           <p className="text-sm text-slate-200">
-            Страница оборудования клиента {clientId || "—"} пока не реализована.
+            Страница истекших сервисных услуг для клиента {clientId || "—"} пока не реализована.
           </p>
         </div>
       </section>

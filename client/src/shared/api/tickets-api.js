@@ -71,6 +71,15 @@ export const ticketsApi = createApi({
       }),
       providesTags: (_, __, { deviceId }) => [{ type: "Device", id: deviceId }],
     }),
+    getDeviceAgreements: builder.query({
+      query: ({ active = true, deviceId }) => ({
+        params: {
+          active,
+        },
+        url: `api/devices/${deviceId}/agreements`,
+      }),
+      providesTags: (_, __, { deviceId }) => [{ type: "Device", id: deviceId }],
+    }),
     getMyTickets: builder.query({
       query: () => "api/tickets",
       providesTags: ["Tickets"],
@@ -172,6 +181,7 @@ export const {
   useGetClientAgreementsQuery,
   useGetClientContactsQuery,
   useGetCommentsQuery,
+  useGetDeviceAgreementsQuery,
   useGetClientTicketsQuery,
   useGetDeviceByIdQuery,
   useGetDeviceTicketsQuery,

@@ -5,12 +5,12 @@ import { TicketCardWithExecutor } from "../../dashboard/ui/ticket-card-with-exec
 import {
   useAddCommentMutation,
   useGetCommentsQuery,
+  useGetDeviceAgreementsQuery,
   useGetDeviceByIdQuery,
   useGetDeviceTicketsQuery,
 } from "../../../shared/api/tickets-api";
 import { routePaths } from "../../../shared/config/routes";
 import { BottomPageAction } from "../../../shared/ui/bottom-page-action";
-import { NavigationCard } from "../../../shared/ui/navigation-card";
 import { PageShell } from "../../../shared/ui/page-shell";
 import { SlideOverSheet } from "../../../shared/ui/slide-over-sheet";
 
@@ -31,6 +31,38 @@ function formatCommentDate(value) {
   const minutes = String(date.getMinutes()).padStart(2, "0");
 
   return `${day}.${month}.${year} ${hours}:${minutes}`;
+}
+
+function formatShortDate(value) {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+
+  return `${day}.${month}.${year}`;
+}
+
+function formatAgreementRange(agreement) {
+  if (!agreement) {
+    return "Срок не указан";
+  }
+
+  const assignedAt = formatShortDate(agreement.assigned_at);
+  const finishedAt = formatShortDate(agreement.finished_at);
+
+  if (!assignedAt && !finishedAt) {
+    return "Срок не указан";
+  }
+
+  return `с ${assignedAt || "—"} до ${finishedAt || "—"}`;
 }
 
 function formatPropertyValue(value) {
@@ -169,22 +201,72 @@ function DeviceOverviewSection({ device, propertyEntries }) {
   );
 }
 
-function DeviceClientSection({ clientAddress, clientId, clientName, onOpenClient }) {
+function DeviceServiceSection({
+  agreement,
+  isError,
+  isLoading,
+  onOpenClient,
+  onOpenExpiredAgreements,
+}) {
   return (
     <section className="space-y-4">
-      <h2 className="text-2xl font-bold tracking-tight text-slate-50 sm:text-3xl">Клиент</h2>
+      <h2 className="text-2xl font-bold tracking-tight text-slate-50 sm:text-3xl">Сервисные услуги</h2>
 
-      {clientId ? (
-        <NavigationCard
-          value={clientName}
-          subtitle={clientAddress || "Адрес не указан"}
-          onClick={() => onOpenClient(clientId)}
-        />
-      ) : (
+      {isLoading ? (
         <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-          <p className="text-sm text-slate-300">Для этого устройства не найден активный клиент.</p>
+          <p className="text-sm text-slate-300">Загрузка сервисных услуг...</p>
         </div>
-      )}
+      ) : null}
+
+      {isError ? (
+        <div className="rounded-3xl border border-rose-300/30 bg-rose-500/10 p-6">
+          <p className="text-sm text-rose-100">Не удалось загрузить сервисные услуги.</p>
+        </div>
+      ) : null}
+
+      {!isLoading && !isError && agreement?.client ? (
+        <>
+          <button
+            type="button"
+            onClick={() => onOpenClient(agreement.client)}
+            className="w-full rounded-3xl border border-white/10 bg-slate-950/35 p-6 text-left shadow-xl shadow-black/20 backdrop-blur transition hover:border-white/20 hover:bg-slate-950/45"
+          >
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Активная услуга</p>
+            <p className="mt-3 text-2xl font-semibold tracking-tight text-slate-50">
+              {agreement.clientName || "Не указано"}
+            </p>
+            <p className="mt-2 text-lg text-slate-400">{agreement.clientAddress || "Адрес не указан"}</p>
+            <p className="mt-6 text-base font-medium text-slate-200">{formatAgreementRange(agreement)}</p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onOpenExpiredAgreements(agreement.client)}
+            className="inline-flex items-center gap-3 rounded-2xl px-2 py-1 text-lg font-semibold text-[#8B5CFF] transition hover:text-[#A27BFF]"
+          >
+            <span>Истекшие сервисные услуги</span>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-5 w-5"
+              aria-hidden="true"
+            >
+              <path d="M9 6l6 6-6 6" />
+            </svg>
+          </button>
+        </>
+      ) : null}
+
+      {!isLoading && !isError && !agreement?.client ? (
+        <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+          <p className="text-sm text-slate-300">Для этого устройства не найдено активных сервисных услуг.</p>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -380,6 +462,20 @@ export function DevicePage() {
     skip: !deviceId,
   });
   const {
+    data: agreements = [],
+    isError: isAgreementsError,
+    isFetching: isAgreementsFetching,
+    isLoading: isAgreementsLoading,
+  } = useGetDeviceAgreementsQuery(
+    {
+      active: true,
+      deviceId,
+    },
+    {
+      skip: !deviceId,
+    },
+  );
+  const {
     data: tickets = [],
     isError: isTicketsError,
     isFetching: isTicketsFetching,
@@ -407,6 +503,7 @@ export function DevicePage() {
   const pageTitle = device?.title?.trim() || "Устройство";
   const serialNumber = device?.serialNumber?.trim() || "";
   const propertyEntries = buildPropertyEntries(device?.properties);
+  const activeAgreement = agreements[0] || null;
   const canCreateTicket = session?.role === "admin" || session?.role === "coordinator";
   const hasCreateTicketWidget = canCreateTicket && !isLoading && !isFetching && !isError && Boolean(device);
 
@@ -468,13 +565,14 @@ export function DevicePage() {
 
         {!isLoading && !isFetching && !isError && device ? (
           <>
-            <DeviceOverviewSection device={device} propertyEntries={propertyEntries} />
-            <DeviceClientSection
-              clientId={device.client}
-              clientName={device.clientName}
-              clientAddress={device.clientAddress}
+            <DeviceServiceSection
+              agreement={activeAgreement}
+              isError={isAgreementsError}
+              isLoading={isAgreementsLoading || isAgreementsFetching}
               onOpenClient={(clientIdValue) => navigate(routePaths.clientById(clientIdValue))}
+              onOpenExpiredAgreements={(clientIdValue) => navigate(routePaths.clientAgreementsById(clientIdValue))}
             />
+            <DeviceOverviewSection device={device} propertyEntries={propertyEntries} />
             <DeviceLatestTicketsSection
               tickets={tickets}
               isError={isTicketsError}

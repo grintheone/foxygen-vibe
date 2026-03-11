@@ -455,20 +455,36 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) canAccessReference(ctx context.Context, referenceID pgtype.UUID) (bool, error) {
+func (s *Server) canAccessReference(ctx context.Context, referenceID pgtype.UUID, userID pgtype.UUID) (bool, error) {
 	var allowed bool
 
 	err := s.db.QueryRow(ctx, `
 		SELECT EXISTS (
-			SELECT 1 FROM tickets t WHERE t.id = $1
-			UNION ALL
-			SELECT 1 FROM clients c WHERE c.id = $1
-			UNION ALL
-			SELECT 1 FROM devices d WHERE d.id = $1
-			UNION ALL
-			SELECT 1 FROM agreements a WHERE a.id = $1
+			SELECT 1
+			FROM tickets t
+			WHERE (
+				t.id = $1
+				OR t.client = $1
+				OR t.device = $1
+				OR EXISTS (
+					SELECT 1
+					FROM agreements a
+					WHERE a.id = $1
+					  AND (a.actual_client = t.client OR a.device = t.device)
+				)
+			)
+			  AND (
+				t.executor = $2
+				OR EXISTS (
+					SELECT 1
+					FROM users u_req
+					WHERE u_req.user_id = $2
+					  AND u_req.department IS NOT NULL
+					  AND u_req.department = t.department
+				)
+			  )
 		)
-	`, referenceID).Scan(&allowed)
+	`, referenceID, userID).Scan(&allowed)
 	if err != nil {
 		return false, err
 	}
@@ -526,7 +542,7 @@ func (s *Server) handleComments(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
 
-		allowed, err := s.canAccessReference(ctx, referenceID)
+		allowed, err := s.canAccessReference(ctx, referenceID, userID)
 		if err != nil {
 			log.Printf("check comments access failed: %v", err)
 			http.Error(w, "failed to load comments", http.StatusInternalServerError)
@@ -627,7 +643,7 @@ func (s *Server) handleComments(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
 
-		allowed, err := s.canAccessReference(ctx, referenceID)
+		allowed, err := s.canAccessReference(ctx, referenceID, userID)
 		if err != nil {
 			log.Printf("check comments access failed: %v", err)
 			http.Error(w, "failed to create comment", http.StatusInternalServerError)
@@ -1197,7 +1213,21 @@ func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 		ClientAddress      string  `json:"clientAddress"`
 	}
 
-	if _, err := parseAuthorizationHeader(s.auth.jwtSecret, r.Header.Get("Authorization")); err != nil {
+	type deviceAgreementResponse struct {
+		ID            string  `json:"id"`
+		Number        int32   `json:"number"`
+		Client        *string `json:"client"`
+		ClientName    string  `json:"clientName"`
+		ClientAddress string  `json:"clientAddress"`
+		AssignedAt    *string `json:"assigned_at"`
+		FinishedAt    *string `json:"finished_at"`
+		IsActive      bool    `json:"isActive"`
+		OnWarranty    bool    `json:"onWarranty"`
+		Type          *string `json:"type"`
+	}
+
+	claims, err := parseAuthorizationHeader(s.auth.jwtSecret, r.Header.Get("Authorization"))
+	if err != nil {
 		http.Error(w, "invalid access token", http.StatusUnauthorized)
 		return
 	}
@@ -1217,6 +1247,12 @@ func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 	var deviceID pgtype.UUID
 	if err := deviceID.Scan(pathParts[0]); err != nil {
 		http.Error(w, "invalid device id", http.StatusBadRequest)
+		return
+	}
+
+	var userID pgtype.UUID
+	if err := userID.Scan(claims.Subject); err != nil {
+		http.Error(w, "invalid access token", http.StatusUnauthorized)
 		return
 	}
 
@@ -1289,9 +1325,19 @@ func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 			LEFT JOIN departments d_exec ON d_exec.id = u_exec.department
 			WHERE t.device = $1
 			  AND ($2 = '' OR COALESCE(t.status, '') = $2)
+			  AND (
+				t.executor = $3
+				OR EXISTS (
+					SELECT 1
+					FROM users u_req
+					WHERE u_req.user_id = $3
+					  AND u_req.department IS NOT NULL
+					  AND u_req.department = t.department
+				)
+			  )
 			ORDER BY t.closed_at DESC NULLS LAST, t.workfinished_at DESC NULLS LAST, t.created_at DESC, t.number DESC
-			LIMIT $3
-		`, deviceID, status, limit)
+			LIMIT $4
+		`, deviceID, status, userID, limit)
 		if err != nil {
 			log.Printf("query device tickets failed: %v", err)
 			http.Error(w, "failed to load device tickets", http.StatusInternalServerError)
@@ -1376,6 +1422,122 @@ func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 		}
 
 		writeJSON(w, http.StatusOK, tickets)
+		return
+	case len(pathParts) == 2 && pathParts[1] == "agreements":
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		activeOnly := true
+		if rawActive := strings.TrimSpace(r.URL.Query().Get("active")); rawActive != "" {
+			switch strings.ToLower(rawActive) {
+			case "true", "1", "yes":
+				activeOnly = true
+			case "false", "0", "no":
+				activeOnly = false
+			default:
+				http.Error(w, "active must be a boolean", http.StatusBadRequest)
+				return
+			}
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+
+		rows, err := s.db.Query(ctx, `
+			SELECT
+				a.id,
+				a.number,
+				a.actual_client,
+				COALESCE(c.title, ''),
+				COALESCE(c.address, ''),
+				a.assigned_at,
+				a.finished_at,
+				a.is_active,
+				a.on_warranty,
+				a.type
+			FROM agreements a
+			LEFT JOIN clients c ON c.id = a.actual_client
+			WHERE a.device = $1
+			  AND ($2 = FALSE OR a.is_active = TRUE)
+			  AND EXISTS (
+				SELECT 1
+				FROM tickets t
+				WHERE t.device = $1
+				  AND (
+					t.executor = $3
+					OR EXISTS (
+						SELECT 1
+						FROM users u_req
+						WHERE u_req.user_id = $3
+						  AND u_req.department IS NOT NULL
+						  AND u_req.department = t.department
+					)
+				  )
+			  )
+			ORDER BY a.assigned_at DESC NULLS LAST, a.number DESC
+		`, deviceID, activeOnly, userID)
+		if err != nil {
+			log.Printf("query device agreements failed: %v", err)
+			http.Error(w, "failed to load device agreements", http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		agreements := make([]deviceAgreementResponse, 0)
+		for rows.Next() {
+			var (
+				id            pgtype.UUID
+				number        pgtype.Int4
+				client        pgtype.UUID
+				clientName    string
+				clientAddress string
+				assignedAt    pgtype.Timestamp
+				finishedAt    pgtype.Timestamp
+				isActive      bool
+				onWarranty    bool
+				agreementType pgtype.Text
+			)
+
+			if err := rows.Scan(
+				&id,
+				&number,
+				&client,
+				&clientName,
+				&clientAddress,
+				&assignedAt,
+				&finishedAt,
+				&isActive,
+				&onWarranty,
+				&agreementType,
+			); err != nil {
+				log.Printf("scan device agreement failed: %v", err)
+				http.Error(w, "failed to load device agreements", http.StatusInternalServerError)
+				return
+			}
+
+			agreements = append(agreements, deviceAgreementResponse{
+				ID:            uuidToString(id),
+				Number:        number.Int32,
+				Client:        nullableUUIDToString(client),
+				ClientName:    clientName,
+				ClientAddress: clientAddress,
+				AssignedAt:    timestampToRFC3339(assignedAt),
+				FinishedAt:    timestampToRFC3339(finishedAt),
+				IsActive:      isActive,
+				OnWarranty:    onWarranty,
+				Type:          nullableTextToString(agreementType),
+			})
+		}
+
+		if err := rows.Err(); err != nil {
+			log.Printf("iterate device agreements failed: %v", err)
+			http.Error(w, "failed to load device agreements", http.StatusInternalServerError)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, agreements)
 		return
 	default:
 		http.NotFound(w, r)

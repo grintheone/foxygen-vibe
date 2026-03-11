@@ -11,6 +11,24 @@ import { sessionCleared } from "../lib/session-events";
 
 let refreshPromise = null;
 
+async function parseResponse(response) {
+  const text = await response.text();
+
+  if (!text) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
+function isUnauthorized(error) {
+  return error?.status === 401 || error?.originalStatus === 401;
+}
+
 function resolveDispatch(dispatch) {
   return dispatch ?? getAuthDispatch() ?? null;
 }
@@ -91,12 +109,13 @@ export async function fetchWithAuth(input, init = {}, options = {}) {
 const rawBaseQuery = fetchBaseQuery({
   baseUrl: "/",
   prepareHeaders: (headers) => withAccessToken(headers),
+  responseHandler: parseResponse,
 });
 
 export async function baseQueryWithAuth(args, api, extraOptions) {
   let result = await rawBaseQuery(args, api, extraOptions);
 
-  if (result.error?.status !== 401) {
+  if (!isUnauthorized(result.error)) {
     return result;
   }
 
@@ -108,7 +127,7 @@ export async function baseQueryWithAuth(args, api, extraOptions) {
 
   result = await rawBaseQuery(args, api, extraOptions);
 
-  if (result.error?.status === 401) {
+  if (isUnauthorized(result.error)) {
     clearSession(api.dispatch);
   }
 
