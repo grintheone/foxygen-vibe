@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router";
 import { TicketCardWithExecutor } from "../../dashboard/ui/ticket-card-with-executor";
 import {
   useAddCommentMutation,
+  isMissingCommentReferenceError,
   useGetClientAgreementsQuery,
   useGetClientByIdQuery,
   useGetClientContactsQuery,
@@ -470,6 +471,7 @@ export function ClientPage() {
   );
   const {
     data: comments = [],
+    error: commentsError,
     isError: isCommentsError,
     isFetching: isCommentsFetching,
     isLoading: isCommentsLoading,
@@ -510,6 +512,8 @@ export function ClientPage() {
   const address = client?.address?.trim() || "";
   const point = resolveLocationPoint(client?.location);
   const mapUrl = buildMapEmbedUrl(point);
+  const hasMissingCommentReference = isMissingCommentReferenceError(commentsError);
+  const isCommentsSectionError = isCommentsError && !hasMissingCommentReference;
 
   async function handleSubmitComment(event) {
     event.preventDefault();
@@ -595,7 +599,7 @@ export function ClientPage() {
               comments={comments}
               commentText={commentText}
               errorMessage={commentError}
-              isError={isCommentsError}
+              isError={isCommentsSectionError}
               isLoading={isCommentsLoading || isCommentsFetching}
               isSubmitting={isAddingComment}
               onChangeText={setCommentText}

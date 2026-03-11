@@ -4,6 +4,7 @@ import { useAuth } from "../../../features/auth";
 import { TicketCardWithExecutor } from "../../dashboard/ui/ticket-card-with-executor";
 import {
   useAddCommentMutation,
+  isMissingCommentReferenceError,
   useGetCommentsQuery,
   useGetDeviceAgreementsQuery,
   useGetDeviceByIdQuery,
@@ -492,6 +493,7 @@ export function DevicePage() {
   );
   const {
     data: comments = [],
+    error: commentsError,
     isError: isCommentsError,
     isFetching: isCommentsFetching,
     isLoading: isCommentsLoading,
@@ -506,6 +508,8 @@ export function DevicePage() {
   const activeAgreement = agreements[0] || null;
   const canCreateTicket = session?.role === "admin" || session?.role === "coordinator";
   const hasCreateTicketWidget = canCreateTicket && !isLoading && !isFetching && !isError && Boolean(device);
+  const hasMissingCommentReference = isMissingCommentReferenceError(commentsError);
+  const isCommentsSectionError = isCommentsError && !hasMissingCommentReference;
 
   async function handleSubmitComment(event) {
     event.preventDefault();
@@ -583,7 +587,7 @@ export function DevicePage() {
               comments={comments}
               commentText={commentText}
               errorMessage={commentError}
-              isError={isCommentsError}
+              isError={isCommentsSectionError}
               isLoading={isCommentsLoading || isCommentsFetching}
               isSubmitting={isAddingComment}
               onChangeText={setCommentText}

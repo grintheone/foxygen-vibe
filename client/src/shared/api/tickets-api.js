@@ -7,6 +7,10 @@ async function readError(response, fallbackMessage) {
   return errorMessage || fallbackMessage;
 }
 
+export function isMissingCommentReferenceError(error) {
+  return error?.status === 400 && error?.data === "reference_id is required";
+}
+
 export const ticketsApi = createApi({
   tagTypes: ["Client", "Comment", "Department", "Device", "Ticket", "Tickets"],
   reducerPath: "ticketsApi",

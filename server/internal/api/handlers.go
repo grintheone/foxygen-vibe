@@ -549,7 +549,7 @@ func (s *Server) handleComments(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !allowed {
-			http.Error(w, "reference not found", http.StatusNotFound)
+			writeJSON(w, http.StatusOK, make([]commentResponse, 0))
 			return
 		}
 
