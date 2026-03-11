@@ -455,36 +455,20 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) canAccessReference(ctx context.Context, referenceID pgtype.UUID, userID pgtype.UUID) (bool, error) {
+func (s *Server) canAccessReference(ctx context.Context, referenceID pgtype.UUID) (bool, error) {
 	var allowed bool
 
 	err := s.db.QueryRow(ctx, `
 		SELECT EXISTS (
-			SELECT 1
-			FROM tickets t
-			WHERE (
-				t.id = $1
-				OR t.client = $1
-				OR t.device = $1
-				OR EXISTS (
-					SELECT 1
-					FROM agreements a
-					WHERE a.id = $1
-					  AND (a.actual_client = t.client OR a.device = t.device)
-				)
-			)
-			  AND (
-				t.executor = $2
-				OR EXISTS (
-					SELECT 1
-					FROM users u_req
-					WHERE u_req.user_id = $2
-					  AND u_req.department IS NOT NULL
-					  AND u_req.department = t.department
-				)
-			  )
+			SELECT 1 FROM tickets t WHERE t.id = $1
+			UNION ALL
+			SELECT 1 FROM clients c WHERE c.id = $1
+			UNION ALL
+			SELECT 1 FROM devices d WHERE d.id = $1
+			UNION ALL
+			SELECT 1 FROM agreements a WHERE a.id = $1
 		)
-	`, referenceID, userID).Scan(&allowed)
+	`, referenceID).Scan(&allowed)
 	if err != nil {
 		return false, err
 	}
@@ -542,7 +526,7 @@ func (s *Server) handleComments(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
 
-		allowed, err := s.canAccessReference(ctx, referenceID, userID)
+		allowed, err := s.canAccessReference(ctx, referenceID)
 		if err != nil {
 			log.Printf("check comments access failed: %v", err)
 			http.Error(w, "failed to load comments", http.StatusInternalServerError)
@@ -643,7 +627,7 @@ func (s *Server) handleComments(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
 
-		allowed, err := s.canAccessReference(ctx, referenceID, userID)
+		allowed, err := s.canAccessReference(ctx, referenceID)
 		if err != nil {
 			log.Printf("check comments access failed: %v", err)
 			http.Error(w, "failed to create comment", http.StatusInternalServerError)
@@ -756,8 +740,7 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 		Type               *string `json:"type"`
 	}
 
-	claims, err := parseAuthorizationHeader(s.auth.jwtSecret, r.Header.Get("Authorization"))
-	if err != nil {
+	if _, err := parseAuthorizationHeader(s.auth.jwtSecret, r.Header.Get("Authorization")); err != nil {
 		http.Error(w, "invalid access token", http.StatusUnauthorized)
 		return
 	}
@@ -777,12 +760,6 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 	var clientID pgtype.UUID
 	if err := clientID.Scan(pathParts[0]); err != nil {
 		http.Error(w, "invalid client id", http.StatusBadRequest)
-		return
-	}
-
-	var userID pgtype.UUID
-	if err := userID.Scan(claims.Subject); err != nil {
-		http.Error(w, "invalid access token", http.StatusUnauthorized)
 		return
 	}
 
@@ -855,19 +832,9 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 			LEFT JOIN departments d_exec ON d_exec.id = u_exec.department
 			WHERE t.client = $1
 			  AND ($2 = '' OR COALESCE(t.status, '') = $2)
-			  AND (
-				t.executor = $3
-				OR EXISTS (
-					SELECT 1
-					FROM users u_req
-					WHERE u_req.user_id = $3
-					  AND u_req.department IS NOT NULL
-					  AND u_req.department = t.department
-				)
-			  )
 			ORDER BY t.closed_at DESC NULLS LAST, t.workfinished_at DESC NULLS LAST, t.created_at DESC, t.number DESC
-			LIMIT $4
-		`, clientID, status, userID, limit)
+			LIMIT $3
+		`, clientID, status, limit)
 		if err != nil {
 			log.Printf("query client tickets failed: %v", err)
 			http.Error(w, "failed to load client tickets", http.StatusInternalServerError)
@@ -984,24 +951,9 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 				COALESCE(ct.email, '')
 			FROM contacts ct
 			WHERE ct.client_id = $1
-			  AND EXISTS (
-				SELECT 1
-				FROM tickets t
-				WHERE t.client = $1
-				  AND (
-					t.executor = $2
-					OR EXISTS (
-						SELECT 1
-						FROM users u_req
-						WHERE u_req.user_id = $2
-						  AND u_req.department IS NOT NULL
-						  AND u_req.department = t.department
-					)
-				  )
-			  )
 			ORDER BY ct.name ASC, ct.id ASC
-			LIMIT $3
-		`, clientID, userID, limit)
+			LIMIT $2
+		`, clientID, limit)
 		if err != nil {
 			log.Printf("query client contacts failed: %v", err)
 			http.Error(w, "failed to load client contacts", http.StatusInternalServerError)
@@ -1080,24 +1032,9 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 			LEFT JOIN devices d ON d.id = a.device
 			LEFT JOIN classificators cls ON cls.id = d.classificator
 			WHERE a.actual_client = $1
-			  AND EXISTS (
-				SELECT 1
-				FROM tickets t
-				WHERE t.client = $1
-				  AND (
-					t.executor = $2
-					OR EXISTS (
-						SELECT 1
-						FROM users u_req
-						WHERE u_req.user_id = $2
-						  AND u_req.department IS NOT NULL
-						  AND u_req.department = t.department
-					)
-				  )
-			  )
 			ORDER BY a.is_active DESC, a.assigned_at DESC NULLS LAST, a.number DESC
-			LIMIT $3
-		`, clientID, userID, limit)
+			LIMIT $2
+		`, clientID, limit)
 		if err != nil {
 			log.Printf("query client agreements failed: %v", err)
 			http.Error(w, "failed to load client agreements", http.StatusInternalServerError)
@@ -1178,23 +1115,8 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 			c.manager
 		FROM clients c
 		WHERE c.id = $1
-		  AND EXISTS (
-			SELECT 1
-			FROM tickets t
-			WHERE t.client = c.id
-			  AND (
-				t.executor = $2
-				OR EXISTS (
-					SELECT 1
-					FROM users u_req
-					WHERE u_req.user_id = $2
-					  AND u_req.department IS NOT NULL
-					  AND u_req.department = t.department
-				)
-			  )
-		  )
 		LIMIT 1
-	`, clientID, userID)
+	`, clientID)
 
 	var (
 		id               pgtype.UUID
@@ -1233,6 +1155,330 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 		Region:           nullableUUIDToString(region),
 		LaboratorySystem: nullableUUIDToString(laboratorySystem),
 		Manager:          uuidSliceToString(manager),
+	})
+}
+
+func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
+	type deviceResponse struct {
+		ID                string          `json:"id"`
+		Title             string          `json:"title"`
+		SerialNumber      string          `json:"serialNumber"`
+		Properties        json.RawMessage `json:"properties"`
+		ConnectedToLis    bool            `json:"connectedToLis"`
+		IsUsed            bool            `json:"isUsed"`
+		Client            *string         `json:"client"`
+		ClientName        string          `json:"clientName"`
+		ClientAddress     string          `json:"clientAddress"`
+		Agreement         *string         `json:"agreement"`
+		AgreementNumber   *int32          `json:"agreementNumber"`
+		AgreementType     *string         `json:"agreementType"`
+		IsActiveAgreement bool            `json:"isActiveAgreement"`
+		OnWarranty        bool            `json:"onWarranty"`
+	}
+
+	type deviceTicketResponse struct {
+		ID                 string  `json:"id"`
+		Number             int32   `json:"number"`
+		Status             string  `json:"status"`
+		Description        string  `json:"description"`
+		Result             string  `json:"result"`
+		Reason             string  `json:"reason"`
+		Urgent             bool    `json:"urgent"`
+		Executor           *string `json:"executor"`
+		ExecutorName       string  `json:"executorName"`
+		ExecutorDepartment string  `json:"executorDepartment"`
+		AssignedEnd        *string `json:"assigned_end"`
+		WorkstartedAt      *string `json:"workstarted_at"`
+		WorkfinishedAt     *string `json:"workfinished_at"`
+		ClosedAt           *string `json:"closed_at"`
+		DeviceName         string  `json:"deviceName"`
+		DeviceSerialNumber string  `json:"deviceSerialNumber"`
+		ClientName         string  `json:"clientName"`
+		ClientAddress      string  `json:"clientAddress"`
+	}
+
+	if _, err := parseAuthorizationHeader(s.auth.jwtSecret, r.Header.Get("Authorization")); err != nil {
+		http.Error(w, "invalid access token", http.StatusUnauthorized)
+		return
+	}
+
+	if s.db == nil {
+		http.Error(w, "database not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	devicePath := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/devices/"), "/")
+	if devicePath == "" {
+		http.NotFound(w, r)
+		return
+	}
+	pathParts := strings.Split(devicePath, "/")
+
+	var deviceID pgtype.UUID
+	if err := deviceID.Scan(pathParts[0]); err != nil {
+		http.Error(w, "invalid device id", http.StatusBadRequest)
+		return
+	}
+
+	switch {
+	case len(pathParts) == 1:
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+	case len(pathParts) == 2 && pathParts[1] == "tickets":
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		status := strings.TrimSpace(r.URL.Query().Get("status"))
+		limit := 50
+		if rawLimit := strings.TrimSpace(r.URL.Query().Get("limit")); rawLimit != "" {
+			parsedLimit, parseErr := strconv.Atoi(rawLimit)
+			if parseErr != nil || parsedLimit <= 0 {
+				http.Error(w, "limit must be a positive integer", http.StatusBadRequest)
+				return
+			}
+			if parsedLimit > 100 {
+				parsedLimit = 100
+			}
+			limit = parsedLimit
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+
+		rows, err := s.db.Query(ctx, `
+			SELECT
+				t.id,
+				t.number,
+				COALESCE(t.status, ''),
+				t.description,
+				COALESCE(t.result, ''),
+				COALESCE(
+					NULLIF(
+						CASE
+							WHEN t.status = 'assigned' THEN tr.future
+							WHEN t.status = 'worksDone' THEN tr.past
+							ELSE tr.present
+						END,
+						''
+					),
+					NULLIF(tr.title, ''),
+					'Не указано'
+				) AS resolved_reason,
+				t.urgent,
+				t.executor,
+				TRIM(CONCAT(COALESCE(u_exec.first_name, ''), ' ', COALESCE(u_exec.last_name, ''))),
+				COALESCE(d_exec.title, ''),
+				t.assigned_end,
+				t.workstarted_at,
+				t.workfinished_at,
+				t.closed_at,
+				COALESCE(cls.title, ''),
+				COALESCE(d.serial_number, ''),
+				COALESCE(c.title, ''),
+				COALESCE(c.address, '')
+			FROM tickets t
+			LEFT JOIN clients c ON c.id = t.client
+			LEFT JOIN devices d ON d.id = t.device
+			LEFT JOIN classificators cls ON cls.id = d.classificator
+			LEFT JOIN ticket_reasons tr ON tr.id = t.reason
+			LEFT JOIN users u_exec ON u_exec.user_id = t.executor
+			LEFT JOIN departments d_exec ON d_exec.id = u_exec.department
+			WHERE t.device = $1
+			  AND ($2 = '' OR COALESCE(t.status, '') = $2)
+			ORDER BY t.closed_at DESC NULLS LAST, t.workfinished_at DESC NULLS LAST, t.created_at DESC, t.number DESC
+			LIMIT $3
+		`, deviceID, status, limit)
+		if err != nil {
+			log.Printf("query device tickets failed: %v", err)
+			http.Error(w, "failed to load device tickets", http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		tickets := make([]deviceTicketResponse, 0)
+		for rows.Next() {
+			var (
+				id             pgtype.UUID
+				number         pgtype.Int4
+				ticketStatus   string
+				description    string
+				result         string
+				reason         string
+				urgent         bool
+				executor       pgtype.UUID
+				executorName   string
+				executorDept   string
+				assignedEnd    pgtype.Timestamp
+				workstartedAt  pgtype.Timestamp
+				workfinishedAt pgtype.Timestamp
+				closedAt       pgtype.Timestamp
+				deviceName     string
+				deviceSerial   string
+				clientName     string
+				clientAddress  string
+			)
+
+			if err := rows.Scan(
+				&id,
+				&number,
+				&ticketStatus,
+				&description,
+				&result,
+				&reason,
+				&urgent,
+				&executor,
+				&executorName,
+				&executorDept,
+				&assignedEnd,
+				&workstartedAt,
+				&workfinishedAt,
+				&closedAt,
+				&deviceName,
+				&deviceSerial,
+				&clientName,
+				&clientAddress,
+			); err != nil {
+				log.Printf("scan device ticket failed: %v", err)
+				http.Error(w, "failed to load device tickets", http.StatusInternalServerError)
+				return
+			}
+
+			tickets = append(tickets, deviceTicketResponse{
+				ID:                 uuidToString(id),
+				Number:             number.Int32,
+				Status:             ticketStatus,
+				Description:        description,
+				Result:             result,
+				Reason:             reason,
+				Urgent:             urgent,
+				Executor:           nullableUUIDToString(executor),
+				ExecutorName:       executorName,
+				ExecutorDepartment: executorDept,
+				AssignedEnd:        timestampToRFC3339(assignedEnd),
+				WorkstartedAt:      timestampToRFC3339(workstartedAt),
+				WorkfinishedAt:     timestampToRFC3339(workfinishedAt),
+				ClosedAt:           timestampToRFC3339(closedAt),
+				DeviceName:         deviceName,
+				DeviceSerialNumber: deviceSerial,
+				ClientName:         clientName,
+				ClientAddress:      clientAddress,
+			})
+		}
+
+		if err := rows.Err(); err != nil {
+			log.Printf("iterate device tickets failed: %v", err)
+			http.Error(w, "failed to load device tickets", http.StatusInternalServerError)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, tickets)
+		return
+	default:
+		http.NotFound(w, r)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	row := s.db.QueryRow(ctx, `
+		SELECT
+			d.id,
+			COALESCE(cls.title, ''),
+			COALESCE(d.serial_number, ''),
+			d.properties,
+			d.connected_to_lis,
+			d.is_used,
+			a.id,
+			a.number,
+			COALESCE(a.is_active, FALSE),
+			COALESCE(a.on_warranty, FALSE),
+			a.type,
+			c.id,
+			COALESCE(c.title, ''),
+			COALESCE(c.address, '')
+		FROM devices d
+		LEFT JOIN classificators cls ON cls.id = d.classificator
+		LEFT JOIN LATERAL (
+			SELECT
+				a.id,
+				a.number,
+				a.is_active,
+				a.on_warranty,
+				a.type,
+				a.actual_client
+			FROM agreements a
+			WHERE a.device = d.id
+			ORDER BY a.is_active DESC, a.assigned_at DESC NULLS LAST, a.number DESC
+			LIMIT 1
+		) a ON TRUE
+		LEFT JOIN clients c ON c.id = a.actual_client
+		WHERE d.id = $1
+		LIMIT 1
+	`, deviceID)
+
+	var (
+		id                pgtype.UUID
+		title             string
+		serialNumber      string
+		properties        []byte
+		connectedToLis    bool
+		isUsed            bool
+		agreementID       pgtype.UUID
+		agreementNumber   pgtype.Int4
+		isActiveAgreement bool
+		onWarranty        bool
+		agreementType     pgtype.Text
+		clientID          pgtype.UUID
+		clientName        string
+		clientAddress     string
+	)
+
+	if err := row.Scan(
+		&id,
+		&title,
+		&serialNumber,
+		&properties,
+		&connectedToLis,
+		&isUsed,
+		&agreementID,
+		&agreementNumber,
+		&isActiveAgreement,
+		&onWarranty,
+		&agreementType,
+		&clientID,
+		&clientName,
+		&clientAddress,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			http.Error(w, "device not found", http.StatusNotFound)
+			return
+		}
+
+		log.Printf("load device by id failed: %v", err)
+		http.Error(w, "failed to load device", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, deviceResponse{
+		ID:                uuidToString(id),
+		Title:             title,
+		SerialNumber:      serialNumber,
+		Properties:        json.RawMessage(properties),
+		ConnectedToLis:    connectedToLis,
+		IsUsed:            isUsed,
+		Client:            nullableUUIDToString(clientID),
+		ClientName:        clientName,
+		ClientAddress:     clientAddress,
+		Agreement:         nullableUUIDToString(agreementID),
+		AgreementNumber:   nullableInt4ToInt32(agreementNumber),
+		AgreementType:     nullableTextToString(agreementType),
+		IsActiveAgreement: isActiveAgreement,
+		OnWarranty:        onWarranty,
 	})
 }
 
@@ -2337,6 +2583,15 @@ func nullableTextToString(value pgtype.Text) *string {
 
 	text := value.String
 	return &text
+}
+
+func nullableInt4ToInt32(value pgtype.Int4) *int32 {
+	if !value.Valid {
+		return nil
+	}
+
+	number := value.Int32
+	return &number
 }
 
 func uuidSliceToString(values []pgtype.UUID) []string {

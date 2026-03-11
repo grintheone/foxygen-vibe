@@ -111,6 +111,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/auth/session", s.handleSession)
 	mux.HandleFunc("/api/profile", s.handleProfile)
 	mux.HandleFunc("/api/clients/", s.handleClientByID)
+	mux.HandleFunc("/api/devices/", s.handleDeviceByID)
 	mux.HandleFunc("/api/comments", s.handleComments)
 	mux.HandleFunc("/api/departments", s.handleDepartments)
 	mux.HandleFunc("/api/tickets", s.handleTickets)

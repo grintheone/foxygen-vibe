@@ -8,7 +8,7 @@ async function readError(response, fallbackMessage) {
 }
 
 export const ticketsApi = createApi({
-  tagTypes: ["Client", "Comment", "Department", "Ticket", "Tickets"],
+  tagTypes: ["Client", "Comment", "Department", "Device", "Ticket", "Tickets"],
   reducerPath: "ticketsApi",
   baseQuery: fetchBaseQuery({
     baseUrl: "/",
@@ -29,6 +29,10 @@ export const ticketsApi = createApi({
     getClientById: builder.query({
       query: (clientId) => `api/clients/${clientId}`,
       providesTags: (_, __, clientId) => [{ type: "Client", id: clientId }],
+    }),
+    getDeviceById: builder.query({
+      query: (deviceId) => `api/devices/${deviceId}`,
+      providesTags: (_, __, deviceId) => [{ type: "Device", id: deviceId }],
     }),
     getComments: builder.query({
       query: (referenceId) => ({
@@ -66,6 +70,16 @@ export const ticketsApi = createApi({
         url: `api/clients/${clientId}/agreements`,
       }),
       providesTags: (_, __, { clientId }) => [{ type: "Client", id: clientId }],
+    }),
+    getDeviceTickets: builder.query({
+      query: ({ deviceId, limit, status }) => ({
+        params: {
+          ...(limit ? { limit } : {}),
+          ...(status ? { status } : {}),
+        },
+        url: `api/devices/${deviceId}/tickets`,
+      }),
+      providesTags: (_, __, { deviceId }) => [{ type: "Device", id: deviceId }],
     }),
     getMyTickets: builder.query({
       query: () => "api/tickets",
@@ -181,6 +195,8 @@ export const {
   useGetClientContactsQuery,
   useGetCommentsQuery,
   useGetClientTicketsQuery,
+  useGetDeviceByIdQuery,
+  useGetDeviceTicketsQuery,
   useGetDepartmentsQuery,
   useGetDepartmentTicketsQuery,
   useGetMyTicketsQuery,
