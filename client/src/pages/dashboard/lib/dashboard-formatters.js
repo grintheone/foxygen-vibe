@@ -72,6 +72,16 @@ export function isTodayOrPast(value) {
 }
 
 export function resolveTicketDeadlineDisplay(ticket) {
+  if (ticket?.closed_at) {
+    return {
+      dateValue: formatDateDayMonth(ticket.closed_at),
+      isOverdue: false,
+      shouldUseFireIcon: false,
+      isPlaceholder: false,
+      isFinishedDate: true,
+    };
+  }
+
   if (ticket?.workfinished_at) {
     return {
       dateValue: formatDateDayMonth(ticket.workfinished_at),

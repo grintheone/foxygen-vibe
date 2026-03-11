@@ -6,10 +6,12 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	appdb "foxygen-vibe/server/internal/db"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -450,6 +452,787 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 		Email:      profile.Email,
 		Department: profile.Department,
 		Role:       profile.Role,
+	})
+}
+
+func (s *Server) canAccessReference(ctx context.Context, referenceID pgtype.UUID, userID pgtype.UUID) (bool, error) {
+	var allowed bool
+
+	err := s.db.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM tickets t
+			WHERE (
+				t.id = $1
+				OR t.client = $1
+				OR t.device = $1
+				OR EXISTS (
+					SELECT 1
+					FROM agreements a
+					WHERE a.id = $1
+					  AND (a.actual_client = t.client OR a.device = t.device)
+				)
+			)
+			  AND (
+				t.executor = $2
+				OR EXISTS (
+					SELECT 1
+					FROM users u_req
+					WHERE u_req.user_id = $2
+					  AND u_req.department IS NOT NULL
+					  AND u_req.department = t.department
+				)
+			  )
+		)
+	`, referenceID, userID).Scan(&allowed)
+	if err != nil {
+		return false, err
+	}
+
+	return allowed, nil
+}
+
+func (s *Server) handleComments(w http.ResponseWriter, r *http.Request) {
+	type commentResponse struct {
+		ID          int32   `json:"id"`
+		AuthorID    string  `json:"author_id"`
+		AuthorName  string  `json:"authorName"`
+		Department  string  `json:"department"`
+		ReferenceID string  `json:"reference_id"`
+		Text        string  `json:"text"`
+		CreatedAt   *string `json:"created_at"`
+	}
+
+	type createCommentRequest struct {
+		ReferenceID string `json:"reference_id"`
+		Text        string `json:"text"`
+	}
+
+	claims, err := parseAuthorizationHeader(s.auth.jwtSecret, r.Header.Get("Authorization"))
+	if err != nil {
+		http.Error(w, "invalid access token", http.StatusUnauthorized)
+		return
+	}
+
+	if s.db == nil {
+		http.Error(w, "database not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	var userID pgtype.UUID
+	if err := userID.Scan(claims.Subject); err != nil {
+		http.Error(w, "invalid access token", http.StatusUnauthorized)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		referenceIDValue := strings.TrimSpace(r.URL.Query().Get("reference_id"))
+		if referenceIDValue == "" {
+			http.Error(w, "reference_id is required", http.StatusBadRequest)
+			return
+		}
+
+		var referenceID pgtype.UUID
+		if err := referenceID.Scan(referenceIDValue); err != nil {
+			http.Error(w, "invalid reference_id", http.StatusBadRequest)
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+
+		allowed, err := s.canAccessReference(ctx, referenceID, userID)
+		if err != nil {
+			log.Printf("check comments access failed: %v", err)
+			http.Error(w, "failed to load comments", http.StatusInternalServerError)
+			return
+		}
+		if !allowed {
+			http.Error(w, "reference not found", http.StatusNotFound)
+			return
+		}
+
+		rows, err := s.db.Query(ctx, `
+			SELECT
+				c.id,
+				c.author_id,
+				TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))),
+				COALESCE(d.title, ''),
+				c.reference_id,
+				COALESCE(c.text, ''),
+				c.created_at
+			FROM comments c
+			LEFT JOIN users u ON u.user_id = c.author_id
+			LEFT JOIN departments d ON d.id = u.department
+			WHERE c.reference_id = $1
+			ORDER BY c.created_at DESC, c.id DESC
+		`, referenceID)
+		if err != nil {
+			log.Printf("query comments failed: %v", err)
+			http.Error(w, "failed to load comments", http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		comments := make([]commentResponse, 0)
+		for rows.Next() {
+			var (
+				id         int32
+				authorID   pgtype.UUID
+				authorName string
+				department string
+				refID      pgtype.UUID
+				text       string
+				createdAt  pgtype.Timestamp
+			)
+
+			if err := rows.Scan(&id, &authorID, &authorName, &department, &refID, &text, &createdAt); err != nil {
+				log.Printf("scan comment failed: %v", err)
+				http.Error(w, "failed to load comments", http.StatusInternalServerError)
+				return
+			}
+
+			comments = append(comments, commentResponse{
+				ID:          id,
+				AuthorID:    uuidToString(authorID),
+				AuthorName:  authorName,
+				Department:  department,
+				ReferenceID: uuidToString(refID),
+				Text:        text,
+				CreatedAt:   timestampToRFC3339(createdAt),
+			})
+		}
+
+		if err := rows.Err(); err != nil {
+			log.Printf("iterate comments failed: %v", err)
+			http.Error(w, "failed to load comments", http.StatusInternalServerError)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, comments)
+	case http.MethodPost:
+		defer r.Body.Close()
+
+		var input createCommentRequest
+		decoder := json.NewDecoder(r.Body)
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&input); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		input.ReferenceID = strings.TrimSpace(input.ReferenceID)
+		input.Text = strings.TrimSpace(input.Text)
+
+		if input.ReferenceID == "" {
+			http.Error(w, "reference_id is required", http.StatusBadRequest)
+			return
+		}
+		if input.Text == "" {
+			http.Error(w, "text is required", http.StatusBadRequest)
+			return
+		}
+
+		var referenceID pgtype.UUID
+		if err := referenceID.Scan(input.ReferenceID); err != nil {
+			http.Error(w, "invalid reference_id", http.StatusBadRequest)
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+
+		allowed, err := s.canAccessReference(ctx, referenceID, userID)
+		if err != nil {
+			log.Printf("check comments access failed: %v", err)
+			http.Error(w, "failed to create comment", http.StatusInternalServerError)
+			return
+		}
+		if !allowed {
+			http.Error(w, "reference not found", http.StatusNotFound)
+			return
+		}
+
+		row := s.db.QueryRow(ctx, `
+			WITH inserted AS (
+				INSERT INTO comments (author_id, reference_id, text, created_at)
+				VALUES ($1, $2, $3, NOW())
+				RETURNING id, author_id, reference_id, text, created_at
+			)
+			SELECT
+				i.id,
+				i.author_id,
+				TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))),
+				COALESCE(d.title, ''),
+				i.reference_id,
+				i.text,
+				i.created_at
+			FROM inserted i
+			LEFT JOIN users u ON u.user_id = i.author_id
+			LEFT JOIN departments d ON d.id = u.department
+		`, userID, referenceID, input.Text)
+
+		var (
+			id         int32
+			authorID   pgtype.UUID
+			authorName string
+			department string
+			refID      pgtype.UUID
+			text       string
+			createdAt  pgtype.Timestamp
+		)
+
+		if err := row.Scan(&id, &authorID, &authorName, &department, &refID, &text, &createdAt); err != nil {
+			log.Printf("insert comment failed: %v", err)
+			http.Error(w, "failed to create comment", http.StatusInternalServerError)
+			return
+		}
+
+		writeJSON(w, http.StatusCreated, commentResponse{
+			ID:          id,
+			AuthorID:    uuidToString(authorID),
+			AuthorName:  authorName,
+			Department:  department,
+			ReferenceID: uuidToString(refID),
+			Text:        text,
+			CreatedAt:   timestampToRFC3339(createdAt),
+		})
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
+	type clientResponse struct {
+		ID               string          `json:"id"`
+		Title            string          `json:"title"`
+		Address          string          `json:"address"`
+		Location         json.RawMessage `json:"location"`
+		Region           *string         `json:"region"`
+		LaboratorySystem *string         `json:"laboratorySystem"`
+		Manager          []string        `json:"manager"`
+	}
+
+	type clientTicketResponse struct {
+		ID                 string  `json:"id"`
+		Number             int32   `json:"number"`
+		Status             string  `json:"status"`
+		Description        string  `json:"description"`
+		Result             string  `json:"result"`
+		Reason             string  `json:"reason"`
+		Urgent             bool    `json:"urgent"`
+		Executor           *string `json:"executor"`
+		ExecutorName       string  `json:"executorName"`
+		ExecutorDepartment string  `json:"executorDepartment"`
+		AssignedEnd        *string `json:"assigned_end"`
+		WorkstartedAt      *string `json:"workstarted_at"`
+		WorkfinishedAt     *string `json:"workfinished_at"`
+		ClosedAt           *string `json:"closed_at"`
+		DeviceName         string  `json:"deviceName"`
+		DeviceSerialNumber string  `json:"deviceSerialNumber"`
+		ClientName         string  `json:"clientName"`
+		ClientAddress      string  `json:"clientAddress"`
+	}
+
+	type clientContactResponse struct {
+		ID       string `json:"id"`
+		Name     string `json:"name"`
+		Position string `json:"position"`
+		Phone    string `json:"phone"`
+		Email    string `json:"email"`
+	}
+
+	type clientAgreementResponse struct {
+		ID                 string  `json:"id"`
+		Number             int32   `json:"number"`
+		Device             *string `json:"device"`
+		DeviceName         string  `json:"deviceName"`
+		DeviceSerialNumber string  `json:"deviceSerialNumber"`
+		AssignedAt         *string `json:"assigned_at"`
+		FinishedAt         *string `json:"finished_at"`
+		IsActive           bool    `json:"isActive"`
+		OnWarranty         bool    `json:"onWarranty"`
+		Type               *string `json:"type"`
+	}
+
+	claims, err := parseAuthorizationHeader(s.auth.jwtSecret, r.Header.Get("Authorization"))
+	if err != nil {
+		http.Error(w, "invalid access token", http.StatusUnauthorized)
+		return
+	}
+
+	if s.db == nil {
+		http.Error(w, "database not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	clientPath := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/clients/"), "/")
+	if clientPath == "" {
+		http.NotFound(w, r)
+		return
+	}
+	pathParts := strings.Split(clientPath, "/")
+
+	var clientID pgtype.UUID
+	if err := clientID.Scan(pathParts[0]); err != nil {
+		http.Error(w, "invalid client id", http.StatusBadRequest)
+		return
+	}
+
+	var userID pgtype.UUID
+	if err := userID.Scan(claims.Subject); err != nil {
+		http.Error(w, "invalid access token", http.StatusUnauthorized)
+		return
+	}
+
+	switch {
+	case len(pathParts) == 1:
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+	case len(pathParts) == 2 && pathParts[1] == "tickets":
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		status := strings.TrimSpace(r.URL.Query().Get("status"))
+		limit := 50
+		if rawLimit := strings.TrimSpace(r.URL.Query().Get("limit")); rawLimit != "" {
+			parsedLimit, parseErr := strconv.Atoi(rawLimit)
+			if parseErr != nil || parsedLimit <= 0 {
+				http.Error(w, "limit must be a positive integer", http.StatusBadRequest)
+				return
+			}
+			if parsedLimit > 100 {
+				parsedLimit = 100
+			}
+			limit = parsedLimit
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+
+		rows, err := s.db.Query(ctx, `
+			SELECT
+				t.id,
+				t.number,
+				COALESCE(t.status, ''),
+				t.description,
+				COALESCE(t.result, ''),
+				COALESCE(
+					NULLIF(
+						CASE
+							WHEN t.status = 'assigned' THEN tr.future
+							WHEN t.status = 'worksDone' THEN tr.past
+							ELSE tr.present
+						END,
+						''
+					),
+					NULLIF(tr.title, ''),
+					'Не указано'
+				) AS resolved_reason,
+				t.urgent,
+				t.executor,
+				TRIM(CONCAT(COALESCE(u_exec.first_name, ''), ' ', COALESCE(u_exec.last_name, ''))),
+				COALESCE(d_exec.title, ''),
+				t.assigned_end,
+				t.workstarted_at,
+				t.workfinished_at,
+				t.closed_at,
+				COALESCE(cls.title, ''),
+				COALESCE(d.serial_number, ''),
+				COALESCE(c.title, ''),
+				COALESCE(c.address, '')
+			FROM tickets t
+			LEFT JOIN clients c ON c.id = t.client
+			LEFT JOIN devices d ON d.id = t.device
+			LEFT JOIN classificators cls ON cls.id = d.classificator
+			LEFT JOIN ticket_reasons tr ON tr.id = t.reason
+			LEFT JOIN users u_exec ON u_exec.user_id = t.executor
+			LEFT JOIN departments d_exec ON d_exec.id = u_exec.department
+			WHERE t.client = $1
+			  AND ($2 = '' OR COALESCE(t.status, '') = $2)
+			  AND (
+				t.executor = $3
+				OR EXISTS (
+					SELECT 1
+					FROM users u_req
+					WHERE u_req.user_id = $3
+					  AND u_req.department IS NOT NULL
+					  AND u_req.department = t.department
+				)
+			  )
+			ORDER BY t.closed_at DESC NULLS LAST, t.workfinished_at DESC NULLS LAST, t.created_at DESC, t.number DESC
+			LIMIT $4
+		`, clientID, status, userID, limit)
+		if err != nil {
+			log.Printf("query client tickets failed: %v", err)
+			http.Error(w, "failed to load client tickets", http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		tickets := make([]clientTicketResponse, 0)
+		for rows.Next() {
+			var (
+				id             pgtype.UUID
+				number         pgtype.Int4
+				ticketStatus   string
+				description    string
+				result         string
+				reason         string
+				urgent         bool
+				executor       pgtype.UUID
+				executorName   string
+				executorDept   string
+				assignedEnd    pgtype.Timestamp
+				workstartedAt  pgtype.Timestamp
+				workfinishedAt pgtype.Timestamp
+				closedAt       pgtype.Timestamp
+				deviceName     string
+				deviceSerial   string
+				clientName     string
+				clientAddress  string
+			)
+
+			if err := rows.Scan(
+				&id,
+				&number,
+				&ticketStatus,
+				&description,
+				&result,
+				&reason,
+				&urgent,
+				&executor,
+				&executorName,
+				&executorDept,
+				&assignedEnd,
+				&workstartedAt,
+				&workfinishedAt,
+				&closedAt,
+				&deviceName,
+				&deviceSerial,
+				&clientName,
+				&clientAddress,
+			); err != nil {
+				log.Printf("scan client ticket failed: %v", err)
+				http.Error(w, "failed to load client tickets", http.StatusInternalServerError)
+				return
+			}
+
+			tickets = append(tickets, clientTicketResponse{
+				ID:                 uuidToString(id),
+				Number:             number.Int32,
+				Status:             ticketStatus,
+				Description:        description,
+				Result:             result,
+				Reason:             reason,
+				Urgent:             urgent,
+				Executor:           nullableUUIDToString(executor),
+				ExecutorName:       executorName,
+				ExecutorDepartment: executorDept,
+				AssignedEnd:        timestampToRFC3339(assignedEnd),
+				WorkstartedAt:      timestampToRFC3339(workstartedAt),
+				WorkfinishedAt:     timestampToRFC3339(workfinishedAt),
+				ClosedAt:           timestampToRFC3339(closedAt),
+				DeviceName:         deviceName,
+				DeviceSerialNumber: deviceSerial,
+				ClientName:         clientName,
+				ClientAddress:      clientAddress,
+			})
+		}
+
+		if err := rows.Err(); err != nil {
+			log.Printf("iterate client tickets failed: %v", err)
+			http.Error(w, "failed to load client tickets", http.StatusInternalServerError)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, tickets)
+		return
+	case len(pathParts) == 2 && pathParts[1] == "contacts":
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		limit := 100
+		if rawLimit := strings.TrimSpace(r.URL.Query().Get("limit")); rawLimit != "" {
+			parsedLimit, parseErr := strconv.Atoi(rawLimit)
+			if parseErr != nil || parsedLimit <= 0 {
+				http.Error(w, "limit must be a positive integer", http.StatusBadRequest)
+				return
+			}
+			if parsedLimit > 100 {
+				parsedLimit = 100
+			}
+			limit = parsedLimit
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+
+		rows, err := s.db.Query(ctx, `
+			SELECT
+				ct.id,
+				COALESCE(ct.name, ''),
+				COALESCE(ct.position, ''),
+				COALESCE(ct.phone, ''),
+				COALESCE(ct.email, '')
+			FROM contacts ct
+			WHERE ct.client_id = $1
+			  AND EXISTS (
+				SELECT 1
+				FROM tickets t
+				WHERE t.client = $1
+				  AND (
+					t.executor = $2
+					OR EXISTS (
+						SELECT 1
+						FROM users u_req
+						WHERE u_req.user_id = $2
+						  AND u_req.department IS NOT NULL
+						  AND u_req.department = t.department
+					)
+				  )
+			  )
+			ORDER BY ct.name ASC, ct.id ASC
+			LIMIT $3
+		`, clientID, userID, limit)
+		if err != nil {
+			log.Printf("query client contacts failed: %v", err)
+			http.Error(w, "failed to load client contacts", http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		contacts := make([]clientContactResponse, 0)
+		for rows.Next() {
+			var (
+				id       pgtype.UUID
+				name     string
+				position string
+				phone    string
+				email    string
+			)
+
+			if err := rows.Scan(&id, &name, &position, &phone, &email); err != nil {
+				log.Printf("scan client contact failed: %v", err)
+				http.Error(w, "failed to load client contacts", http.StatusInternalServerError)
+				return
+			}
+
+			contacts = append(contacts, clientContactResponse{
+				ID:       uuidToString(id),
+				Name:     name,
+				Position: position,
+				Phone:    phone,
+				Email:    email,
+			})
+		}
+
+		if err := rows.Err(); err != nil {
+			log.Printf("iterate client contacts failed: %v", err)
+			http.Error(w, "failed to load client contacts", http.StatusInternalServerError)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, contacts)
+		return
+	case len(pathParts) == 2 && pathParts[1] == "agreements":
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		limit := 100
+		if rawLimit := strings.TrimSpace(r.URL.Query().Get("limit")); rawLimit != "" {
+			parsedLimit, parseErr := strconv.Atoi(rawLimit)
+			if parseErr != nil || parsedLimit <= 0 {
+				http.Error(w, "limit must be a positive integer", http.StatusBadRequest)
+				return
+			}
+			if parsedLimit > 100 {
+				parsedLimit = 100
+			}
+			limit = parsedLimit
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+
+		rows, err := s.db.Query(ctx, `
+			SELECT
+				a.id,
+				a.number,
+				a.device,
+				COALESCE(cls.title, ''),
+				COALESCE(d.serial_number, ''),
+				a.assigned_at,
+				a.finished_at,
+				a.is_active,
+				a.on_warranty,
+				a.type
+			FROM agreements a
+			LEFT JOIN devices d ON d.id = a.device
+			LEFT JOIN classificators cls ON cls.id = d.classificator
+			WHERE a.actual_client = $1
+			  AND EXISTS (
+				SELECT 1
+				FROM tickets t
+				WHERE t.client = $1
+				  AND (
+					t.executor = $2
+					OR EXISTS (
+						SELECT 1
+						FROM users u_req
+						WHERE u_req.user_id = $2
+						  AND u_req.department IS NOT NULL
+						  AND u_req.department = t.department
+					)
+				  )
+			  )
+			ORDER BY a.is_active DESC, a.assigned_at DESC NULLS LAST, a.number DESC
+			LIMIT $3
+		`, clientID, userID, limit)
+		if err != nil {
+			log.Printf("query client agreements failed: %v", err)
+			http.Error(w, "failed to load client agreements", http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		agreements := make([]clientAgreementResponse, 0)
+		for rows.Next() {
+			var (
+				id            pgtype.UUID
+				number        pgtype.Int4
+				device        pgtype.UUID
+				deviceName    string
+				deviceSerial  string
+				assignedAt    pgtype.Timestamp
+				finishedAt    pgtype.Timestamp
+				isActive      bool
+				onWarranty    bool
+				agreementType pgtype.Text
+			)
+
+			if err := rows.Scan(
+				&id,
+				&number,
+				&device,
+				&deviceName,
+				&deviceSerial,
+				&assignedAt,
+				&finishedAt,
+				&isActive,
+				&onWarranty,
+				&agreementType,
+			); err != nil {
+				log.Printf("scan client agreement failed: %v", err)
+				http.Error(w, "failed to load client agreements", http.StatusInternalServerError)
+				return
+			}
+
+			agreements = append(agreements, clientAgreementResponse{
+				ID:                 uuidToString(id),
+				Number:             number.Int32,
+				Device:             nullableUUIDToString(device),
+				DeviceName:         deviceName,
+				DeviceSerialNumber: deviceSerial,
+				AssignedAt:         timestampToRFC3339(assignedAt),
+				FinishedAt:         timestampToRFC3339(finishedAt),
+				IsActive:           isActive,
+				OnWarranty:         onWarranty,
+				Type:               nullableTextToString(agreementType),
+			})
+		}
+
+		if err := rows.Err(); err != nil {
+			log.Printf("iterate client agreements failed: %v", err)
+			http.Error(w, "failed to load client agreements", http.StatusInternalServerError)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, agreements)
+		return
+	default:
+		http.NotFound(w, r)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	row := s.db.QueryRow(ctx, `
+		SELECT
+			c.id,
+			COALESCE(c.title, ''),
+			COALESCE(c.address, ''),
+			c.location,
+			c.region,
+			c.laboratory_system,
+			c.manager
+		FROM clients c
+		WHERE c.id = $1
+		  AND EXISTS (
+			SELECT 1
+			FROM tickets t
+			WHERE t.client = c.id
+			  AND (
+				t.executor = $2
+				OR EXISTS (
+					SELECT 1
+					FROM users u_req
+					WHERE u_req.user_id = $2
+					  AND u_req.department IS NOT NULL
+					  AND u_req.department = t.department
+				)
+			  )
+		  )
+		LIMIT 1
+	`, clientID, userID)
+
+	var (
+		id               pgtype.UUID
+		title            string
+		address          string
+		location         []byte
+		region           pgtype.UUID
+		laboratorySystem pgtype.UUID
+		manager          []pgtype.UUID
+	)
+
+	if err := row.Scan(
+		&id,
+		&title,
+		&address,
+		&location,
+		&region,
+		&laboratorySystem,
+		&manager,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			http.Error(w, "client not found", http.StatusNotFound)
+			return
+		}
+
+		log.Printf("load client by id failed: %v", err)
+		http.Error(w, "failed to load client", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, clientResponse{
+		ID:               uuidToString(id),
+		Title:            title,
+		Address:          address,
+		Location:         json.RawMessage(location),
+		Region:           nullableUUIDToString(region),
+		LaboratorySystem: nullableUUIDToString(laboratorySystem),
+		Manager:          uuidSliceToString(manager),
 	})
 }
 

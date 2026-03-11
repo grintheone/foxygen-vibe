@@ -57,6 +57,8 @@ type Client struct {
 }
 
 func NewMinIO(ctx context.Context, config Config) (*Client, error) {
+	return nil, nil
+
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}

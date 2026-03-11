@@ -8,7 +8,7 @@ async function readError(response, fallbackMessage) {
 }
 
 export const ticketsApi = createApi({
-  tagTypes: ["Department", "Ticket", "Tickets"],
+  tagTypes: ["Client", "Comment", "Department", "Ticket", "Tickets"],
   reducerPath: "ticketsApi",
   baseQuery: fetchBaseQuery({
     baseUrl: "/",
@@ -25,6 +25,47 @@ export const ticketsApi = createApi({
     getDepartments: builder.query({
       query: () => "api/departments",
       providesTags: ["Department"],
+    }),
+    getClientById: builder.query({
+      query: (clientId) => `api/clients/${clientId}`,
+      providesTags: (_, __, clientId) => [{ type: "Client", id: clientId }],
+    }),
+    getComments: builder.query({
+      query: (referenceId) => ({
+        params: {
+          reference_id: referenceId,
+        },
+        url: "api/comments",
+      }),
+      providesTags: (_, __, referenceId) => [{ type: "Comment", id: referenceId }],
+    }),
+    getClientTickets: builder.query({
+      query: ({ clientId, limit, status }) => ({
+        params: {
+          ...(limit ? { limit } : {}),
+          ...(status ? { status } : {}),
+        },
+        url: `api/clients/${clientId}/tickets`,
+      }),
+      providesTags: (_, __, { clientId }) => [{ type: "Client", id: clientId }],
+    }),
+    getClientContacts: builder.query({
+      query: ({ clientId, limit }) => ({
+        params: {
+          ...(limit ? { limit } : {}),
+        },
+        url: `api/clients/${clientId}/contacts`,
+      }),
+      providesTags: (_, __, { clientId }) => [{ type: "Client", id: clientId }],
+    }),
+    getClientAgreements: builder.query({
+      query: ({ clientId, limit }) => ({
+        params: {
+          ...(limit ? { limit } : {}),
+        },
+        url: `api/clients/${clientId}/agreements`,
+      }),
+      providesTags: (_, __, { clientId }) => [{ type: "Client", id: clientId }],
     }),
     getMyTickets: builder.query({
       query: () => "api/tickets",
@@ -51,6 +92,20 @@ export const ticketsApi = createApi({
         "Tickets",
         { type: "Ticket", id: ticketId },
       ],
+    }),
+    addComment: builder.mutation({
+      query: ({ referenceId, text }) => ({
+        body: {
+          reference_id: referenceId,
+          text,
+        },
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+        url: "api/comments",
+      }),
+      invalidatesTags: (_, __, { referenceId }) => [{ type: "Comment", id: referenceId }],
     }),
     uploadTicketAttachment: builder.mutation({
       query: ({ file, ticketId }) => {
@@ -120,6 +175,12 @@ export async function loadTicketAttachmentPreviewUrl(downloadUrl) {
 }
 
 export const {
+  useAddCommentMutation,
+  useGetClientByIdQuery,
+  useGetClientAgreementsQuery,
+  useGetClientContactsQuery,
+  useGetCommentsQuery,
+  useGetClientTicketsQuery,
   useGetDepartmentsQuery,
   useGetDepartmentTicketsQuery,
   useGetMyTicketsQuery,

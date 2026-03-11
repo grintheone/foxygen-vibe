@@ -1,5 +1,8 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router";
+import { ClientAgreementsPage } from "../../pages/client-agreements";
 import { GuestRoute, ProtectedRoute } from "../../features/auth";
+import { ClientArchivePage } from "../../pages/client-archive";
+import { ClientContactsPage } from "../../pages/client-contacts";
 import { ClientPage } from "../../pages/client";
 import { DashboardPage } from "../../pages/dashboard";
 import { DevicePage } from "../../pages/device";
@@ -18,6 +21,9 @@ export function AppRouter() {
         <Route element={<ProtectedRoute />}>
           <Route path={routePaths.dashboard} element={<DashboardPage />} />
           <Route path={routePaths.profile} element={<ProfilePage />} />
+          <Route path={routePaths.clientAgreementsPattern} element={<ClientAgreementsPage />} />
+          <Route path={routePaths.clientArchivePattern} element={<ClientArchivePage />} />
+          <Route path={routePaths.clientContactsPattern} element={<ClientContactsPage />} />
           <Route path={routePaths.clientPattern} element={<ClientPage />} />
           <Route path={routePaths.devicePattern} element={<DevicePage />} />
           <Route path={routePaths.ticketPattern} element={<TicketPage />} />
