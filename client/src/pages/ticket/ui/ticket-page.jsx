@@ -36,8 +36,6 @@ export function TicketPage() {
         skip: !ticketId,
     });
 
-    console.log(ticket);
-
     const {
         ticketNumber,
         statusIcon,
@@ -64,6 +62,7 @@ export function TicketPage() {
         ticket,
     });
     const hasVisibleActionWidget = Boolean(actionState?.isVisible);
+    const isInitialTicketLoad = !ticket && (isLoading || isFetching);
     const isReportSubmitting = isPatching || isUploadingAttachment;
 
     function handleOpenDevice() {
@@ -187,9 +186,17 @@ export function TicketPage() {
                     onBack={() => navigate(routePaths.dashboard)}
                 />
 
-                {isLoading || isFetching ? (
+                {isInitialTicketLoad ? (
                     <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
                         <p className="text-sm text-slate-300">Загрузка тикета...</p>
+                    </div>
+                ) : null}
+
+                {ticket && isFetching ? (
+                    <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
+                            Обновляем данные тикета...
+                        </p>
                     </div>
                 ) : null}
 
@@ -199,7 +206,7 @@ export function TicketPage() {
                     </div>
                 ) : null}
 
-                {!isLoading && !isFetching && !isError && ticket ? (
+                {!isError && ticket ? (
                     <>
                         <TicketSummaryCard
                             reasonValue={reasonValue}

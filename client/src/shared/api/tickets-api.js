@@ -11,6 +11,36 @@ export function isMissingCommentReferenceError(error) {
   return error?.status === 400 && error?.data === "reference_id is required";
 }
 
+function applyTicketPatchToDraft(draft, patch, response) {
+  if (!draft || !patch) {
+    return;
+  }
+
+  if (response?.status || patch.status) {
+    draft.status = response?.status || patch.status;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, "workstarted_at")) {
+    draft.workstarted_at = response?.workstarted_at || patch.workstarted_at || draft.workstarted_at;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, "workfinished_at")) {
+    draft.workfinished_at = response?.workfinished_at || patch.workfinished_at || draft.workfinished_at;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, "closed_at")) {
+    draft.closed_at = response?.closed_at || patch.closed_at || draft.closed_at;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, "result")) {
+    draft.result = patch.result;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, "double_signed")) {
+    draft.double_signed = patch.double_signed;
+  }
+}
+
 export const ticketsApi = createApi({
   tagTypes: ["Client", "Comment", "Department", "DepartmentMember", "Device", "Ticket", "TicketReason", "Tickets"],
   reducerPath: "ticketsApi",
@@ -128,6 +158,25 @@ export const ticketsApi = createApi({
         method: "PATCH",
         url: `api/tickets/${ticketId}`,
       }),
+      async onQueryStarted({ ticketId, patch }, { dispatch, queryFulfilled }) {
+        const optimisticUpdate = dispatch(
+          ticketsApi.util.updateQueryData("getTicketById", ticketId, (draft) => {
+            applyTicketPatchToDraft(draft, patch);
+          }),
+        );
+
+        try {
+          const { data } = await queryFulfilled;
+
+          dispatch(
+            ticketsApi.util.updateQueryData("getTicketById", ticketId, (draft) => {
+              applyTicketPatchToDraft(draft, patch, data);
+            }),
+          );
+        } catch {
+          optimisticUpdate.undo();
+        }
+      },
       invalidatesTags: (_, __, { ticketId }) => [
         "Tickets",
         { type: "Ticket", id: ticketId },
