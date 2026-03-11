@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useGetDepartmentsQuery } from "../../../../shared/api/tickets-api";
+import { SlideOverSheet } from "../../../../shared/ui/slide-over-sheet";
 
 function createPreviewItems(files) {
     return files.map((file) => ({
@@ -252,48 +253,13 @@ export function TicketReportSheet({
     }
 
     return (
-        <div className="fixed inset-0 z-50">
-            <button
-                type="button"
-                aria-label="Закрыть панель отчета"
-                onClick={onClose}
-                className="absolute inset-0 bg-black/55"
-            />
-
-            <aside className="absolute right-0 top-0 h-full w-full overflow-y-auto border-l border-white/10 bg-slate-950/95 p-6 shadow-2xl shadow-black/50 backdrop-blur md:w-[78%] lg:w-[33.333%]">
-                <div className="flex items-start justify-between gap-4">
-                    <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
-                            Закрытие тикета
-                        </p>
-                        <h2 className="mt-2 text-2xl font-semibold text-slate-100">
-                            Отчет по заявке #{ticketNumber || "—"}
-                        </h2>
-                    </div>
-
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10 text-slate-100 transition hover:bg-white/20"
-                        aria-label="Закрыть"
-                    >
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            className="h-5 w-5"
-                            aria-hidden="true"
-                        >
-                            <path d="M18 6 6 18" />
-                            <path d="m6 6 12 12" />
-                        </svg>
-                    </button>
-                </div>
-
+        <SlideOverSheet
+            isOpen={isOpen}
+            onClose={onClose}
+            closeLabel="Закрыть панель отчета"
+            eyebrow="Закрытие тикета"
+            title={`Отчет по заявке #${ticketNumber || "—"}`}
+        >
                 <div className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-5">
                     <p className="text-sm text-slate-300">{reportSummary || "—"}</p>
                 </div>
@@ -506,7 +472,6 @@ export function TicketReportSheet({
                         ) : null}
                     </div>
                 </form>
-            </aside>
-        </div>
+        </SlideOverSheet>
     );
 }

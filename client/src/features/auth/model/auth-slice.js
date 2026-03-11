@@ -10,6 +10,7 @@ import {
   getRefreshToken,
   storeTokens,
 } from "../../../shared/lib/auth-tokens";
+import { sessionCleared } from "../../../shared/lib/session-events";
 import { ticketsApi } from "../../../shared/api/tickets-api";
 
 const initialFeedback = {
@@ -48,6 +49,15 @@ const authSlice = createSlice({
       state.isSubmitting = action.payload;
     },
   },
+  extraReducers: (builder) => {
+    builder.addCase(sessionCleared, (state) => {
+      state.feedback = initialFeedback;
+      state.isBootstrapping = false;
+      state.isRefreshing = false;
+      state.isSubmitting = false;
+      state.session = null;
+    });
+  },
 });
 
 const {
@@ -81,13 +91,13 @@ export function restoreSession() {
     } catch {
       if (!refreshToken) {
         clearStoredTokens();
-        dispatch(setSession(null));
+        dispatch(sessionCleared());
       } else {
         try {
           await dispatch(rotateSessionWithToken(refreshToken, { silent: true }));
         } catch {
           clearStoredTokens();
-          dispatch(setSession(null));
+          dispatch(sessionCleared());
         }
       }
     } finally {
@@ -117,7 +127,7 @@ export function login(credentials) {
       return data;
     } catch (error) {
       clearStoredTokens();
-      dispatch(setSession(null));
+      dispatch(sessionCleared());
       dispatch(
         setFeedback({
           tone: "error",
@@ -154,7 +164,7 @@ export function rotateSessionWithToken(refreshToken, options = {}) {
       return data;
     } catch (error) {
       clearStoredTokens();
-      dispatch(setSession(null));
+      dispatch(sessionCleared());
 
       if (!silent) {
         dispatch(
@@ -198,7 +208,7 @@ export function rotateSession() {
 export function signOut() {
   return function signOutThunk(dispatch) {
     clearStoredTokens();
-    dispatch(setSession(null));
+    dispatch(sessionCleared());
     dispatch(ticketsApi.util.resetApiState());
     dispatch(
       setFeedback({

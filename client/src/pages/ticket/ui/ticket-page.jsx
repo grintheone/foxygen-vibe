@@ -1,5 +1,5 @@
 import { useNavigate, useParams } from "react-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useAuth } from "../../../features/auth";
 import { routePaths } from "../../../shared/config/routes";
 import {
@@ -65,19 +65,6 @@ export function TicketPage() {
     });
     const hasVisibleActionWidget = Boolean(actionState?.isVisible);
     const isReportSubmitting = isPatching || isUploadingAttachment;
-
-    useEffect(() => {
-        if (!isReportSheetOpen) {
-            return undefined;
-        }
-
-        const previousOverflow = document.body.style.overflow;
-        document.body.style.overflow = "hidden";
-
-        return () => {
-            document.body.style.overflow = previousOverflow;
-        };
-    }, [isReportSheetOpen]);
 
     function handleOpenDevice() {
         if (!ticket?.device) {

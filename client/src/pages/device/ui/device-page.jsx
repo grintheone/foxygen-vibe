@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router";
+import { useAuth } from "../../../features/auth";
 import { TicketCardWithExecutor } from "../../dashboard/ui/ticket-card-with-executor";
 import {
   useAddCommentMutation,
@@ -8,8 +9,10 @@ import {
   useGetDeviceTicketsQuery,
 } from "../../../shared/api/tickets-api";
 import { routePaths } from "../../../shared/config/routes";
+import { BottomPageAction } from "../../../shared/ui/bottom-page-action";
 import { NavigationCard } from "../../../shared/ui/navigation-card";
 import { PageShell } from "../../../shared/ui/page-shell";
+import { SlideOverSheet } from "../../../shared/ui/slide-over-sheet";
 
 function formatCommentDate(value) {
   if (!value) {
@@ -322,11 +325,52 @@ function DeviceCommentsSection({
   );
 }
 
+function DeviceCreateTicketSheet({ device, isOpen, onClose }) {
+  const deviceTitle = device?.title?.trim() || "Устройство";
+  const serialNumber = device?.serialNumber?.trim() || "Не указано";
+  const clientName = device?.clientName?.trim() || "Клиент не указан";
+  const clientAddress = device?.clientAddress?.trim() || "Адрес не указан";
+
+  return (
+    <SlideOverSheet
+      isOpen={isOpen}
+      onClose={onClose}
+      closeLabel="Закрыть создание тикета"
+      eyebrow="Новый тикет"
+      title="Создание тикета на прибор"
+    >
+      <div className="mt-8 space-y-6">
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+          <p className="text-sm text-slate-400">Прибор</p>
+          <p className="mt-2 text-lg font-semibold text-slate-100">{deviceTitle}</p>
+          <p className="mt-2 text-sm text-slate-300">С/Н: {serialNumber}</p>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+          <p className="text-sm text-slate-400">Клиент</p>
+          <p className="mt-2 text-lg font-semibold text-slate-100">{clientName}</p>
+          <p className="mt-2 text-sm text-slate-300">{clientAddress}</p>
+        </div>
+
+        <div className="rounded-3xl border border-dashed border-white/15 bg-slate-900/40 p-6">
+          <h3 className="text-xl font-semibold text-slate-100">Форма в следующем шаге</h3>
+          <p className="mt-3 text-base leading-7 text-slate-300">
+            Шторка и контекст прибора готовы. Дальше сюда можно добавить поля причины, описания и остальных данных для
+            создания тикета.
+          </p>
+        </div>
+      </div>
+    </SlideOverSheet>
+  );
+}
+
 export function DevicePage() {
   const navigate = useNavigate();
   const { deviceId } = useParams();
+  const { session } = useAuth();
   const [commentText, setCommentText] = useState("");
   const [commentError, setCommentError] = useState("");
+  const [isCreateTicketSheetOpen, setIsCreateTicketSheetOpen] = useState(false);
   const {
     data: device,
     isError,
@@ -363,6 +407,8 @@ export function DevicePage() {
   const pageTitle = device?.title?.trim() || "Устройство";
   const serialNumber = device?.serialNumber?.trim() || "";
   const propertyEntries = buildPropertyEntries(device?.properties);
+  const canCreateTicket = session?.role === "admin" || session?.role === "coordinator";
+  const hasCreateTicketWidget = canCreateTicket && !isLoading && !isFetching && !isError && Boolean(device);
 
   async function handleSubmitComment(event) {
     event.preventDefault();
@@ -397,7 +443,11 @@ export function DevicePage() {
 
   return (
     <PageShell>
-      <section className="w-full space-y-6">
+      <section
+        className={`w-full space-y-6 transition ${hasCreateTicketWidget ? "pb-28" : ""} ${
+          isCreateTicketSheetOpen ? "brightness-75" : ""
+        }`}
+      >
         <DeviceHeader
           title={pageTitle}
           serialNumber={serialNumber}
@@ -444,6 +494,18 @@ export function DevicePage() {
           </>
         ) : null}
       </section>
+
+      {hasCreateTicketWidget ? (
+        <BottomPageAction onClick={() => setIsCreateTicketSheetOpen(true)}>
+          <span>Создать тикет на прибор</span>
+        </BottomPageAction>
+      ) : null}
+
+      <DeviceCreateTicketSheet
+        device={device}
+        isOpen={isCreateTicketSheetOpen}
+        onClose={() => setIsCreateTicketSheetOpen(false)}
+      />
     </PageShell>
   );
 }

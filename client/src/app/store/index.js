@@ -1,6 +1,7 @@
 import { configureStore } from "@reduxjs/toolkit";
 import { authReducer } from "../../features/auth";
 import { ticketsApi } from "../../shared/api/tickets-api";
+import { registerAuthDispatch } from "../../shared/lib/auth-dispatch";
 
 export const store = configureStore({
   reducer: {
@@ -10,3 +11,5 @@ export const store = configureStore({
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware().concat(ticketsApi.middleware),
 });
+
+registerAuthDispatch(store.dispatch);

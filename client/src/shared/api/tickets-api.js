@@ -1,5 +1,5 @@
-import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
-import { getAccessToken } from "../lib/auth-tokens";
+import { createApi } from "@reduxjs/toolkit/query/react";
+import { baseQueryWithAuth, fetchWithAuth } from "./authenticated-fetch";
 
 async function readError(response, fallbackMessage) {
   const errorMessage = await response.text();
@@ -10,17 +10,7 @@ async function readError(response, fallbackMessage) {
 export const ticketsApi = createApi({
   tagTypes: ["Client", "Comment", "Department", "Device", "Ticket", "Tickets"],
   reducerPath: "ticketsApi",
-  baseQuery: fetchBaseQuery({
-    baseUrl: "/",
-    prepareHeaders: (headers) => {
-      const accessToken = getAccessToken();
-      if (accessToken) {
-        headers.set("Authorization", `Bearer ${accessToken}`);
-      }
-
-      return headers;
-    },
-  }),
+  baseQuery: baseQueryWithAuth,
   endpoints: (builder) => ({
     getDepartments: builder.query({
       query: () => "api/departments",
@@ -138,14 +128,9 @@ export const ticketsApi = createApi({
 });
 
 export async function downloadTicketAttachmentFile({ attachmentId, fileName, ticketId }) {
-  const accessToken = getAccessToken();
-  const response = await fetch(`/api/tickets/${ticketId}/attachments/${attachmentId}/download`, {
-    headers: accessToken
-      ? {
-          Authorization: `Bearer ${accessToken}`,
-        }
-      : undefined,
-  });
+  const response = await fetchWithAuth(
+    `/api/tickets/${ticketId}/attachments/${attachmentId}/download`,
+  );
 
   if (!response.ok) {
     throw new Error(await readError(response, "Не удалось скачать вложение."));
@@ -171,14 +156,7 @@ export async function loadTicketAttachmentPreviewUrl(downloadUrl) {
     return null;
   }
 
-  const accessToken = getAccessToken();
-  const response = await fetch(downloadUrl, {
-    headers: accessToken
-      ? {
-          Authorization: `Bearer ${accessToken}`,
-        }
-      : undefined,
-  });
+  const response = await fetchWithAuth(downloadUrl);
 
   if (!response.ok) {
     throw new Error(await readError(response, "Не удалось загрузить превью вложения."));
