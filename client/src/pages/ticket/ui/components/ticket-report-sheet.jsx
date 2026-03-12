@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useGetDepartmentsQuery } from "../../../../shared/api/tickets-api";
+import { SelectField } from "../../../../shared/ui/select-field";
 import { SlideOverSheet } from "../../../../shared/ui/slide-over-sheet";
 
 function createPreviewItems(files) {
@@ -415,13 +416,13 @@ export function TicketReportSheet({
                         />
 
                         <div className="space-y-2">
-                            <select
+                            <SelectField
                                 id="ticket-report-recommendation-department"
                                 name="recommendation_department"
                                 value={recommendationDepartmentId}
                                 onChange={(event) => setRecommendationDepartmentId(event.target.value)}
                                 disabled={isSubmitting || isSubmitted || isDepartmentsFetching}
-                                className="min-h-16 w-full rounded-2xl border border-slate-400/35 bg-slate-950 px-4 py-3 text-xl text-slate-100 outline-none transition focus:border-[#9fb5d6] focus:ring-2 focus:ring-[#9fb5d6]/30 disabled:opacity-80"
+                                className="text-xl"
                             >
                                 <option value="">
                                     {isDepartmentsFetching ? "Загружаем отделы..." : "Выберите отдел"}
@@ -431,7 +432,7 @@ export function TicketReportSheet({
                                         {department.title}
                                     </option>
                                 ))}
-                            </select>
+                            </SelectField>
 
                             {isDepartmentsError ? (
                                 <p className="text-sm text-rose-200">Не удалось загрузить список отделов.</p>

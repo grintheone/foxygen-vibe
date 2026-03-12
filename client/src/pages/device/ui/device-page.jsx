@@ -17,6 +17,7 @@ import {
 import { routePaths } from "../../../shared/config/routes";
 import { BottomPageAction } from "../../../shared/ui/bottom-page-action";
 import { PageShell } from "../../../shared/ui/page-shell";
+import { SelectField } from "../../../shared/ui/select-field";
 import { SlideOverSheet } from "../../../shared/ui/slide-over-sheet";
 
 function formatCommentDate(value) {
@@ -616,7 +617,7 @@ function DeviceCreateTicketSheet({ device, isOpen, isSubmitting, onClose, onSubm
                             Причина
                         </label>
 
-                        <select
+                        <SelectField
                             id="device-ticket-reason"
                             name="reason"
                             value={ticketReasonId}
@@ -625,7 +626,7 @@ function DeviceCreateTicketSheet({ device, isOpen, isSubmitting, onClose, onSubm
                                 setTicketReasonId(event.target.value);
                             }}
                             disabled={isSubmitting || isTicketReasonsFetching || isTicketReasonsError}
-                            className="min-h-16 w-full rounded-2xl border border-slate-400/35 bg-slate-950 px-4 py-3 text-xl text-slate-100 outline-none transition focus:border-[#9fb5d6] focus:ring-2 focus:ring-[#9fb5d6]/30 disabled:opacity-80"
+                            className="text-xl"
                         >
                             <option value="">
                                 {isTicketReasonsFetching ? "Загружаем причины..." : "Выберите причину"}
@@ -635,7 +636,7 @@ function DeviceCreateTicketSheet({ device, isOpen, isSubmitting, onClose, onSubm
                                     {reason.title}
                                 </option>
                             ))}
-                        </select>
+                        </SelectField>
 
                         {isTicketReasonsError ? (
                             <p className="text-sm text-rose-200">Не удалось загрузить причины тикетов.</p>
@@ -669,7 +670,7 @@ function DeviceCreateTicketSheet({ device, isOpen, isSubmitting, onClose, onSubm
                             Контакт
                         </label>
 
-                        <select
+                        <SelectField
                             id="device-ticket-contact"
                             name="contact"
                             value={contactId}
@@ -680,7 +681,7 @@ function DeviceCreateTicketSheet({ device, isOpen, isSubmitting, onClose, onSubm
                             disabled={
                                 isSubmitting || !device?.client || isClientContactsFetching || isClientContactsError
                             }
-                            className="min-h-16 w-full rounded-2xl border border-slate-400/35 bg-slate-950 px-4 py-3 text-xl text-slate-100 outline-none transition focus:border-[#9fb5d6] focus:ring-2 focus:ring-[#9fb5d6]/30 disabled:opacity-80"
+                            className="text-xl"
                         >
                             <option value="">
                                 {!device?.client
@@ -696,7 +697,7 @@ function DeviceCreateTicketSheet({ device, isOpen, isSubmitting, onClose, onSubm
                                     {[contact.name, contact.position].filter(Boolean).join(" • ") || contact.id}
                                 </option>
                             ))}
-                        </select>
+                        </SelectField>
 
                         {isClientContactsError ? (
                             <p className="text-sm text-rose-200">Не удалось загрузить контакты клиента.</p>
@@ -708,7 +709,7 @@ function DeviceCreateTicketSheet({ device, isOpen, isSubmitting, onClose, onSubm
                             Исполнитель
                         </label>
 
-                        <select
+                        <SelectField
                             id="device-ticket-executor"
                             name="executor"
                             value={executorId}
@@ -717,7 +718,7 @@ function DeviceCreateTicketSheet({ device, isOpen, isSubmitting, onClose, onSubm
                                 setExecutorId(event.target.value);
                             }}
                             disabled={isSubmitting || isDepartmentMembersFetching || isDepartmentMembersError}
-                            className="min-h-16 w-full rounded-2xl border border-slate-400/35 bg-slate-950 px-4 py-3 text-xl text-slate-100 outline-none transition focus:border-[#9fb5d6] focus:ring-2 focus:ring-[#9fb5d6]/30 disabled:opacity-80"
+                            className="text-xl"
                         >
                             <option value="">
                                 {isDepartmentMembersFetching
@@ -731,7 +732,7 @@ function DeviceCreateTicketSheet({ device, isOpen, isSubmitting, onClose, onSubm
                                     {member.name?.trim() || member.username}
                                 </option>
                             ))}
-                        </select>
+                        </SelectField>
 
                         {isDepartmentMembersError ? (
                             <p className="text-sm text-rose-200">Не удалось загрузить сотрудников отдела.</p>

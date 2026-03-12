@@ -721,6 +721,7 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 		Description        string  `json:"description"`
 		Result             string  `json:"result"`
 		Reason             string  `json:"reason"`
+		ReasonTitle        string  `json:"reasonTitle"`
 		Urgent             bool    `json:"urgent"`
 		Executor           *string `json:"executor"`
 		ExecutorName       string  `json:"executorName"`
@@ -827,6 +828,7 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 					NULLIF(tr.title, ''),
 					'Не указано'
 				) AS resolved_reason,
+				COALESCE(NULLIF(tr.title, ''), 'Не указано') AS reason_title,
 				t.urgent,
 				t.executor,
 				TRIM(CONCAT(COALESCE(u_exec.first_name, ''), ' ', COALESCE(u_exec.last_name, ''))),
@@ -867,6 +869,7 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 				description    string
 				result         string
 				reason         string
+				reasonTitle    string
 				urgent         bool
 				executor       pgtype.UUID
 				executorName   string
@@ -888,6 +891,7 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 				&description,
 				&result,
 				&reason,
+				&reasonTitle,
 				&urgent,
 				&executor,
 				&executorName,
@@ -913,6 +917,7 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 				Description:        description,
 				Result:             result,
 				Reason:             reason,
+				ReasonTitle:        reasonTitle,
 				Urgent:             urgent,
 				Executor:           nullableUUIDToString(executor),
 				ExecutorName:       executorName,
@@ -1199,6 +1204,7 @@ func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 		Description        string  `json:"description"`
 		Result             string  `json:"result"`
 		Reason             string  `json:"reason"`
+		ReasonTitle        string  `json:"reasonTitle"`
 		Urgent             bool    `json:"urgent"`
 		Executor           *string `json:"executor"`
 		ExecutorName       string  `json:"executorName"`
@@ -1304,6 +1310,7 @@ func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 					NULLIF(tr.title, ''),
 					'Не указано'
 				) AS resolved_reason,
+				COALESCE(NULLIF(tr.title, ''), 'Не указано') AS reason_title,
 				t.urgent,
 				t.executor,
 				TRIM(CONCAT(COALESCE(u_exec.first_name, ''), ' ', COALESCE(u_exec.last_name, ''))),
@@ -1354,6 +1361,7 @@ func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 				description    string
 				result         string
 				reason         string
+				reasonTitle    string
 				urgent         bool
 				executor       pgtype.UUID
 				executorName   string
@@ -1375,6 +1383,7 @@ func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 				&description,
 				&result,
 				&reason,
+				&reasonTitle,
 				&urgent,
 				&executor,
 				&executorName,
@@ -1400,6 +1409,7 @@ func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 				Description:        description,
 				Result:             result,
 				Reason:             reason,
+				ReasonTitle:        reasonTitle,
 				Urgent:             urgent,
 				Executor:           nullableUUIDToString(executor),
 				ExecutorName:       executorName,
