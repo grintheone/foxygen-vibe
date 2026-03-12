@@ -1,16 +1,20 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import {
     useGetClientByIdQuery,
-    useGetClientTicketsQuery,
+    useGetClientTicketArchiveFacetsQuery,
+    useGetClientTicketsPageQuery,
     useGetDeviceByIdQuery,
-    useGetDeviceTicketsQuery,
+    useGetDeviceTicketArchiveFacetsQuery,
+    useGetDeviceTicketsPageQuery,
 } from "../../../shared/api/tickets-api";
 import { routePaths } from "../../../shared/config/routes";
 import { PageShell } from "../../../shared/ui/page-shell";
 import { SelectField } from "../../../shared/ui/select-field";
 import { SlideOverSheet } from "../../../shared/ui/slide-over-sheet";
 import { TicketCardWithExecutor } from "../../dashboard/ui/ticket-card-with-executor";
+
+const ARCHIVE_PAGE_SIZE = 100;
 
 const archiveConfigByEntity = {
     client: {
@@ -136,18 +140,6 @@ function ArchiveFilterButton({ onClick }) {
     );
 }
 
-function filterTicketsByTab(tickets, activeTab) {
-    if (activeTab === "closed") {
-        return tickets.filter((ticket) => ticket.status === "closed");
-    }
-
-    if (activeTab === "inWork") {
-        return tickets.filter((ticket) => ticket.status === "inWork");
-    }
-
-    return tickets;
-}
-
 function resolveEmptyMessage(config, activeTab) {
     if (activeTab === "closed") {
         return config.emptyClosedMessage;
@@ -243,98 +235,20 @@ function resolveSortLabel(sortBy) {
     return archiveSortOptions.find((option) => option.id === sortBy)?.label || "Сначала новые";
 }
 
-function filterTicketsByPeriod(tickets, period) {
-    if (period?.useEntirePeriod) {
-        return tickets;
+function resolveStatusFilter(activeTab) {
+    if (activeTab === "all") {
+        return "";
     }
 
-    if (!period?.startDate && !period?.endDate) {
-        return tickets;
+    return activeTab;
+}
+
+function includeSelectedOption(options, selectedValue) {
+    if (!selectedValue || options.includes(selectedValue)) {
+        return options;
     }
 
-    const startTimestamp = period.startDate ? new Date(`${period.startDate}T00:00:00`).getTime() : null;
-    const endTimestamp = period.endDate ? new Date(`${period.endDate}T23:59:59`).getTime() : null;
-
-    return tickets.filter((ticket) => {
-        const timelineDate = resolveTicketTimelineDate(ticket);
-        if (!timelineDate) {
-            return false;
-        }
-
-        const ticketTimestamp = new Date(timelineDate).getTime();
-        if (Number.isNaN(ticketTimestamp)) {
-            return false;
-        }
-
-        if (startTimestamp !== null && ticketTimestamp < startTimestamp) {
-            return false;
-        }
-
-        if (endTimestamp !== null && ticketTimestamp > endTimestamp) {
-            return false;
-        }
-
-        return true;
-    });
-}
-
-function filterTicketsByReason(tickets, reasonTitle) {
-    if (!reasonTitle) {
-        return tickets;
-    }
-
-    return tickets.filter((ticket) => (ticket?.reasonTitle?.trim() || ticket?.reason?.trim() || "") === reasonTitle);
-}
-
-function filterTicketsByDevice(tickets, deviceName) {
-    if (!deviceName) {
-        return tickets;
-    }
-
-    return tickets.filter((ticket) => (ticket?.deviceName?.trim() || "") === deviceName);
-}
-
-function getReasonOptions(tickets) {
-    return Array.from(
-        new Set(
-            tickets
-                .map((ticket) => ticket?.reasonTitle?.trim() || ticket?.reason?.trim() || "")
-                .filter(Boolean),
-        ),
-    ).sort((left, right) => left.localeCompare(right, "ru"));
-}
-
-function getDeviceOptions(tickets) {
-    return Array.from(
-        new Set(
-            tickets
-                .map((ticket) => ticket?.deviceName?.trim() || "")
-                .filter(Boolean),
-        ),
-    ).sort((left, right) => left.localeCompare(right, "ru"));
-}
-
-function sortTicketsByDate(tickets, sortBy) {
-    const direction = sortBy === "oldest" ? 1 : -1;
-
-    return [...tickets].sort((left, right) => {
-        const leftTimestamp = new Date(resolveTicketTimelineDate(left) || 0).getTime();
-        const rightTimestamp = new Date(resolveTicketTimelineDate(right) || 0).getTime();
-        const safeLeftTimestamp = Number.isNaN(leftTimestamp) ? 0 : leftTimestamp;
-        const safeRightTimestamp = Number.isNaN(rightTimestamp) ? 0 : rightTimestamp;
-
-        if (safeLeftTimestamp !== safeRightTimestamp) {
-            return (safeLeftTimestamp - safeRightTimestamp) * direction;
-        }
-
-        const leftNumber = Number(left?.number || 0);
-        const rightNumber = Number(right?.number || 0);
-        if (leftNumber !== rightNumber) {
-            return (leftNumber - rightNumber) * direction;
-        }
-
-        return String(left?.id || "").localeCompare(String(right?.id || ""));
-    });
+    return [selectedValue, ...options];
 }
 
 function FilterSection({ children, description, title }) {
@@ -619,18 +533,27 @@ function ArchiveTicketsSection({
     onChangeTab,
     onOpenFilters,
     onOpenTicket,
+    onPageChange,
+    pagination,
     sortLabel,
     tickets,
     ticketsErrorMessage,
     ticketsHeading,
 }) {
+    const totalPages = pagination.total > 0 ? Math.ceil(pagination.total / pagination.limit) : 0;
+    const currentPage = totalPages > 0 ? Math.floor(pagination.offset / pagination.limit) + 1 : 0;
+    const currentRangeStart = pagination.total > 0 ? pagination.offset + 1 : 0;
+    const currentRangeEnd = pagination.total > 0 ? pagination.offset + pagination.pageItemsCount : 0;
+
     return (
         <section className="space-y-4">
             <h2 className="text-2xl font-bold tracking-tight text-slate-50 sm:text-3xl">{ticketsHeading}</h2>
 
             {!isLoading && !isError ? (
                 <p className="text-sm text-slate-300">
-                    Найдено: <span className="font-semibold text-slate-100">{tickets.length}</span>
+                    На странице после фильтров: <span className="font-semibold text-slate-100">{tickets.length}</span>
+                    <span className="mx-2 text-slate-500">•</span>
+                    Всего в архиве: <span className="font-semibold text-slate-100">{pagination.total}</span>
                     <span className="mx-2 text-slate-500">•</span>
                     Группировка: <span className="font-semibold text-slate-100">{groupingLabel}</span>
                     <span className="mx-2 text-slate-500">•</span>
@@ -703,6 +626,38 @@ function ArchiveTicketsSection({
                     <p className="text-sm text-slate-300">{emptyMessage}</p>
                 </div>
             ) : null}
+
+            {!isLoading && !isError && totalPages > 1 ? (
+                <div className="flex flex-col gap-3 rounded-3xl border border-white/10 bg-slate-950/25 p-4 shadow-lg shadow-black/10 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+                    <div className="space-y-1">
+                        <p className="text-sm font-semibold text-slate-100">
+                            Страница {currentPage} из {totalPages}
+                        </p>
+                        <p className="text-sm text-slate-300">
+                            Записи {currentRangeStart}-{currentRangeEnd} из {pagination.total}
+                        </p>
+                    </div>
+
+                    <div className="flex gap-3">
+                        <button
+                            type="button"
+                            onClick={() => onPageChange(-1)}
+                            disabled={!pagination.hasPrev}
+                            className="min-h-12 rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-semibold text-slate-100 transition hover:border-white/20 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            Назад
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => onPageChange(1)}
+                            disabled={!pagination.hasNext}
+                            className="min-h-12 rounded-2xl bg-[#6A3BF2] px-4 text-sm font-semibold text-white transition hover:bg-[#7C52F5] disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            Дальше
+                        </button>
+                    </div>
+                </div>
+            ) : null}
         </section>
     );
 }
@@ -730,9 +685,16 @@ export function TicketArchivePage({ entityType }) {
         useEntirePeriod: true,
     });
     const [activeReasonTitle, setActiveReasonTitle] = useState("");
+    const [page, setPage] = useState(1);
     const config = archiveConfigByEntity[entityType] || archiveConfigByEntity.client;
     const isClientArchive = entityType === "client";
     const entityId = isClientArchive ? clientId : deviceId;
+    const archiveOffset = (page - 1) * ARCHIVE_PAGE_SIZE;
+    const activeStatus = resolveStatusFilter(activeTab);
+    const activeStartDate = activePeriod.useEntirePeriod ? "" : activePeriod.startDate;
+    const activeEndDate = activePeriod.useEntirePeriod ? "" : activePeriod.endDate;
+    const draftStartDate = filterDraft.useEntirePeriod ? "" : filterDraft.startDate;
+    const draftEndDate = filterDraft.useEntirePeriod ? "" : filterDraft.endDate;
 
     const {
         data: client,
@@ -751,28 +713,71 @@ export function TicketArchivePage({ entityType }) {
         skip: !entityId || isClientArchive,
     });
     const {
-        data: clientTickets = [],
+        data: clientTicketsPage,
         isError: isClientTicketsError,
         isFetching: isClientTicketsFetching,
         isLoading: isClientTicketsLoading,
-    } = useGetClientTicketsQuery(
+    } = useGetClientTicketsPageQuery(
         {
             clientId: entityId,
-            limit: 100,
+            deviceName: activeDeviceName,
+            endDate: activeEndDate,
+            limit: ARCHIVE_PAGE_SIZE,
+            offset: archiveOffset,
+            reasonTitle: activeReasonTitle,
+            sortBy: activeSortBy,
+            startDate: activeStartDate,
+            status: activeStatus,
         },
         {
             skip: !entityId || !isClientArchive,
         },
     );
     const {
-        data: deviceTickets = [],
+        data: deviceTicketsPage,
         isError: isDeviceTicketsError,
         isFetching: isDeviceTicketsFetching,
         isLoading: isDeviceTicketsLoading,
-    } = useGetDeviceTicketsQuery(
+    } = useGetDeviceTicketsPageQuery(
         {
             deviceId: entityId,
-            limit: 100,
+            deviceName: activeDeviceName,
+            endDate: activeEndDate,
+            limit: ARCHIVE_PAGE_SIZE,
+            offset: archiveOffset,
+            reasonTitle: activeReasonTitle,
+            sortBy: activeSortBy,
+            startDate: activeStartDate,
+            status: activeStatus,
+        },
+        {
+            skip: !entityId || isClientArchive,
+        },
+    );
+    const {
+        data: clientArchiveFacets,
+    } = useGetClientTicketArchiveFacetsQuery(
+        {
+            clientId: entityId,
+            deviceName: filterDraft.deviceName,
+            endDate: draftEndDate,
+            reasonTitle: filterDraft.reasonTitle,
+            startDate: draftStartDate,
+            status: activeStatus,
+        },
+        {
+            skip: !entityId || !isClientArchive,
+        },
+    );
+    const {
+        data: deviceArchiveFacets,
+    } = useGetDeviceTicketArchiveFacetsQuery(
+        {
+            deviceId: entityId,
+            endDate: draftEndDate,
+            reasonTitle: filterDraft.reasonTitle,
+            startDate: draftStartDate,
+            status: activeStatus,
         },
         {
             skip: !entityId || isClientArchive,
@@ -780,13 +785,23 @@ export function TicketArchivePage({ entityType }) {
     );
 
     const entity = isClientArchive ? client : device;
-    const tickets = isClientArchive ? clientTickets : deviceTickets;
+    const ticketsPage = isClientArchive ? clientTicketsPage : deviceTicketsPage;
+    const archiveFacets = isClientArchive ? clientArchiveFacets : deviceArchiveFacets;
+    const tickets = ticketsPage?.items || [];
     const isEntityError = isClientArchive ? isClientError : isDeviceError;
     const isEntityLoading = isClientArchive ? isClientLoading || isClientFetching : isDeviceLoading || isDeviceFetching;
     const isTicketsError = isClientArchive ? isClientTicketsError : isDeviceTicketsError;
     const isTicketsLoading = isClientArchive
         ? isClientTicketsLoading || isClientTicketsFetching
         : isDeviceTicketsLoading || isDeviceTicketsFetching;
+    const pagination = {
+        hasNext: ticketsPage?.hasNext || false,
+        hasPrev: ticketsPage?.hasPrev || false,
+        limit: ticketsPage?.limit || ARCHIVE_PAGE_SIZE,
+        offset: ticketsPage?.offset || 0,
+        pageItemsCount: tickets.length,
+        total: ticketsPage?.total || 0,
+    };
     const entityTitle = isClientArchive
         ? entity?.title?.trim() || config.entityFallbackTitle
         : entity?.title?.trim() || config.entityFallbackTitle;
@@ -795,21 +810,28 @@ export function TicketArchivePage({ entityType }) {
         : entity?.serialNumber?.trim()
           ? `С/Н: ${entity.serialNumber.trim()}`
           : "Серийный номер не указан";
-    const draftPeriodTickets = filterTicketsByPeriod(tickets, {
-        endDate: filterDraft.endDate,
-        startDate: filterDraft.startDate,
-        useEntirePeriod: filterDraft.useEntirePeriod,
-    });
-    const draftTabTickets = filterTicketsByTab(draftPeriodTickets, activeTab);
-    const draftReasonTickets = filterTicketsByReason(draftTabTickets, filterDraft.reasonTitle);
-    const reasonOptions = getReasonOptions(filterTicketsByDevice(draftTabTickets, filterDraft.deviceName));
-    const deviceOptions = getDeviceOptions(draftReasonTickets);
-    const periodFilteredTickets = filterTicketsByPeriod(tickets, activePeriod);
-    const tabFilteredTickets = filterTicketsByTab(periodFilteredTickets, activeTab);
-    const reasonFilteredTickets = filterTicketsByReason(tabFilteredTickets, activeReasonTitle);
-    const deviceFilteredTickets = filterTicketsByDevice(reasonFilteredTickets, activeDeviceName);
-    const filteredTickets = sortTicketsByDate(deviceFilteredTickets, activeSortBy);
-    const groupedTickets = groupTickets(filteredTickets, activeGrouping);
+    const reasonOptions = includeSelectedOption(archiveFacets?.reasonTitles || [], filterDraft.reasonTitle);
+    const deviceOptions = includeSelectedOption(archiveFacets?.deviceNames || [], filterDraft.deviceName);
+    const groupedTickets = groupTickets(tickets, activeGrouping);
+
+    useEffect(() => {
+        setPage(1);
+    }, [
+        activeDeviceName,
+        activeEndDate,
+        activeReasonTitle,
+        activeSortBy,
+        activeStartDate,
+        activeStatus,
+        entityId,
+        isClientArchive,
+    ]);
+
+    useEffect(() => {
+        if (pagination.total > 0 && archiveOffset >= pagination.total) {
+            setPage(Math.ceil(pagination.total / ARCHIVE_PAGE_SIZE));
+        }
+    }, [archiveOffset, pagination.total]);
 
     function handleBack() {
         if (!entityId) {
@@ -852,6 +874,10 @@ export function TicketArchivePage({ entityType }) {
         setIsFilterSheetOpen(false);
     }
 
+    function handlePageChange(direction) {
+        setPage((currentValue) => Math.max(1, currentValue + direction));
+    }
+
     return (
         <PageShell>
             <section className="w-full space-y-6">
@@ -881,8 +907,10 @@ export function TicketArchivePage({ entityType }) {
                         onChangeTab={setActiveTab}
                         onOpenFilters={() => setIsFilterSheetOpen(true)}
                         onOpenTicket={(ticketId) => navigate(routePaths.ticketById(ticketId))}
+                        onPageChange={handlePageChange}
+                        pagination={pagination}
                         sortLabel={resolveSortLabel(activeSortBy)}
-                        tickets={filteredTickets}
+                        tickets={tickets}
                         ticketsErrorMessage={config.ticketsErrorMessage}
                         ticketsHeading={config.ticketsHeading}
                     />

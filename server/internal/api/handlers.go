@@ -15,8 +15,148 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 )
+
+const (
+	defaultTicketListLimit = 50
+	maxTicketListLimit     = 100
+)
+
+type paginatedResponse[T any] struct {
+	Items   []T  `json:"items"`
+	Limit   int  `json:"limit"`
+	Offset  int  `json:"offset"`
+	Total   int  `json:"total"`
+	HasNext bool `json:"hasNext"`
+	HasPrev bool `json:"hasPrev"`
+}
+
+type ticketListFilters struct {
+	DeviceName  string
+	EndDate     *time.Time
+	ReasonTitle string
+	SortBy      string
+	StartDate   *time.Time
+	Status      string
+}
+
+type ticketArchiveFacetsResponse struct {
+	DeviceNames  []string `json:"deviceNames"`
+	ReasonTitles []string `json:"reasonTitles"`
+}
+
+func parseTicketListPagination(r *http.Request) (int, int, error) {
+	limit := defaultTicketListLimit
+	if rawLimit := strings.TrimSpace(r.URL.Query().Get("limit")); rawLimit != "" {
+		parsedLimit, parseErr := strconv.Atoi(rawLimit)
+		if parseErr != nil || parsedLimit <= 0 {
+			return 0, 0, errors.New("limit must be a positive integer")
+		}
+		if parsedLimit > maxTicketListLimit {
+			parsedLimit = maxTicketListLimit
+		}
+		limit = parsedLimit
+	}
+
+	offset := 0
+	if rawOffset := strings.TrimSpace(r.URL.Query().Get("offset")); rawOffset != "" {
+		parsedOffset, parseErr := strconv.Atoi(rawOffset)
+		if parseErr != nil || parsedOffset < 0 {
+			return 0, 0, errors.New("offset must be a non-negative integer")
+		}
+		offset = parsedOffset
+	}
+
+	return limit, offset, nil
+}
+
+func newPaginatedResponse[T any](items []T, limit, offset, total int) paginatedResponse[T] {
+	return paginatedResponse[T]{
+		Items:   items,
+		Limit:   limit,
+		Offset:  offset,
+		Total:   total,
+		HasNext: offset+len(items) < total,
+		HasPrev: offset > 0,
+	}
+}
+
+func parseTicketListFilters(r *http.Request) (ticketListFilters, error) {
+	status := strings.TrimSpace(r.URL.Query().Get("status"))
+	reasonTitle := strings.TrimSpace(r.URL.Query().Get("reasonTitle"))
+	deviceName := strings.TrimSpace(r.URL.Query().Get("deviceName"))
+	sortBy := strings.TrimSpace(r.URL.Query().Get("sortBy"))
+	if sortBy == "" {
+		sortBy = "newest"
+	}
+	if sortBy != "newest" && sortBy != "oldest" {
+		return ticketListFilters{}, errors.New("sortBy must be newest or oldest")
+	}
+
+	startDate, err := parseArchiveDate(strings.TrimSpace(r.URL.Query().Get("startDate")))
+	if err != nil {
+		return ticketListFilters{}, err
+	}
+
+	endDate, err := parseArchiveDate(strings.TrimSpace(r.URL.Query().Get("endDate")))
+	if err != nil {
+		return ticketListFilters{}, err
+	}
+	if endDate != nil {
+		endDateValue := endDate.Add(24 * time.Hour)
+		endDate = &endDateValue
+	}
+
+	return ticketListFilters{
+		DeviceName:  deviceName,
+		EndDate:     endDate,
+		ReasonTitle: reasonTitle,
+		SortBy:      sortBy,
+		StartDate:   startDate,
+		Status:      status,
+	}, nil
+}
+
+func parseArchiveDate(rawValue string) (*time.Time, error) {
+	if rawValue == "" {
+		return nil, nil
+	}
+
+	parsedDate, err := time.Parse("2006-01-02", rawValue)
+	if err != nil {
+		return nil, errors.New("date filters must use YYYY-MM-DD")
+	}
+
+	return &parsedDate, nil
+}
+
+func queryFacetValues(ctx context.Context, db *pgxpool.Pool, query string, args ...any) ([]string, error) {
+	rows, err := db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	values := make([]string, 0)
+	for rows.Next() {
+		var value string
+		if err := rows.Scan(&value); err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(value) == "" {
+			continue
+		}
+		values = append(values, value)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return values, nil
+}
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	type response struct {
@@ -786,28 +926,103 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
+	case len(pathParts) == 3 && pathParts[1] == "tickets" && pathParts[2] == "facets":
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		filters, err := parseTicketListFilters(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+
+		reasonTitles, err := queryFacetValues(ctx, s.db, `
+			SELECT DISTINCT COALESCE(NULLIF(tr.title, ''), 'Не указано') AS reason_title
+			FROM tickets t
+			LEFT JOIN devices d ON d.id = t.device
+			LEFT JOIN classificators cls ON cls.id = d.classificator
+			LEFT JOIN ticket_reasons tr ON tr.id = t.reason
+			WHERE t.client = $1
+			  AND ($2 = '' OR COALESCE(t.status, '') = $2)
+			  AND ($3 = '' OR COALESCE(cls.title, '') = $3)
+			  AND ($4::timestamp IS NULL OR COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) >= $4::timestamp)
+			  AND ($5::timestamp IS NULL OR COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) < $5::timestamp)
+			ORDER BY reason_title ASC
+		`, clientID, filters.Status, filters.DeviceName, filters.StartDate, filters.EndDate)
+		if err != nil {
+			log.Printf("query client ticket reason facets failed: %v", err)
+			http.Error(w, "failed to load client ticket facets", http.StatusInternalServerError)
+			return
+		}
+
+		deviceNames, err := queryFacetValues(ctx, s.db, `
+			SELECT DISTINCT COALESCE(cls.title, '') AS device_name
+			FROM tickets t
+			LEFT JOIN devices d ON d.id = t.device
+			LEFT JOIN classificators cls ON cls.id = d.classificator
+			LEFT JOIN ticket_reasons tr ON tr.id = t.reason
+			WHERE t.client = $1
+			  AND ($2 = '' OR COALESCE(t.status, '') = $2)
+			  AND ($3 = '' OR COALESCE(NULLIF(tr.title, ''), 'Не указано') = $3)
+			  AND ($4::timestamp IS NULL OR COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) >= $4::timestamp)
+			  AND ($5::timestamp IS NULL OR COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) < $5::timestamp)
+			ORDER BY device_name ASC
+		`, clientID, filters.Status, filters.ReasonTitle, filters.StartDate, filters.EndDate)
+		if err != nil {
+			log.Printf("query client ticket device facets failed: %v", err)
+			http.Error(w, "failed to load client ticket facets", http.StatusInternalServerError)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, ticketArchiveFacetsResponse{
+			DeviceNames:  deviceNames,
+			ReasonTitles: reasonTitles,
+		})
+		return
 	case len(pathParts) == 2 && pathParts[1] == "tickets":
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		status := strings.TrimSpace(r.URL.Query().Get("status"))
-		limit := 50
-		if rawLimit := strings.TrimSpace(r.URL.Query().Get("limit")); rawLimit != "" {
-			parsedLimit, parseErr := strconv.Atoi(rawLimit)
-			if parseErr != nil || parsedLimit <= 0 {
-				http.Error(w, "limit must be a positive integer", http.StatusBadRequest)
-				return
-			}
-			if parsedLimit > 100 {
-				parsedLimit = 100
-			}
-			limit = parsedLimit
+		filters, err := parseTicketListFilters(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		limit, offset, err := parseTicketListPagination(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
 		}
 
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
+
+		var total int
+		if err := s.db.QueryRow(ctx, `
+			SELECT COUNT(*)
+			FROM tickets t
+			LEFT JOIN devices d ON d.id = t.device
+			LEFT JOIN classificators cls ON cls.id = d.classificator
+			LEFT JOIN ticket_reasons tr ON tr.id = t.reason
+			WHERE t.client = $1
+			  AND ($2 = '' OR COALESCE(t.status, '') = $2)
+			  AND ($3 = '' OR COALESCE(NULLIF(tr.title, ''), 'Не указано') = $3)
+			  AND ($4 = '' OR COALESCE(cls.title, '') = $4)
+			  AND ($5::timestamp IS NULL OR COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) >= $5::timestamp)
+			  AND ($6::timestamp IS NULL OR COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) < $6::timestamp)
+		`, clientID, filters.Status, filters.ReasonTitle, filters.DeviceName, filters.StartDate, filters.EndDate).Scan(&total); err != nil {
+			log.Printf("count client tickets failed: %v", err)
+			http.Error(w, "failed to load client tickets", http.StatusInternalServerError)
+			return
+		}
 
 		rows, err := s.db.Query(ctx, `
 			SELECT
@@ -850,9 +1065,19 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 			LEFT JOIN departments d_exec ON d_exec.id = u_exec.department
 			WHERE t.client = $1
 			  AND ($2 = '' OR COALESCE(t.status, '') = $2)
-			ORDER BY t.closed_at DESC NULLS LAST, t.workfinished_at DESC NULLS LAST, t.created_at DESC, t.number DESC
-			LIMIT $3
-		`, clientID, status, limit)
+			  AND ($3 = '' OR COALESCE(NULLIF(tr.title, ''), 'Не указано') = $3)
+			  AND ($4 = '' OR COALESCE(cls.title, '') = $4)
+			  AND ($5::timestamp IS NULL OR COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) >= $5::timestamp)
+			  AND ($6::timestamp IS NULL OR COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) < $6::timestamp)
+			ORDER BY
+			  CASE WHEN $7 = 'oldest' THEN COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) END ASC NULLS FIRST,
+			  CASE WHEN $7 <> 'oldest' THEN COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) END DESC NULLS LAST,
+			  CASE WHEN $7 = 'oldest' THEN t.number END ASC,
+			  CASE WHEN $7 <> 'oldest' THEN t.number END DESC,
+			  t.id ASC
+			LIMIT $8
+			OFFSET $9
+		`, clientID, filters.Status, filters.ReasonTitle, filters.DeviceName, filters.StartDate, filters.EndDate, filters.SortBy, limit, offset)
 		if err != nil {
 			log.Printf("query client tickets failed: %v", err)
 			http.Error(w, "failed to load client tickets", http.StatusInternalServerError)
@@ -939,7 +1164,7 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, tickets)
+		writeJSON(w, http.StatusOK, newPaginatedResponse(tickets, limit, offset, total))
 		return
 	case len(pathParts) == 2 && pathParts[1] == "contacts":
 		if r.Method != http.MethodGet {
@@ -1268,28 +1493,83 @@ func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
+	case len(pathParts) == 3 && pathParts[1] == "tickets" && pathParts[2] == "facets":
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		filters, err := parseTicketListFilters(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+
+		reasonTitles, err := queryFacetValues(ctx, s.db, `
+			SELECT DISTINCT COALESCE(NULLIF(tr.title, ''), 'Не указано') AS reason_title
+			FROM tickets t
+			LEFT JOIN devices d ON d.id = t.device
+			LEFT JOIN classificators cls ON cls.id = d.classificator
+			LEFT JOIN ticket_reasons tr ON tr.id = t.reason
+			WHERE t.device = $1
+			  AND ($2 = '' OR COALESCE(t.status, '') = $2)
+			  AND ($3::timestamp IS NULL OR COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) >= $3::timestamp)
+			  AND ($4::timestamp IS NULL OR COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) < $4::timestamp)
+			ORDER BY reason_title ASC
+		`, deviceID, filters.Status, filters.StartDate, filters.EndDate)
+		if err != nil {
+			log.Printf("query device ticket reason facets failed: %v", err)
+			http.Error(w, "failed to load device ticket facets", http.StatusInternalServerError)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, ticketArchiveFacetsResponse{
+			DeviceNames:  []string{},
+			ReasonTitles: reasonTitles,
+		})
+		return
 	case len(pathParts) == 2 && pathParts[1] == "tickets":
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		status := strings.TrimSpace(r.URL.Query().Get("status"))
-		limit := 50
-		if rawLimit := strings.TrimSpace(r.URL.Query().Get("limit")); rawLimit != "" {
-			parsedLimit, parseErr := strconv.Atoi(rawLimit)
-			if parseErr != nil || parsedLimit <= 0 {
-				http.Error(w, "limit must be a positive integer", http.StatusBadRequest)
-				return
-			}
-			if parsedLimit > 100 {
-				parsedLimit = 100
-			}
-			limit = parsedLimit
+		filters, err := parseTicketListFilters(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		limit, offset, err := parseTicketListPagination(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
 		}
 
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
+
+		var total int
+		if err := s.db.QueryRow(ctx, `
+			SELECT COUNT(*)
+			FROM tickets t
+			LEFT JOIN devices d ON d.id = t.device
+			LEFT JOIN classificators cls ON cls.id = d.classificator
+			LEFT JOIN ticket_reasons tr ON tr.id = t.reason
+			WHERE t.device = $1
+			  AND ($2 = '' OR COALESCE(t.status, '') = $2)
+			  AND ($3 = '' OR COALESCE(NULLIF(tr.title, ''), 'Не указано') = $3)
+			  AND ($4 = '' OR COALESCE(cls.title, '') = $4)
+			  AND ($5::timestamp IS NULL OR COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) >= $5::timestamp)
+			  AND ($6::timestamp IS NULL OR COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) < $6::timestamp)
+		`, deviceID, filters.Status, filters.ReasonTitle, filters.DeviceName, filters.StartDate, filters.EndDate).Scan(&total); err != nil {
+			log.Printf("count device tickets failed: %v", err)
+			http.Error(w, "failed to load device tickets", http.StatusInternalServerError)
+			return
+		}
 
 		rows, err := s.db.Query(ctx, `
 			SELECT
@@ -1332,9 +1612,19 @@ func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 			LEFT JOIN departments d_exec ON d_exec.id = u_exec.department
 			WHERE t.device = $1
 			  AND ($2 = '' OR COALESCE(t.status, '') = $2)
-			ORDER BY t.closed_at DESC NULLS LAST, t.workfinished_at DESC NULLS LAST, t.created_at DESC, t.number DESC
-			LIMIT $3
-		`, deviceID, status, limit)
+			  AND ($3 = '' OR COALESCE(NULLIF(tr.title, ''), 'Не указано') = $3)
+			  AND ($4 = '' OR COALESCE(cls.title, '') = $4)
+			  AND ($5::timestamp IS NULL OR COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) >= $5::timestamp)
+			  AND ($6::timestamp IS NULL OR COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) < $6::timestamp)
+			ORDER BY
+			  CASE WHEN $7 = 'oldest' THEN COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) END ASC NULLS FIRST,
+			  CASE WHEN $7 <> 'oldest' THEN COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) END DESC NULLS LAST,
+			  CASE WHEN $7 = 'oldest' THEN t.number END ASC,
+			  CASE WHEN $7 <> 'oldest' THEN t.number END DESC,
+			  t.id ASC
+			LIMIT $8
+			OFFSET $9
+		`, deviceID, filters.Status, filters.ReasonTitle, filters.DeviceName, filters.StartDate, filters.EndDate, filters.SortBy, limit, offset)
 		if err != nil {
 			log.Printf("query device tickets failed: %v", err)
 			http.Error(w, "failed to load device tickets", http.StatusInternalServerError)
@@ -1421,7 +1711,7 @@ func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, tickets)
+		writeJSON(w, http.StatusOK, newPaginatedResponse(tickets, limit, offset, total))
 		return
 	case len(pathParts) == 2 && pathParts[1] == "agreements":
 		if r.Method != http.MethodGet {

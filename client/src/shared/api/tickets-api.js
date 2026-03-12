@@ -7,6 +7,27 @@ async function readError(response, fallbackMessage) {
   return errorMessage || fallbackMessage;
 }
 
+function normalizeTicketItems(response) {
+  if (Array.isArray(response)) {
+    return response;
+  }
+
+  return response?.items || [];
+}
+
+function buildTicketListParams({ deviceName, endDate, limit, offset, reasonTitle, sortBy, startDate, status }) {
+  return {
+    ...(limit ? { limit } : {}),
+    ...(offset ? { offset } : {}),
+    ...(status ? { status } : {}),
+    ...(reasonTitle ? { reasonTitle } : {}),
+    ...(deviceName ? { deviceName } : {}),
+    ...(sortBy ? { sortBy } : {}),
+    ...(startDate ? { startDate } : {}),
+    ...(endDate ? { endDate } : {}),
+  };
+}
+
 export function isMissingCommentReferenceError(error) {
   return error?.status === 400 && error?.data === "reference_id is required";
 }
@@ -76,12 +97,24 @@ export const ticketsApi = createApi({
       providesTags: (_, __, referenceId) => [{ type: "Comment", id: referenceId }],
     }),
     getClientTickets: builder.query({
-      query: ({ clientId, limit, status }) => ({
-        params: {
-          ...(limit ? { limit } : {}),
-          ...(status ? { status } : {}),
-        },
+      query: ({ clientId, deviceName, endDate, limit, offset, reasonTitle, sortBy, startDate, status }) => ({
+        params: buildTicketListParams({ deviceName, endDate, limit, offset, reasonTitle, sortBy, startDate, status }),
         url: `api/clients/${clientId}/tickets`,
+      }),
+      transformResponse: normalizeTicketItems,
+      providesTags: (_, __, { clientId }) => [{ type: "Client", id: clientId }],
+    }),
+    getClientTicketsPage: builder.query({
+      query: ({ clientId, deviceName, endDate, limit, offset = 0, reasonTitle, sortBy, startDate, status }) => ({
+        params: buildTicketListParams({ deviceName, endDate, limit, offset, reasonTitle, sortBy, startDate, status }),
+        url: `api/clients/${clientId}/tickets`,
+      }),
+      providesTags: (_, __, { clientId }) => [{ type: "Client", id: clientId }],
+    }),
+    getClientTicketArchiveFacets: builder.query({
+      query: ({ clientId, deviceName, endDate, reasonTitle, startDate, status }) => ({
+        params: buildTicketListParams({ deviceName, endDate, reasonTitle, startDate, status }),
+        url: `api/clients/${clientId}/tickets/facets`,
       }),
       providesTags: (_, __, { clientId }) => [{ type: "Client", id: clientId }],
     }),
@@ -104,12 +137,24 @@ export const ticketsApi = createApi({
       providesTags: (_, __, { clientId }) => [{ type: "Client", id: clientId }],
     }),
     getDeviceTickets: builder.query({
-      query: ({ deviceId, limit, status }) => ({
-        params: {
-          ...(limit ? { limit } : {}),
-          ...(status ? { status } : {}),
-        },
+      query: ({ deviceId, deviceName, endDate, limit, offset, reasonTitle, sortBy, startDate, status }) => ({
+        params: buildTicketListParams({ deviceName, endDate, limit, offset, reasonTitle, sortBy, startDate, status }),
         url: `api/devices/${deviceId}/tickets`,
+      }),
+      transformResponse: normalizeTicketItems,
+      providesTags: (_, __, { deviceId }) => [{ type: "Device", id: deviceId }],
+    }),
+    getDeviceTicketsPage: builder.query({
+      query: ({ deviceId, deviceName, endDate, limit, offset = 0, reasonTitle, sortBy, startDate, status }) => ({
+        params: buildTicketListParams({ deviceName, endDate, limit, offset, reasonTitle, sortBy, startDate, status }),
+        url: `api/devices/${deviceId}/tickets`,
+      }),
+      providesTags: (_, __, { deviceId }) => [{ type: "Device", id: deviceId }],
+    }),
+    getDeviceTicketArchiveFacets: builder.query({
+      query: ({ deviceId, endDate, reasonTitle, startDate, status }) => ({
+        params: buildTicketListParams({ endDate, reasonTitle, startDate, status }),
+        url: `api/devices/${deviceId}/tickets/facets`,
       }),
       providesTags: (_, __, { deviceId }) => [{ type: "Device", id: deviceId }],
     }),
@@ -256,10 +301,14 @@ export const {
   useGetClientByIdQuery,
   useGetClientAgreementsQuery,
   useGetClientContactsQuery,
+  useGetClientTicketArchiveFacetsQuery,
   useGetCommentsQuery,
+  useGetClientTicketsPageQuery,
   useGetDeviceAgreementsQuery,
   useGetClientTicketsQuery,
   useGetDeviceByIdQuery,
+  useGetDeviceTicketArchiveFacetsQuery,
+  useGetDeviceTicketsPageQuery,
   useGetDeviceTicketsQuery,
   useGetDepartmentsQuery,
   useGetDepartmentTicketsQuery,
