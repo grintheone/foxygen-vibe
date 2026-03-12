@@ -1332,19 +1332,9 @@ func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 			LEFT JOIN departments d_exec ON d_exec.id = u_exec.department
 			WHERE t.device = $1
 			  AND ($2 = '' OR COALESCE(t.status, '') = $2)
-			  AND (
-				t.executor = $3
-				OR EXISTS (
-					SELECT 1
-					FROM users u_req
-					WHERE u_req.user_id = $3
-					  AND u_req.department IS NOT NULL
-					  AND u_req.department = t.department
-				)
-			  )
 			ORDER BY t.closed_at DESC NULLS LAST, t.workfinished_at DESC NULLS LAST, t.created_at DESC, t.number DESC
-			LIMIT $4
-		`, deviceID, status, userID, limit)
+			LIMIT $3
+		`, deviceID, status, limit)
 		if err != nil {
 			log.Printf("query device tickets failed: %v", err)
 			http.Error(w, "failed to load device tickets", http.StatusInternalServerError)
@@ -2458,7 +2448,7 @@ func (s *Server) handleTicketByID(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		s.handleTicketAttachmentDownload(w, r, ticketID, pathParts[2], userID)
+		s.handleTicketAttachmentDownload(w, r, ticketID, pathParts[2])
 		return
 	default:
 		http.NotFound(w, r)
@@ -2538,17 +2528,7 @@ func (s *Server) handleTicketByID(w http.ResponseWriter, r *http.Request) {
 		LEFT JOIN departments dpt ON dpt.id = t.department
 		LEFT JOIN contacts cp ON cp.id = t.contact_person
 		WHERE t.id = $1
-		  AND (
-			t.executor = $2
-			OR EXISTS (
-				SELECT 1
-				FROM users u_req
-				WHERE u_req.user_id = $2
-				  AND u_req.department IS NOT NULL
-				  AND u_req.department = t.department
-			)
-		  )
-	`, ticketID, userID)
+	`, ticketID)
 
 	var (
 		id                 pgtype.UUID

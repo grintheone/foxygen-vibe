@@ -176,7 +176,7 @@ func (s *Server) handleTicketAttachmentUpload(w http.ResponseWriter, r *http.Req
 	})
 }
 
-func (s *Server) handleTicketAttachmentDownload(w http.ResponseWriter, r *http.Request, ticketID pgtype.UUID, attachmentID string, userID pgtype.UUID) {
+func (s *Server) handleTicketAttachmentDownload(w http.ResponseWriter, r *http.Request, ticketID pgtype.UUID, attachmentID string) {
 	if s.db == nil {
 		http.Error(w, "database not configured", http.StatusServiceUnavailable)
 		return
@@ -202,17 +202,7 @@ func (s *Server) handleTicketAttachmentDownload(w http.ResponseWriter, r *http.R
 		WHERE a.ref_id = $1
 		  AND a.id = $2
 		  AND a.object_key <> ''
-		  AND (
-			t.executor = $3
-			OR EXISTS (
-				SELECT 1
-				FROM users u_req
-				WHERE u_req.user_id = $3
-				  AND u_req.department IS NOT NULL
-				  AND u_req.department = t.department
-			)
-		  )
-	`, ticketID, attachmentID, userID).Scan(&name, &mediaType, &objectKey)
+	`, ticketID, attachmentID).Scan(&name, &mediaType, &objectKey)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			http.Error(w, "attachment not found", http.StatusNotFound)
