@@ -281,7 +281,7 @@ function DeviceServiceSection({ agreement, isError, isLoading, onOpenClient, onO
     );
 }
 
-function DeviceLatestTicketsSection({ isError, isLoading, onOpenTicket, tickets }) {
+function DeviceLatestTicketsSection({ deviceId, isError, isLoading, onOpenArchive, onOpenTicket, tickets }) {
     return (
         <section className="space-y-4">
             <h2 className="text-2xl font-bold tracking-tight text-slate-50 sm:text-3xl">Последние выезды</h2>
@@ -319,6 +319,28 @@ function DeviceLatestTicketsSection({ isError, isLoading, onOpenTicket, tickets 
                     <p className="text-sm text-slate-300">У этого устройства пока нет закрытых выездов.</p>
                 </div>
             ) : null}
+
+            <button
+                type="button"
+                onClick={() => onOpenArchive(deviceId)}
+                className="inline-flex items-center gap-3 rounded-2xl px-2 py-1 text-lg font-semibold text-[#9B7BFF] transition hover:text-[#B49CFF]"
+            >
+                <span>Все выезды</span>
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="h-5 w-5"
+                    aria-hidden="true"
+                >
+                    <path d="M5 12h14" />
+                    <path d="m13 6 6 6-6 6" />
+                </svg>
+            </button>
         </section>
     );
 }
@@ -972,9 +994,11 @@ export function DevicePage() {
                         />
                         <DeviceOverviewSection device={device} propertyEntries={propertyEntries} />
                         <DeviceLatestTicketsSection
+                            deviceId={deviceId}
                             tickets={tickets}
                             isError={isTicketsError}
                             isLoading={isTicketsLoading || isTicketsFetching}
+                            onOpenArchive={(targetDeviceId) => navigate(routePaths.deviceArchiveById(targetDeviceId))}
                             onOpenTicket={(ticketId) => navigate(routePaths.ticketById(ticketId))}
                         />
                         <DeviceCommentsSection

@@ -7,6 +7,7 @@ export const routePaths = {
   clientContactsPattern: "/clients/:clientId/contacts",
   clientAgreementsPattern: "/clients/:clientId/agreements",
   devicePattern: "/devices/:deviceId",
+  deviceArchivePattern: "/devices/:deviceId/archive",
   ticketPattern: "/tickets/:ticketId",
   clientById(clientId) {
     return `/clients/${clientId}`;
@@ -22,6 +23,9 @@ export const routePaths = {
   },
   deviceById(deviceId) {
     return `/devices/${deviceId}`;
+  },
+  deviceArchiveById(deviceId) {
+    return `/devices/${deviceId}/archive`;
   },
   ticketById(ticketId) {
     return `/tickets/${ticketId}`;

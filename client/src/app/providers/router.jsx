@@ -5,6 +5,7 @@ import { ClientArchivePage } from "../../pages/client-archive";
 import { ClientContactsPage } from "../../pages/client-contacts";
 import { ClientPage } from "../../pages/client";
 import { DashboardPage } from "../../pages/dashboard";
+import { DeviceArchivePage } from "../../pages/device-archive";
 import { DevicePage } from "../../pages/device";
 import { ProfilePage } from "../../pages/profile";
 import { SignInPage } from "../../pages/sign-in";
@@ -25,6 +26,7 @@ export function AppRouter() {
           <Route path={routePaths.clientArchivePattern} element={<ClientArchivePage />} />
           <Route path={routePaths.clientContactsPattern} element={<ClientContactsPage />} />
           <Route path={routePaths.clientPattern} element={<ClientPage />} />
+          <Route path={routePaths.deviceArchivePattern} element={<DeviceArchivePage />} />
           <Route path={routePaths.devicePattern} element={<DevicePage />} />
           <Route path={routePaths.ticketPattern} element={<TicketPage />} />
         </Route>
