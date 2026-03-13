@@ -181,14 +181,10 @@ function DeviceOverviewSection({ device, propertyEntries }) {
         <section className="space-y-4">
             <h2 className="text-2xl font-bold tracking-tight text-slate-50 sm:text-3xl">Сведения</h2>
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-3">
                 <DeviceStatCard label="Серийный номер" value={device?.serialNumber || "Не указано"} />
                 <DeviceStatCard label="LIS" value={device?.connectedToLis ? "Подключено" : "Не подключено"} />
-                <DeviceStatCard label="Статус" value={device?.isUsed ? "В эксплуатации" : "Не используется"} />
-                <DeviceStatCard
-                    label="Договор"
-                    value={agreementMeta ? `${agreementLabel} • ${agreementMeta}` : agreementLabel}
-                />
+                <DeviceStatCard label="Б/У" value={device?.isUsed ? "Да" : "Нет"} />
             </div>
 
             <div className="rounded-3xl border border-white/10 bg-slate-950/35 p-6 shadow-xl shadow-black/20 backdrop-blur">
