@@ -47,6 +47,35 @@ type ticketArchiveFacetsResponse struct {
 	ReasonTitles []string `json:"reasonTitles"`
 }
 
+type profileTicketResponse struct {
+	ID                 string  `json:"id"`
+	Number             int32   `json:"number"`
+	Status             string  `json:"status"`
+	Description        string  `json:"description"`
+	Result             string  `json:"result"`
+	Reason             string  `json:"reason"`
+	ReasonTitle        string  `json:"reasonTitle"`
+	Urgent             bool    `json:"urgent"`
+	Executor           *string `json:"executor"`
+	ExecutorName       string  `json:"executorName"`
+	ExecutorDepartment string  `json:"executorDepartment"`
+	AssignedEnd        *string `json:"assigned_end"`
+	WorkstartedAt      *string `json:"workstarted_at"`
+	WorkfinishedAt     *string `json:"workfinished_at"`
+	ClosedAt           *string `json:"closed_at"`
+	DeviceName         string  `json:"deviceName"`
+	DeviceSerialNumber string  `json:"deviceSerialNumber"`
+	ClientName         string  `json:"clientName"`
+	ClientAddress      string  `json:"clientAddress"`
+}
+
+type profileTicketStatsResponse struct {
+	Total           int `json:"total"`
+	Closed          int `json:"closed"`
+	Overdue         int `json:"overdue"`
+	ClosedThisMonth int `json:"closedThisMonth"`
+}
+
 func parseTicketListPagination(r *http.Request) (int, int, error) {
 	limit := defaultTicketListLimit
 	if rawLimit := strings.TrimSpace(r.URL.Query().Get("limit")); rawLimit != "" {
@@ -156,6 +185,109 @@ func queryFacetValues(ctx context.Context, db *pgxpool.Pool, query string, args 
 	}
 
 	return values, nil
+}
+
+func scanProfileTicketRows(rows pgx.Rows) ([]profileTicketResponse, error) {
+	tickets := make([]profileTicketResponse, 0)
+
+	for rows.Next() {
+		var (
+			id             pgtype.UUID
+			number         pgtype.Int4
+			ticketStatus   string
+			description    string
+			result         string
+			reason         string
+			reasonTitle    string
+			urgent         bool
+			executor       pgtype.UUID
+			executorName   string
+			executorDept   string
+			assignedEnd    pgtype.Timestamp
+			workstartedAt  pgtype.Timestamp
+			workfinishedAt pgtype.Timestamp
+			closedAt       pgtype.Timestamp
+			deviceName     string
+			deviceSerial   string
+			clientName     string
+			clientAddress  string
+		)
+
+		if err := rows.Scan(
+			&id,
+			&number,
+			&ticketStatus,
+			&description,
+			&result,
+			&reason,
+			&reasonTitle,
+			&urgent,
+			&executor,
+			&executorName,
+			&executorDept,
+			&assignedEnd,
+			&workstartedAt,
+			&workfinishedAt,
+			&closedAt,
+			&deviceName,
+			&deviceSerial,
+			&clientName,
+			&clientAddress,
+		); err != nil {
+			return nil, err
+		}
+
+		tickets = append(tickets, profileTicketResponse{
+			ID:                 uuidToString(id),
+			Number:             number.Int32,
+			Status:             ticketStatus,
+			Description:        description,
+			Result:             result,
+			Reason:             reason,
+			ReasonTitle:        reasonTitle,
+			Urgent:             urgent,
+			Executor:           nullableUUIDToString(executor),
+			ExecutorName:       executorName,
+			ExecutorDepartment: executorDept,
+			AssignedEnd:        timestampToRFC3339(assignedEnd),
+			WorkstartedAt:      timestampToRFC3339(workstartedAt),
+			WorkfinishedAt:     timestampToRFC3339(workfinishedAt),
+			ClosedAt:           timestampToRFC3339(closedAt),
+			DeviceName:         deviceName,
+			DeviceSerialNumber: deviceSerial,
+			ClientName:         clientName,
+			ClientAddress:      clientAddress,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return tickets, nil
+}
+
+func (s *Server) canAccessProfile(ctx context.Context, requesterID pgtype.UUID, targetID pgtype.UUID) (bool, error) {
+	if requesterID == targetID {
+		return true, nil
+	}
+
+	var allowed bool
+	err := s.db.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM users requester
+			JOIN users target ON target.user_id = $2
+			WHERE requester.user_id = $1
+			  AND requester.department IS NOT NULL
+			  AND requester.department = target.department
+		)
+	`, requesterID, targetID).Scan(&allowed)
+	if err != nil {
+		return false, err
+	}
+
+	return allowed, nil
 }
 
 type sqlExecutor interface {
@@ -560,12 +692,18 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 	type profileResponse struct {
-		UserID     string `json:"user_id"`
-		Username   string `json:"username"`
-		Name       string `json:"name"`
-		Email      string `json:"email"`
-		Department string `json:"department"`
-		Role       string `json:"role"`
+		UserID             string                     `json:"user_id"`
+		Username           string                     `json:"username"`
+		Name               string                     `json:"name"`
+		Email              string                     `json:"email"`
+		Phone              string                     `json:"phone"`
+		Logo               string                     `json:"logo"`
+		Department         string                     `json:"department"`
+		Role               string                     `json:"role"`
+		LatestTicket       *string                    `json:"latestTicket,omitempty"`
+		LatestTicketStatus string                     `json:"latestTicketStatus"`
+		TicketStats        profileTicketStatsResponse `json:"ticketStats"`
+		ActiveTickets      []profileTicketResponse    `json:"activeTickets"`
 	}
 
 	if r.Method != http.MethodGet {
@@ -591,46 +729,292 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	targetID := requesterID
+	subresource := ""
 	if r.URL.Path != "/api/profile" {
-		targetValue := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/profile/"), "/")
-		if targetValue == "" {
+		profilePath := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/profile/"), "/")
+		if profilePath == "" {
 			http.NotFound(w, r)
 			return
 		}
-		if err := targetID.Scan(targetValue); err != nil {
+
+		pathParts := strings.Split(profilePath, "/")
+		if err := targetID.Scan(pathParts[0]); err != nil {
 			http.Error(w, "invalid user id", http.StatusBadRequest)
 			return
 		}
+
+		switch {
+		case len(pathParts) == 1:
+		case len(pathParts) == 2 && pathParts[1] == "tickets":
+			subresource = "tickets"
+		case len(pathParts) == 3 && pathParts[1] == "tickets" && pathParts[2] == "facets":
+			subresource = "tickets-facets"
+		default:
+			http.NotFound(w, r)
+			return
+		}
+	}
+
+	if s.db == nil {
+		if subresource != "" {
+			http.Error(w, "database not configured", http.StatusServiceUnavailable)
+			return
+		}
+		if s.queries == nil {
+			http.Error(w, "database not configured", http.StatusServiceUnavailable)
+			return
+		}
+		if requesterID != targetID {
+			http.Error(w, "profile not found", http.StatusNotFound)
+			return
+		}
+
+		profile, err := s.queries.GetUserProfileByUserID(r.Context(), targetID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				http.Error(w, "profile not found", http.StatusNotFound)
+				return
+			}
+
+			log.Printf("load user profile failed: %v", err)
+			http.Error(w, "failed to load profile", http.StatusInternalServerError)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, profileResponse{
+			UserID:             uuidToString(profile.UserID),
+			Username:           profile.Username,
+			Name:               profile.Name,
+			Email:              profile.Email,
+			Phone:              "",
+			Logo:               "",
+			Department:         profile.Department,
+			Role:               profile.Role,
+			LatestTicket:       nil,
+			LatestTicketStatus: "",
+			TicketStats:        profileTicketStatsResponse{},
+			ActiveTickets:      []profileTicketResponse{},
+		})
+		return
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
 
-	if requesterID != targetID {
-		var allowed bool
-		if err := s.db.QueryRow(ctx, `
-			SELECT EXISTS (
-				SELECT 1
-				FROM users requester
-				JOIN users target ON target.user_id = $2
-				WHERE requester.user_id = $1
-				  AND requester.department IS NOT NULL
-				  AND requester.department = target.department
-			)
-		`, requesterID, targetID).Scan(&allowed); err != nil {
-			log.Printf("check profile access failed: %v", err)
-			http.Error(w, "failed to load profile", http.StatusInternalServerError)
-			return
-		}
-
-		if !allowed {
-			http.Error(w, "profile not found", http.StatusNotFound)
-			return
-		}
+	allowed, err := s.canAccessProfile(ctx, requesterID, targetID)
+	if err != nil {
+		log.Printf("check profile access failed: %v", err)
+		http.Error(w, "failed to load profile", http.StatusInternalServerError)
+		return
 	}
 
-	profile, err := s.queries.GetUserProfileByUserID(ctx, targetID)
-	if err != nil {
+	if !allowed {
+		http.Error(w, "profile not found", http.StatusNotFound)
+		return
+	}
+
+	switch subresource {
+	case "tickets-facets":
+		filters, err := parseTicketListFilters(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		reasonTitles, err := queryFacetValues(ctx, s.db, `
+			SELECT DISTINCT COALESCE(NULLIF(tr.title, ''), 'Не указано') AS reason_title
+			FROM tickets t
+			LEFT JOIN devices d ON d.id = t.device
+			LEFT JOIN classificators cls ON cls.id = d.classificator
+			LEFT JOIN ticket_reasons tr ON tr.id = t.reason
+			WHERE t.executor = $1
+			  AND ($2 = '' OR COALESCE(t.status, '') = $2)
+			  AND ($3 = '' OR COALESCE(cls.title, '') = $3)
+			  AND ($4::timestamp IS NULL OR COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) >= $4::timestamp)
+			  AND ($5::timestamp IS NULL OR COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) < $5::timestamp)
+			ORDER BY reason_title ASC
+		`, targetID, filters.Status, filters.DeviceName, filters.StartDate, filters.EndDate)
+		if err != nil {
+			log.Printf("query profile ticket reason facets failed: %v", err)
+			http.Error(w, "failed to load profile ticket facets", http.StatusInternalServerError)
+			return
+		}
+
+		deviceNames, err := queryFacetValues(ctx, s.db, `
+			SELECT DISTINCT COALESCE(cls.title, '') AS device_name
+			FROM tickets t
+			LEFT JOIN devices d ON d.id = t.device
+			LEFT JOIN classificators cls ON cls.id = d.classificator
+			LEFT JOIN ticket_reasons tr ON tr.id = t.reason
+			WHERE t.executor = $1
+			  AND ($2 = '' OR COALESCE(t.status, '') = $2)
+			  AND ($3 = '' OR COALESCE(NULLIF(tr.title, ''), 'Не указано') = $3)
+			  AND ($4::timestamp IS NULL OR COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) >= $4::timestamp)
+			  AND ($5::timestamp IS NULL OR COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) < $5::timestamp)
+			ORDER BY device_name ASC
+		`, targetID, filters.Status, filters.ReasonTitle, filters.StartDate, filters.EndDate)
+		if err != nil {
+			log.Printf("query profile ticket device facets failed: %v", err)
+			http.Error(w, "failed to load profile ticket facets", http.StatusInternalServerError)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, ticketArchiveFacetsResponse{
+			DeviceNames:  deviceNames,
+			ReasonTitles: reasonTitles,
+		})
+		return
+	case "tickets":
+		filters, err := parseTicketListFilters(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		limit, offset, err := parseTicketListPagination(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		var total int
+		if err := s.db.QueryRow(ctx, `
+			SELECT COUNT(*)
+			FROM tickets t
+			LEFT JOIN devices d ON d.id = t.device
+			LEFT JOIN classificators cls ON cls.id = d.classificator
+			LEFT JOIN ticket_reasons tr ON tr.id = t.reason
+			WHERE t.executor = $1
+			  AND ($2 = '' OR COALESCE(t.status, '') = $2)
+			  AND ($3 = '' OR COALESCE(NULLIF(tr.title, ''), 'Не указано') = $3)
+			  AND ($4 = '' OR COALESCE(cls.title, '') = $4)
+			  AND ($5::timestamp IS NULL OR COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) >= $5::timestamp)
+			  AND ($6::timestamp IS NULL OR COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) < $6::timestamp)
+		`, targetID, filters.Status, filters.ReasonTitle, filters.DeviceName, filters.StartDate, filters.EndDate).Scan(&total); err != nil {
+			log.Printf("count profile tickets failed: %v", err)
+			http.Error(w, "failed to load profile tickets", http.StatusInternalServerError)
+			return
+		}
+
+		rows, err := s.db.Query(ctx, `
+			SELECT
+				t.id,
+				t.number,
+				COALESCE(t.status, ''),
+				t.description,
+				COALESCE(t.result, ''),
+				COALESCE(
+					NULLIF(
+						CASE
+							WHEN t.status = 'assigned' THEN tr.future
+							WHEN t.status = 'worksDone' THEN tr.past
+							ELSE tr.present
+						END,
+						''
+					),
+					NULLIF(tr.title, ''),
+					'Не указано'
+				) AS resolved_reason,
+				COALESCE(NULLIF(tr.title, ''), 'Не указано') AS reason_title,
+				t.urgent,
+				t.executor,
+				TRIM(CONCAT(COALESCE(u_exec.first_name, ''), ' ', COALESCE(u_exec.last_name, ''))),
+				COALESCE(d_exec.title, ''),
+				t.assigned_end,
+				t.workstarted_at,
+				t.workfinished_at,
+				t.closed_at,
+				COALESCE(cls.title, ''),
+				COALESCE(d.serial_number, ''),
+				COALESCE(c.title, ''),
+				COALESCE(c.address, '')
+			FROM tickets t
+			LEFT JOIN clients c ON c.id = t.client
+			LEFT JOIN devices d ON d.id = t.device
+			LEFT JOIN classificators cls ON cls.id = d.classificator
+			LEFT JOIN ticket_reasons tr ON tr.id = t.reason
+			LEFT JOIN users u_exec ON u_exec.user_id = t.executor
+			LEFT JOIN departments d_exec ON d_exec.id = u_exec.department
+			WHERE t.executor = $1
+			  AND ($2 = '' OR COALESCE(t.status, '') = $2)
+			  AND ($3 = '' OR COALESCE(NULLIF(tr.title, ''), 'Не указано') = $3)
+			  AND ($4 = '' OR COALESCE(cls.title, '') = $4)
+			  AND ($5::timestamp IS NULL OR COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) >= $5::timestamp)
+			  AND ($6::timestamp IS NULL OR COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) < $6::timestamp)
+			ORDER BY
+			  CASE WHEN $7 = 'oldest' THEN COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) END ASC NULLS FIRST,
+			  CASE WHEN $7 <> 'oldest' THEN COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) END DESC NULLS LAST,
+			  CASE WHEN $7 = 'oldest' THEN t.number END ASC,
+			  CASE WHEN $7 <> 'oldest' THEN t.number END DESC,
+			  t.id ASC
+			LIMIT $8
+			OFFSET $9
+		`, targetID, filters.Status, filters.ReasonTitle, filters.DeviceName, filters.StartDate, filters.EndDate, filters.SortBy, limit, offset)
+		if err != nil {
+			log.Printf("query profile tickets failed: %v", err)
+			http.Error(w, "failed to load profile tickets", http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		tickets, err := scanProfileTicketRows(rows)
+		if err != nil {
+			log.Printf("scan profile ticket failed: %v", err)
+			http.Error(w, "failed to load profile tickets", http.StatusInternalServerError)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, newPaginatedResponse(tickets, limit, offset, total))
+		return
+	}
+
+	row := s.db.QueryRow(ctx, `
+		SELECT
+			a.user_id,
+			a.username,
+			TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))) AS name,
+			COALESCE(u.email, ''),
+			COALESCE(u.phone, ''),
+			COALESCE(u.logo, ''),
+			COALESCE(d.title, ''),
+			COALESCE(r.name, 'user'),
+			u.latest_ticket,
+			COALESCE(lt.status, '')
+		FROM accounts AS a
+		JOIN users AS u ON u.user_id = a.user_id
+		LEFT JOIN departments AS d ON d.id = u.department
+		LEFT JOIN account_roles AS ar ON ar.user_id = a.user_id
+		LEFT JOIN roles AS r ON r.id = ar.role_id
+		LEFT JOIN tickets AS lt ON lt.id = u.latest_ticket
+		WHERE a.user_id = $1
+		LIMIT 1
+	`, targetID)
+
+	var (
+		profileUserID      pgtype.UUID
+		username           string
+		name               string
+		email              string
+		phone              string
+		logo               string
+		department         string
+		role               string
+		latestTicket       pgtype.UUID
+		latestTicketStatus string
+	)
+
+	if err := row.Scan(
+		&profileUserID,
+		&username,
+		&name,
+		&email,
+		&phone,
+		&logo,
+		&department,
+		&role,
+		&latestTicket,
+		&latestTicketStatus,
+	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			http.Error(w, "profile not found", http.StatusNotFound)
 			return
@@ -641,13 +1025,104 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	stats := profileTicketStatsResponse{}
+	if err := s.db.QueryRow(ctx, `
+		SELECT
+			COUNT(*) AS total_count,
+			COUNT(*) FILTER (WHERE COALESCE(status, '') = 'closed') AS closed_count,
+			COUNT(*) FILTER (
+				WHERE COALESCE(status, '') NOT IN ('closed', 'canceled', 'cancelled')
+				  AND assigned_end IS NOT NULL
+				  AND assigned_end::date <= (NOW() AT TIME ZONE 'UTC')::date
+			) AS overdue_count,
+			COUNT(*) FILTER (
+				WHERE COALESCE(status, '') = 'closed'
+				  AND closed_at >= date_trunc('month', NOW() AT TIME ZONE 'UTC')
+				  AND closed_at < date_trunc('month', NOW() AT TIME ZONE 'UTC') + INTERVAL '1 month'
+			) AS closed_this_month_count
+		FROM tickets
+		WHERE executor = $1
+	`, targetID).Scan(&stats.Total, &stats.Closed, &stats.Overdue, &stats.ClosedThisMonth); err != nil {
+		log.Printf("load profile ticket stats failed: %v", err)
+		http.Error(w, "failed to load profile", http.StatusInternalServerError)
+		return
+	}
+
+	activeRows, err := s.db.Query(ctx, `
+		SELECT
+			t.id,
+			t.number,
+			COALESCE(t.status, ''),
+			t.description,
+			COALESCE(t.result, ''),
+			COALESCE(
+				NULLIF(
+					CASE
+						WHEN t.status = 'assigned' THEN tr.future
+						WHEN t.status = 'worksDone' THEN tr.past
+						ELSE tr.present
+					END,
+					''
+				),
+				NULLIF(tr.title, ''),
+				'Не указано'
+			) AS resolved_reason,
+			COALESCE(NULLIF(tr.title, ''), 'Не указано') AS reason_title,
+			t.urgent,
+			t.executor,
+			TRIM(CONCAT(COALESCE(u_exec.first_name, ''), ' ', COALESCE(u_exec.last_name, ''))),
+			COALESCE(d_exec.title, ''),
+			t.assigned_end,
+			t.workstarted_at,
+			t.workfinished_at,
+			t.closed_at,
+			COALESCE(cls.title, ''),
+			COALESCE(d.serial_number, ''),
+			COALESCE(c.title, ''),
+			COALESCE(c.address, '')
+		FROM tickets t
+		LEFT JOIN clients c ON c.id = t.client
+		LEFT JOIN devices d ON d.id = t.device
+		LEFT JOIN classificators cls ON cls.id = d.classificator
+		LEFT JOIN ticket_reasons tr ON tr.id = t.reason
+		LEFT JOIN users u_exec ON u_exec.user_id = t.executor
+		LEFT JOIN departments d_exec ON d_exec.id = u_exec.department
+		WHERE t.executor = $1
+		  AND COALESCE(t.status, '') NOT IN ('closed', 'canceled', 'cancelled')
+		ORDER BY
+		  CASE WHEN t.assigned_end IS NULL THEN 1 ELSE 0 END ASC,
+		  t.assigned_end ASC NULLS LAST,
+		  t.created_at DESC,
+		  t.number DESC
+		LIMIT 2
+	`, targetID)
+	if err != nil {
+		log.Printf("query profile active tickets failed: %v", err)
+		http.Error(w, "failed to load profile", http.StatusInternalServerError)
+		return
+	}
+	defer activeRows.Close()
+
+	activeTickets, err := scanProfileTicketRows(activeRows)
+	if err != nil {
+		log.Printf("scan profile active ticket failed: %v", err)
+		http.Error(w, "failed to load profile", http.StatusInternalServerError)
+		return
+	}
+
 	writeJSON(w, http.StatusOK, profileResponse{
-		UserID:     uuidToString(profile.UserID),
-		Username:   profile.Username,
-		Name:       profile.Name,
-		Email:      profile.Email,
-		Department: profile.Department,
-		Role:       profile.Role,
+		UserID:             uuidToString(profileUserID),
+		Username:           username,
+		Name:               name,
+		Email:              email,
+		Phone:              phone,
+		Logo:               logo,
+		Department:         department,
+		Role:               role,
+		LatestTicket:       nullableUUIDToString(latestTicket),
+		LatestTicketStatus: latestTicketStatus,
+		TicketStats:        stats,
+		ActiveTickets:      activeTickets,
 	})
 }
 

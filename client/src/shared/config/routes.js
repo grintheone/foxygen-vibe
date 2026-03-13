@@ -2,6 +2,7 @@ export const routePaths = {
   dashboard: "/dashboard",
   profile: "/profile",
   memberProfilePattern: "/profile/:userId",
+  profileArchivePattern: "/profile/:userId/archive",
   signIn: "/",
   clientPattern: "/clients/:clientId",
   clientArchivePattern: "/clients/:clientId/archive",
@@ -33,5 +34,8 @@ export const routePaths = {
   },
   profileById(userId) {
     return `/profile/${userId}`;
+  },
+  profileArchiveById(userId) {
+    return `/profile/${userId}/archive`;
   },
 };

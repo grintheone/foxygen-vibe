@@ -7,8 +7,12 @@ import {
     useGetDeviceByIdQuery,
     useGetDeviceTicketArchiveFacetsQuery,
     useGetDeviceTicketsPageQuery,
+    useGetProfileByIdQuery,
+    useGetProfileTicketArchiveFacetsQuery,
+    useGetProfileTicketsPageQuery,
 } from "../../../shared/api/tickets-api";
 import { routePaths } from "../../../shared/config/routes";
+import { ProfileTicketCard } from "../../../shared/ui/profile-ticket-card";
 import { PageShell } from "../../../shared/ui/page-shell";
 import { SelectField } from "../../../shared/ui/select-field";
 import { SlideOverSheet } from "../../../shared/ui/slide-over-sheet";
@@ -36,6 +40,16 @@ const archiveConfigByEntity = {
         loadingTicketsMessage: "Загрузка архива выездов...",
         ticketsHeading: "Все выезды устройства",
         ticketsErrorMessage: "Не удалось загрузить архив выездов устройства.",
+    },
+    profile: {
+        emptyAllMessage: "У этого сотрудника пока нет выездов.",
+        emptyClosedMessage: "У этого сотрудника пока нет закрытых выездов.",
+        emptyInWorkMessage: "У этого сотрудника сейчас нет выездов в работе.",
+        entityFallbackTitle: "Сотрудник",
+        loadingEntityMessage: "Загрузка профиля сотрудника...",
+        loadingTicketsMessage: "Загрузка архива выездов...",
+        ticketsHeading: "Все выезды сотрудника",
+        ticketsErrorMessage: "Не удалось загрузить архив выездов сотрудника.",
     },
 };
 
@@ -525,6 +539,7 @@ function ArchiveFilterSheet({
 function ArchiveTicketsSection({
     activeTab,
     emptyMessage,
+    entityType,
     groupedTickets,
     groupingLabel,
     isError,
@@ -604,17 +619,21 @@ function ArchiveTicketsSection({
                             </div>
 
                             <div className="grid gap-3">
-                                {group.items.map((ticket) => (
-                                    <TicketCardWithExecutor
-                                        key={ticket.id}
-                                        ticket={ticket}
-                                        executor={{
-                                            department: ticket.executorDepartment,
-                                            name: ticket.executorName,
-                                        }}
-                                        onOpenTicket={onOpenTicket}
-                                    />
-                                ))}
+                                {group.items.map((ticket) =>
+                                    entityType === "profile" ? (
+                                        <ProfileTicketCard key={ticket.id} ticket={ticket} onOpenTicket={onOpenTicket} />
+                                    ) : (
+                                        <TicketCardWithExecutor
+                                            key={ticket.id}
+                                            ticket={ticket}
+                                            executor={{
+                                                department: ticket.executorDepartment,
+                                                name: ticket.executorName,
+                                            }}
+                                            onOpenTicket={onOpenTicket}
+                                        />
+                                    ),
+                                )}
                             </div>
                         </section>
                     ))}
@@ -664,7 +683,7 @@ function ArchiveTicketsSection({
 
 export function TicketArchivePage({ entityType }) {
     const navigate = useNavigate();
-    const { clientId, deviceId } = useParams();
+    const { clientId, deviceId, userId } = useParams();
     const [activeTab, setActiveTab] = useState("closed");
     const [activeGrouping, setActiveGrouping] = useState("months");
     const [activeDeviceName, setActiveDeviceName] = useState("");
@@ -688,7 +707,8 @@ export function TicketArchivePage({ entityType }) {
     const [page, setPage] = useState(1);
     const config = archiveConfigByEntity[entityType] || archiveConfigByEntity.client;
     const isClientArchive = entityType === "client";
-    const entityId = isClientArchive ? clientId : deviceId;
+    const isProfileArchive = entityType === "profile";
+    const entityId = isClientArchive ? clientId : isProfileArchive ? userId : deviceId;
     const archiveOffset = (page - 1) * ARCHIVE_PAGE_SIZE;
     const activeStatus = resolveStatusFilter(activeTab);
     const activeStartDate = activePeriod.useEntirePeriod ? "" : activePeriod.startDate;
@@ -710,7 +730,15 @@ export function TicketArchivePage({ entityType }) {
         isFetching: isDeviceFetching,
         isLoading: isDeviceLoading,
     } = useGetDeviceByIdQuery(entityId, {
-        skip: !entityId || isClientArchive,
+        skip: !entityId || isClientArchive || isProfileArchive,
+    });
+    const {
+        data: profile,
+        isError: isProfileError,
+        isFetching: isProfileFetching,
+        isLoading: isProfileLoading,
+    } = useGetProfileByIdQuery(entityId, {
+        skip: !entityId || !isProfileArchive,
     });
     const {
         data: clientTicketsPage,
@@ -751,7 +779,28 @@ export function TicketArchivePage({ entityType }) {
             status: activeStatus,
         },
         {
-            skip: !entityId || isClientArchive,
+            skip: !entityId || isClientArchive || isProfileArchive,
+        },
+    );
+    const {
+        data: profileTicketsPage,
+        isError: isProfileTicketsError,
+        isFetching: isProfileTicketsFetching,
+        isLoading: isProfileTicketsLoading,
+    } = useGetProfileTicketsPageQuery(
+        {
+            deviceName: activeDeviceName,
+            endDate: activeEndDate,
+            limit: ARCHIVE_PAGE_SIZE,
+            offset: archiveOffset,
+            reasonTitle: activeReasonTitle,
+            sortBy: activeSortBy,
+            startDate: activeStartDate,
+            status: activeStatus,
+            userId: entityId,
+        },
+        {
+            skip: !entityId || !isProfileArchive,
         },
     );
     const {
@@ -780,20 +829,49 @@ export function TicketArchivePage({ entityType }) {
             status: activeStatus,
         },
         {
-            skip: !entityId || isClientArchive,
+            skip: !entityId || isClientArchive || isProfileArchive,
+        },
+    );
+    const {
+        data: profileArchiveFacets,
+    } = useGetProfileTicketArchiveFacetsQuery(
+        {
+            deviceName: filterDraft.deviceName,
+            endDate: draftEndDate,
+            reasonTitle: filterDraft.reasonTitle,
+            startDate: draftStartDate,
+            status: activeStatus,
+            userId: entityId,
+        },
+        {
+            skip: !entityId || !isProfileArchive,
         },
     );
 
-    const entity = isClientArchive ? client : device;
-    const ticketsPage = isClientArchive ? clientTicketsPage : deviceTicketsPage;
-    const archiveFacets = isClientArchive ? clientArchiveFacets : deviceArchiveFacets;
+    const entity = isClientArchive ? client : isProfileArchive ? profile : device;
+    const ticketsPage = isClientArchive ? clientTicketsPage : isProfileArchive ? profileTicketsPage : deviceTicketsPage;
+    const archiveFacets = isClientArchive
+        ? clientArchiveFacets
+        : isProfileArchive
+          ? profileArchiveFacets
+          : deviceArchiveFacets;
     const tickets = ticketsPage?.items || [];
-    const isEntityError = isClientArchive ? isClientError : isDeviceError;
-    const isEntityLoading = isClientArchive ? isClientLoading || isClientFetching : isDeviceLoading || isDeviceFetching;
-    const isTicketsError = isClientArchive ? isClientTicketsError : isDeviceTicketsError;
+    const isEntityError = isClientArchive ? isClientError : isProfileArchive ? isProfileError : isDeviceError;
+    const isEntityLoading = isClientArchive
+        ? isClientLoading || isClientFetching
+        : isProfileArchive
+          ? isProfileLoading || isProfileFetching
+          : isDeviceLoading || isDeviceFetching;
+    const isTicketsError = isClientArchive
+        ? isClientTicketsError
+        : isProfileArchive
+          ? isProfileTicketsError
+          : isDeviceTicketsError;
     const isTicketsLoading = isClientArchive
         ? isClientTicketsLoading || isClientTicketsFetching
-        : isDeviceTicketsLoading || isDeviceTicketsFetching;
+        : isProfileArchive
+          ? isProfileTicketsLoading || isProfileTicketsFetching
+          : isDeviceTicketsLoading || isDeviceTicketsFetching;
     const pagination = {
         hasNext: ticketsPage?.hasNext || false,
         hasPrev: ticketsPage?.hasPrev || false,
@@ -804,12 +882,16 @@ export function TicketArchivePage({ entityType }) {
     };
     const entityTitle = isClientArchive
         ? entity?.title?.trim() || config.entityFallbackTitle
-        : entity?.title?.trim() || config.entityFallbackTitle;
+        : isProfileArchive
+          ? entity?.name?.trim() || entity?.username?.trim() || config.entityFallbackTitle
+          : entity?.title?.trim() || config.entityFallbackTitle;
     const entityMeta = isClientArchive
         ? entity?.address?.trim() || "Адрес не указан"
-        : entity?.serialNumber?.trim()
-          ? `С/Н: ${entity.serialNumber.trim()}`
-          : "Серийный номер не указан";
+        : isProfileArchive
+          ? entity?.department?.trim() || "Отдел не указан"
+          : entity?.serialNumber?.trim()
+            ? `С/Н: ${entity.serialNumber.trim()}`
+            : "Серийный номер не указан";
     const reasonOptions = includeSelectedOption(archiveFacets?.reasonTitles || [], filterDraft.reasonTitle);
     const deviceOptions = includeSelectedOption(archiveFacets?.deviceNames || [], filterDraft.deviceName);
     const groupedTickets = groupTickets(tickets, activeGrouping);
@@ -839,7 +921,13 @@ export function TicketArchivePage({ entityType }) {
             return;
         }
 
-        navigate(isClientArchive ? routePaths.clientById(entityId) : routePaths.deviceById(entityId));
+        navigate(
+            isClientArchive
+                ? routePaths.clientById(entityId)
+                : isProfileArchive
+                  ? routePaths.profileById(entityId)
+                  : routePaths.deviceById(entityId),
+        );
     }
 
     function handleDraftChange(key, value) {
@@ -899,6 +987,7 @@ export function TicketArchivePage({ entityType }) {
                     <ArchiveTicketsSection
                         activeTab={activeTab}
                         emptyMessage={resolveEmptyMessage(config, activeTab)}
+                        entityType={entityType}
                         groupedTickets={groupedTickets}
                         groupingLabel={resolveGroupingLabel(activeGrouping)}
                         isError={isTicketsError}

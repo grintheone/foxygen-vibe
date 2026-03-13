@@ -8,6 +8,7 @@ import { DashboardPage } from "../../pages/dashboard";
 import { DeviceArchivePage } from "../../pages/device-archive";
 import { DevicePage } from "../../pages/device";
 import { ProfilePage } from "../../pages/profile";
+import { ProfileArchivePage } from "../../pages/profile-archive";
 import { SignInPage } from "../../pages/sign-in";
 import { TicketPage } from "../../pages/ticket";
 import { routePaths } from "../../shared/config/routes";
@@ -22,6 +23,7 @@ export function AppRouter() {
         <Route element={<ProtectedRoute />}>
           <Route path={routePaths.dashboard} element={<DashboardPage />} />
           <Route path={routePaths.profile} element={<ProfilePage />} />
+          <Route path={routePaths.profileArchivePattern} element={<ProfileArchivePage />} />
           <Route path={routePaths.memberProfilePattern} element={<ProfilePage />} />
           <Route path={routePaths.clientAgreementsPattern} element={<ClientAgreementsPage />} />
           <Route path={routePaths.clientArchivePattern} element={<ClientArchivePage />} />

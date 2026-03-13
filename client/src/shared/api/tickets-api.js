@@ -96,10 +96,18 @@ function applyTicketPatchToDraft(draft, patch, response) {
 }
 
 export const ticketsApi = createApi({
-  tagTypes: ["Client", "Comment", "Department", "DepartmentMember", "Device", "Ticket", "TicketReason", "Tickets"],
+  tagTypes: ["Client", "Comment", "Department", "DepartmentMember", "Device", "Profile", "Ticket", "TicketReason", "Tickets"],
   reducerPath: "ticketsApi",
   baseQuery: baseQueryWithAuth,
   endpoints: (builder) => ({
+    getMyProfile: builder.query({
+      query: () => "api/profile",
+      providesTags: ["Profile"],
+    }),
+    getProfileById: builder.query({
+      query: (userId) => `api/profile/${userId}`,
+      providesTags: (_, __, userId) => [{ type: "Profile", id: userId }],
+    }),
     getDepartments: builder.query({
       query: () => "api/departments",
       providesTags: ["Department"],
@@ -191,6 +199,20 @@ export const ticketsApi = createApi({
       }),
       providesTags: (_, __, { deviceId }) => [{ type: "Device", id: deviceId }],
     }),
+    getProfileTicketsPage: builder.query({
+      query: ({ deviceName, endDate, limit, offset = 0, reasonTitle, sortBy, startDate, status, userId }) => ({
+        params: buildTicketListParams({ deviceName, endDate, limit, offset, reasonTitle, sortBy, startDate, status }),
+        url: `api/profile/${userId}/tickets`,
+      }),
+      providesTags: (_, __, { userId }) => [{ type: "Profile", id: userId }],
+    }),
+    getProfileTicketArchiveFacets: builder.query({
+      query: ({ deviceName, endDate, reasonTitle, startDate, status, userId }) => ({
+        params: buildTicketListParams({ deviceName, endDate, reasonTitle, startDate, status }),
+        url: `api/profile/${userId}/tickets/facets`,
+      }),
+      providesTags: (_, __, { userId }) => [{ type: "Profile", id: userId }],
+    }),
     getDeviceAgreements: builder.query({
       query: ({ active = true, deviceId }) => ({
         params: {
@@ -222,6 +244,7 @@ export const ticketsApi = createApi({
         url: "api/tickets",
       }),
       invalidatesTags: (_, __, { client, device }) => [
+        "Profile",
         "Tickets",
         "DepartmentMember",
         ...(client ? [{ type: "Client", id: client }] : []),
@@ -257,6 +280,7 @@ export const ticketsApi = createApi({
         }
       },
       invalidatesTags: (_, __, { ticketId }) => [
+        "Profile",
         "DepartmentMember",
         "Tickets",
         { type: "Ticket", id: ticketId },
@@ -348,7 +372,11 @@ export const {
   useGetDepartmentsQuery,
   useGetDepartmentTicketsQuery,
   useGetDepartmentMembersQuery,
+  useGetMyProfileQuery,
   useGetMyTicketsQuery,
+  useGetProfileByIdQuery,
+  useGetProfileTicketArchiveFacetsQuery,
+  useGetProfileTicketsPageQuery,
   useGetTicketByIdQuery,
   useGetTicketReasonsQuery,
   useCreateTicketMutation,
