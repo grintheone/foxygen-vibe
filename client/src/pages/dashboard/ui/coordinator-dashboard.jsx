@@ -65,19 +65,26 @@ function MemberCard({ member, totalTickets }) {
     const isInWork = status === "inWork";
     const isDone = status === "worksDone";
     const toneClass = isInWork
-        ? "border-emerald-300/35 bg-emerald-500/20"
+        ? "border-emerald-300/25 bg-emerald-500/10"
         : isDone
-          ? "border-fuchsia-300/35 bg-fuchsia-500/20"
-          : "border-cyan-300/35 bg-cyan-500/15";
-    const pulseClass = isInWork ? "bg-[#6A3BF2]/45" : "bg-emerald-400/45";
+          ? "border-fuchsia-300/25 bg-fuchsia-500/10"
+          : "border-cyan-300/25 bg-cyan-500/10";
+    const pulseClass = isInWork ? "bg-[#6A3BF2]/45" : "bg-emerald-400/35";
     const cardClass = isInWork
-        ? "border-emerald-200/30 bg-emerald-50/95"
+        ? "border-emerald-300/20 bg-slate-950/35"
         : isDone
-          ? "border-fuchsia-200/35 bg-fuchsia-50/95"
-          : "border-cyan-200/35 bg-cyan-50/95";
+          ? "border-fuchsia-300/20 bg-slate-950/35"
+          : "border-white/10 bg-slate-950/35";
+    const statusTextClass = isInWork
+        ? "text-emerald-200"
+        : isDone
+          ? "text-fuchsia-200"
+          : "text-cyan-200";
 
     return (
-        <article className={`h-[19rem] w-[14rem] shrink-0 overflow-hidden rounded-[1.65rem] border p-3 text-slate-950 shadow-lg shadow-slate-950/10 ${cardClass}`}>
+        <article
+            className={`h-[19rem] w-[14rem] shrink-0 overflow-hidden rounded-[1.65rem] border p-3 text-slate-100 shadow-xl shadow-black/20 backdrop-blur ${cardClass}`}
+        >
             <div className={`flex justify-center rounded-[1.3rem] border p-3 ${toneClass}`}>
                 <div className="relative h-36 w-36">
                     {isInWork || isDone ? (
@@ -86,16 +93,16 @@ function MemberCard({ member, totalTickets }) {
                             className={`absolute -inset-2 animate-ping rounded-full ${pulseClass}`}
                         />
                     ) : null}
-                    <span className="absolute inset-0 rounded-full bg-white/65" aria-hidden="true" />
+                    <span className="absolute inset-0 rounded-full bg-white/5" aria-hidden="true" />
 
                     {member.avatarUrl ? (
                         <img
                             src={member.avatarUrl}
                             alt={member.name}
-                            className="relative h-full w-full rounded-full object-cover"
+                            className="relative h-full w-full rounded-full border border-white/10 object-cover"
                         />
                     ) : (
-                        <div className="relative flex h-full w-full items-center justify-center rounded-full bg-slate-100 text-slate-500">
+                        <div className="relative flex h-full w-full items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-400">
                             <PersonIcon className="h-10 w-10" />
                         </div>
                     )}
@@ -104,15 +111,15 @@ function MemberCard({ member, totalTickets }) {
                 </div>
             </div>
 
-            <p className="mt-3 text-[1.75rem] leading-7 font-semibold tracking-tight">{member.name}</p>
+            <p className="mt-3 text-[1.75rem] leading-7 font-semibold tracking-tight text-white">{member.name}</p>
 
             <div className="mt-2 min-h-[1.8rem] text-sm font-semibold">
                 {isInWork ? (
-                    <p className="text-emerald-700">В работе</p>
+                    <p className={statusTextClass}>В работе</p>
                 ) : isDone ? (
-                    <p className="text-fuchsia-700">Работы завершены</p>
+                    <p className={statusTextClass}>Работы завершены</p>
                 ) : (
-                    <p className="text-cyan-800">{`${totalTickets} тикетов`}</p>
+                    <p className={statusTextClass}>{`${totalTickets} тикетов`}</p>
                 )}
             </div>
         </article>
