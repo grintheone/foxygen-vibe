@@ -2992,12 +2992,19 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 
 	type patchTicketRequest struct {
 		Attachments              []patchTicketAttachmentRequest `json:"attachments"`
+		AssignedEnd              string                         `json:"assigned_end"`
+		AssignedStart            string                         `json:"assigned_start"`
 		ClosedAt                 string                         `json:"closed_at"`
+		ContactPerson            string                         `json:"contact_person"`
+		Description              string                         `json:"description"`
 		DoubleSigned             bool                           `json:"double_signed"`
+		Executor                 string                         `json:"executor"`
 		Recommendation           string                         `json:"recommendation"`
 		RecommendationDepartment string                         `json:"recommendation_department"`
+		Reason                   string                         `json:"reason"`
 		Result                   string                         `json:"result"`
 		Status                   string                         `json:"status"`
+		Urgent                   bool                           `json:"urgent"`
 		WorkstartedAt            string                         `json:"workstarted_at"`
 		WorkfinishedAt           string                         `json:"workfinished_at"`
 	}
@@ -3009,11 +3016,19 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 	}
 
 	type patchTicketResponse struct {
+		AssignedAt     *string                         `json:"assigned_at,omitempty"`
+		AssignedEnd    *string                         `json:"assigned_end,omitempty"`
+		AssignedStart  *string                         `json:"assigned_start,omitempty"`
 		Attachments    []patchTicketAttachmentResponse `json:"attachments,omitempty"`
 		ClosedAt       *string                         `json:"closed_at,omitempty"`
+		ContactPerson  *string                         `json:"contact_person,omitempty"`
+		Description    string                          `json:"description,omitempty"`
+		Executor       *string                         `json:"executor,omitempty"`
 		FollowUpTicket *patchTicketFollowUpResponse    `json:"followUpTicket,omitempty"`
 		ID             string                          `json:"id"`
+		Reason         string                          `json:"reason,omitempty"`
 		Status         string                          `json:"status"`
+		Urgent         *bool                           `json:"urgent,omitempty"`
 		WorkfinishedAt *string                         `json:"workfinished_at,omitempty"`
 		WorkstartedAt  *string                         `json:"workstarted_at,omitempty"`
 	}
@@ -3034,9 +3049,15 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 	}
 
 	input.Status = strings.TrimSpace(input.Status)
+	input.AssignedStart = strings.TrimSpace(input.AssignedStart)
+	input.AssignedEnd = strings.TrimSpace(input.AssignedEnd)
 	input.WorkstartedAt = strings.TrimSpace(input.WorkstartedAt)
 	input.WorkfinishedAt = strings.TrimSpace(input.WorkfinishedAt)
 	input.ClosedAt = strings.TrimSpace(input.ClosedAt)
+	input.ContactPerson = strings.TrimSpace(input.ContactPerson)
+	input.Description = strings.TrimSpace(input.Description)
+	input.Executor = strings.TrimSpace(input.Executor)
+	input.Reason = strings.TrimSpace(input.Reason)
 	input.Result = strings.TrimSpace(input.Result)
 	input.Recommendation = strings.TrimSpace(input.Recommendation)
 	input.RecommendationDepartment = strings.TrimSpace(input.RecommendationDepartment)
@@ -3054,6 +3075,7 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 	var (
 		err                   error
 		result                pgconn.CommandTag
+		conflictMessage       = "ticket must be assigned to you and in expected status"
 		expectedCurrentStatus string
 		response              patchTicketResponse
 		tx                    pgx.Tx
@@ -3063,6 +3085,173 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 	response.Status = input.Status
 
 	switch input.Status {
+	case "assigned":
+		if input.Description == "" {
+			http.Error(w, "description is required", http.StatusBadRequest)
+			return
+		}
+		if input.Reason == "" {
+			http.Error(w, "reason is required", http.StatusBadRequest)
+			return
+		}
+		if input.ContactPerson == "" {
+			http.Error(w, "contact_person is required", http.StatusBadRequest)
+			return
+		}
+		if input.Executor == "" {
+			http.Error(w, "executor is required", http.StatusBadRequest)
+			return
+		}
+		if input.AssignedStart == "" {
+			http.Error(w, "assigned_start is required", http.StatusBadRequest)
+			return
+		}
+		if input.AssignedEnd == "" {
+			http.Error(w, "assigned_end is required", http.StatusBadRequest)
+			return
+		}
+
+		assignedStart, parseErr := parseTicketDateInput(input.AssignedStart)
+		if parseErr != nil {
+			http.Error(w, "assigned_start must be a date or ISO timestamp", http.StatusBadRequest)
+			return
+		}
+
+		assignedEnd, parseErr := parseTicketDateInput(input.AssignedEnd)
+		if parseErr != nil {
+			http.Error(w, "assigned_end must be a date or ISO timestamp", http.StatusBadRequest)
+			return
+		}
+
+		if assignedStart.After(assignedEnd) {
+			http.Error(w, "assigned_end must be greater than or equal to assigned_start", http.StatusBadRequest)
+			return
+		}
+
+		var executorID pgtype.UUID
+		if err := executorID.Scan(input.Executor); err != nil {
+			http.Error(w, "executor must be a valid UUID", http.StatusBadRequest)
+			return
+		}
+		var contactPersonID pgtype.UUID
+		if err := contactPersonID.Scan(input.ContactPerson); err != nil {
+			http.Error(w, "contact_person must be a valid UUID", http.StatusBadRequest)
+			return
+		}
+
+		var (
+			requesterDepartment pgtype.UUID
+			requesterRole       string
+		)
+		if err := s.db.QueryRow(ctx, `
+			SELECT
+				u.department,
+				COALESCE(r.name, 'user')
+			FROM users u
+			LEFT JOIN account_roles ar ON ar.user_id = u.user_id
+			LEFT JOIN roles r ON r.id = ar.role_id
+			WHERE u.user_id = $1
+		`, userID).Scan(&requesterDepartment, &requesterRole); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				http.Error(w, "profile not found", http.StatusNotFound)
+				return
+			}
+
+			log.Printf("load requester profile failed: %v", err)
+			http.Error(w, "failed to update ticket", http.StatusInternalServerError)
+			return
+		}
+
+		if requesterRole != "coordinator" {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		if !requesterDepartment.Valid {
+			http.Error(w, "requester department is required", http.StatusBadRequest)
+			return
+		}
+
+		var reasonExists bool
+		if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM ticket_reasons WHERE id = $1)`, input.Reason).Scan(&reasonExists); err != nil {
+			log.Printf("validate ticket reason failed: %v", err)
+			http.Error(w, "failed to update ticket", http.StatusInternalServerError)
+			return
+		}
+		if !reasonExists {
+			http.Error(w, "reason not found", http.StatusBadRequest)
+			return
+		}
+
+		var contactExists bool
+		if err := s.db.QueryRow(ctx, `
+			SELECT EXISTS(
+				SELECT 1
+				FROM tickets t
+				JOIN contacts c ON c.client_id = t.client
+				WHERE t.id = $1
+				  AND c.id = $2
+			)
+		`, ticketID, contactPersonID).Scan(&contactExists); err != nil {
+			log.Printf("validate contact failed: %v", err)
+			http.Error(w, "failed to update ticket", http.StatusInternalServerError)
+			return
+		}
+		if !contactExists {
+			http.Error(w, "contact_person not found", http.StatusBadRequest)
+			return
+		}
+
+		var executorExists bool
+		if err := s.db.QueryRow(ctx, `
+			SELECT EXISTS(
+				SELECT 1
+				FROM users u
+				JOIN accounts a ON a.user_id = u.user_id
+				WHERE u.user_id = $1
+				  AND u.department = $2
+				  AND a.disabled = FALSE
+			)
+		`, executorID, requesterDepartment).Scan(&executorExists); err != nil {
+			log.Printf("validate executor failed: %v", err)
+			http.Error(w, "failed to update ticket", http.StatusInternalServerError)
+			return
+		}
+		if !executorExists {
+			http.Error(w, "executor not found in requester department", http.StatusBadRequest)
+			return
+		}
+
+		expectedCurrentStatus = "created"
+		conflictMessage = "ticket must belong to your department and be in created status"
+		result, err = s.db.Exec(ctx, `
+			UPDATE tickets
+			SET status = $1,
+				description = $2,
+				reason = $3,
+				contact_person = $4,
+				executor = $5,
+				urgent = $6,
+				assigned_by = $7,
+				assigned_at = (NOW() AT TIME ZONE 'UTC'),
+				assigned_start = $8,
+				assigned_end = $9
+			WHERE id = $10
+			  AND department = $11
+			  AND status = $12
+		`, input.Status, input.Description, input.Reason, contactPersonID, executorID, input.Urgent, userID, assignedStart, assignedEnd, ticketID, requesterDepartment, expectedCurrentStatus)
+		if err == nil {
+			formattedAssignedAt := time.Now().UTC().Format(time.RFC3339)
+			formattedAssignedStart := assignedStart.UTC().Format(time.RFC3339)
+			formattedAssignedEnd := assignedEnd.UTC().Format(time.RFC3339)
+			response.AssignedAt = &formattedAssignedAt
+			response.AssignedStart = &formattedAssignedStart
+			response.AssignedEnd = &formattedAssignedEnd
+			response.ContactPerson = &input.ContactPerson
+			response.Description = input.Description
+			response.Executor = &input.Executor
+			response.Reason = input.Reason
+			response.Urgent = &input.Urgent
+		}
 	case "inWork":
 		if input.WorkstartedAt == "" {
 			http.Error(w, "workstarted_at is required", http.StatusBadRequest)
@@ -3223,7 +3412,7 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 			}
 		}
 	default:
-		http.Error(w, "supported transitions: assigned->inWork, inWork->worksDone, worksDone->closed", http.StatusBadRequest)
+		http.Error(w, "supported transitions: created->assigned, assigned->inWork, inWork->worksDone, worksDone->closed", http.StatusBadRequest)
 		return
 	}
 
@@ -3246,7 +3435,7 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 			return
 		}
 
-		http.Error(w, "ticket must be assigned to you and in expected status", http.StatusConflict)
+		http.Error(w, conflictMessage, http.StatusConflict)
 		return
 	}
 

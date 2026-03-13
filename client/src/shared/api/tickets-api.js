@@ -49,16 +49,49 @@ function applyTicketPatchToDraft(draft, patch, response) {
     draft.workfinished_at = response?.workfinished_at || patch.workfinished_at || draft.workfinished_at;
   }
 
+  if (response?.assigned_at || Object.prototype.hasOwnProperty.call(patch, "assigned_at")) {
+    draft.assigned_at = response?.assigned_at || patch.assigned_at || draft.assigned_at;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, "assigned_start")) {
+    draft.assigned_start = response?.assigned_start || patch.assigned_start || draft.assigned_start;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, "assigned_end")) {
+    draft.assigned_end = response?.assigned_end || patch.assigned_end || draft.assigned_end;
+  }
+
   if (Object.prototype.hasOwnProperty.call(patch, "closed_at")) {
     draft.closed_at = response?.closed_at || patch.closed_at || draft.closed_at;
   }
 
   if (Object.prototype.hasOwnProperty.call(patch, "result")) {
-    draft.result = patch.result;
+    draft.result = response?.result || patch.result;
   }
 
   if (Object.prototype.hasOwnProperty.call(patch, "double_signed")) {
     draft.double_signed = patch.double_signed;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, "description")) {
+    draft.description = response?.description || patch.description || draft.description;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, "executor")) {
+    draft.executor = response?.executor || patch.executor || draft.executor;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, "urgent")) {
+    draft.urgent = response?.urgent ?? patch.urgent;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, "reason")) {
+    draft.reason = response?.reason || patch.reason || draft.reason;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, "contact_person")) {
+    draft.contactPerson =
+      response?.contact_person || response?.contactPerson || patch.contact_person || draft.contactPerson;
   }
 }
 

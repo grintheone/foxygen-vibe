@@ -12,6 +12,7 @@ import { PageShell } from "../../../shared/ui/page-shell";
 import { useTicketViewModel } from "../lib/use-ticket-view-model";
 import { buildTicketPatchPayload, resolveTicketActionState } from "../model/ticket-action-widget-model";
 import { TicketContactCard } from "./components/ticket-contact-card";
+import { TicketAssignmentSheet } from "./components/ticket-assignment-sheet";
 import { TicketHeader } from "./components/ticket-header";
 import { TicketHistorySection } from "./components/ticket-history-section";
 import { TicketNavigationCard } from "./components/ticket-navigation-card";
@@ -25,6 +26,8 @@ export function TicketPage() {
     const { ticketId } = useParams();
     const { session } = useAuth();
     const [actionError, setActionError] = useState("");
+    const [assignmentSubmitError, setAssignmentSubmitError] = useState("");
+    const [isAssignmentSheetOpen, setIsAssignmentSheetOpen] = useState(false);
     const [reportSubmitError, setReportSubmitError] = useState("");
     const [isReportSheetOpen, setIsReportSheetOpen] = useState(false);
     const {
@@ -58,7 +61,9 @@ export function TicketPage() {
     );
 
     const actionState = resolveTicketActionState({
-        currentUserId: session?.id || session?.user_id || "",
+        currentUserDepartment: session?.department || "",
+        currentUserId: session?.user_id || "",
+        currentUserRole: session?.role || "",
         ticket,
     });
     const hasVisibleActionWidget = Boolean(actionState?.isVisible);
@@ -108,6 +113,13 @@ export function TicketPage() {
             return;
         }
 
+        if (actionState.actionType === "openAssignmentSheet") {
+            setActionError("");
+            setAssignmentSubmitError("");
+            setIsAssignmentSheetOpen(true);
+            return;
+        }
+
         const patch = buildTicketPatchPayload({
             actionState,
             ticket,
@@ -125,6 +137,26 @@ export function TicketPage() {
             }).unwrap();
         } catch (error) {
             setActionError(resolveActionErrorMessage(error));
+        }
+    }
+
+    async function handleAssignEngineer(patch) {
+        if (!ticket?.id) {
+            return null;
+        }
+
+        setAssignmentSubmitError("");
+
+        try {
+            const response = await patchTicket({
+                patch,
+                ticketId: ticket.id,
+            }).unwrap();
+            setIsAssignmentSheetOpen(false);
+            return response;
+        } catch (error) {
+            setAssignmentSubmitError(resolveActionErrorMessage(error));
+            throw error;
         }
     }
 
@@ -174,7 +206,7 @@ export function TicketPage() {
         <PageShell>
             <section
                 className={`w-full space-y-6 transition ${hasVisibleActionWidget ? "pb-28" : ""} ${
-                    isReportSheetOpen ? "brightness-75" : ""
+                    isReportSheetOpen || isAssignmentSheetOpen ? "brightness-75" : ""
                 }`}
             >
                 <TicketHeader
@@ -260,6 +292,18 @@ export function TicketPage() {
                 errorMessage={actionError}
                 isLoading={isPatching}
                 onSubmit={handleTicketAction}
+            />
+
+            <TicketAssignmentSheet
+                isOpen={isAssignmentSheetOpen}
+                isSubmitting={isPatching}
+                onClose={() => {
+                    setAssignmentSubmitError("");
+                    setIsAssignmentSheetOpen(false);
+                }}
+                onSubmitAssign={handleAssignEngineer}
+                submitError={assignmentSubmitError}
+                ticket={ticket}
             />
 
             <TicketReportSheet

@@ -1,9 +1,40 @@
-export function resolveTicketActionState({ currentUserId, ticket }) {
+function normalizeTextValue(value) {
+  return (value || "").trim().toLocaleLowerCase();
+}
+
+export function resolveTicketActionState({
+  currentUserDepartment,
+  currentUserId,
+  currentUserRole,
+  ticket,
+}) {
+  if (!ticket) {
+    return null;
+  }
+
+  if (ticket.status === "created") {
+    const isCoordinatorForTicketDepartment =
+      normalizeTextValue(currentUserRole) === "coordinator" &&
+      normalizeTextValue(currentUserDepartment) !== "" &&
+      normalizeTextValue(currentUserDepartment) === normalizeTextValue(ticket.departmentTitle);
+
+    if (!isCoordinatorForTicketDepartment) {
+      return null;
+    }
+
+    return {
+      colorClassName: "bg-[#6A3BF2] hover:bg-[#7C52F5]",
+      actionType: "openAssignmentSheet",
+      isEnabled: true,
+      isVisible: true,
+      title: "Назначить инженера",
+    };
+  }
+
   if (
-    !ticket ||
-    (ticket.status !== "assigned" &&
-      ticket.status !== "inWork" &&
-      ticket.status !== "worksDone")
+    ticket.status !== "assigned" &&
+    ticket.status !== "inWork" &&
+    ticket.status !== "worksDone"
   ) {
     return null;
   }
