@@ -2,8 +2,8 @@ import { useMemo } from "react";
 import { Link, useNavigate } from "react-router";
 import { routePaths } from "../../../shared/config/routes";
 import { useGetDepartmentMembersQuery, useGetDepartmentTicketsQuery } from "../../../shared/api/tickets-api";
+import { ProfileTicketCard } from "../../../shared/ui/profile-ticket-card";
 import { TicketCardWithExecutor } from "./ticket-card-with-executor";
-import { TicketCardWithStatus } from "./ticket-card-with-status";
 
 function toTimestampOrMin(value) {
     if (!value) {
@@ -283,7 +283,7 @@ export function CoordinatorDashboard({ department }) {
                 ) : unassignedTickets.length > 0 ? (
                     <div className="grid gap-3">
                         {unassignedTickets.map((ticket) => (
-                            <TicketCardWithStatus key={ticket.id} ticket={ticket} onOpenTicket={handleOpenTicket} />
+                            <ProfileTicketCard key={ticket.id} ticket={ticket} onOpenTicket={handleOpenTicket} />
                         ))}
                     </div>
                 ) : (

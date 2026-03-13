@@ -50,30 +50,34 @@ export function TicketCardWithExecutor({ ticket, executor, onOpenTicket }) {
     const statusIcon = statusIconByType[ticket.status] || ticketAssignedIcon;
     const detailsValue = ticket.status === "closed" ? ticket.result : ticket.description;
     const shouldShowGradient = !deadlineDisplay.isFinishedDate && (deadlineDisplay.isOverdue || ticket.urgent);
+    const shouldShowUrgencyBadge = !deadlineDisplay.isFinishedDate && ticket.urgent;
     const gradientClassName = deadlineDisplay.isOverdue
         ? "from-rose-500/0 via-rose-400/80 to-rose-300/0"
         : "from-cyan-500/0 via-cyan-400/80 to-cyan-300/0";
+    const urgencyBadgeClassName = deadlineDisplay.isOverdue
+        ? "border-rose-200/30 bg-rose-500/20 text-rose-50"
+        : "border-cyan-200/30 bg-cyan-400/20 text-cyan-50";
 
     return (
         <button
             type="button"
             onClick={() => onOpenTicket(ticket.id)}
-            className="relative w-full overflow-hidden rounded-2xl border border-cyan-200/25 bg-cyan-500/15 text-left shadow-lg transition hover:border-cyan-100/60"
+            className="relative w-full overflow-hidden rounded-3xl border border-white/10 bg-slate-950/35 text-left shadow-xl shadow-black/20 transition hover:border-white/20 hover:bg-slate-950/45"
         >
-            <div className="grid gap-3 p-4 grid-cols-[1fr_auto]">
-                <div className="space-y-1.5">
-                    <p className="text-sm font-semibold text-white">{reasonValue}</p>
-                    <p className="font-semibold text-slate-100">{ticket.deviceName}</p>
-                    <p className="text-sm text-slate-200/90">{detailsValue || "Не указано"}</p>
+            <div className="grid grid-cols-[1fr_auto] gap-3 p-5">
+                <div className="space-y-2">
+                    <p className="text-sm font-semibold text-cyan-100">{reasonValue}</p>
+                    <p className="text-xl font-semibold tracking-tight text-white">{ticket.deviceName}</p>
+                    <p className="text-sm text-slate-300">{detailsValue || "Не указано"}</p>
                 </div>
                 <div className="flex flex-col items-end justify-between gap-2">
-                    <p className="font-semibold text-white">{deadlineValue}</p>
-                    <p className="text-sm text-white">#{ticket.number}</p>
+                    <p className="text-sm font-semibold text-slate-200">{deadlineValue}</p>
+                    <p className="text-sm font-semibold text-white">#{ticket.number}</p>
                     <img src={statusIcon} alt={ticket.status || "status"} className="h-6 w-6" />
                 </div>
             </div>
 
-            <div className="border-t border-white/10 bg-white/5 px-4 py-3">
+            <div className="border-t border-white/10 bg-white/5 px-5 py-4">
                 <div className="flex items-center gap-3">
                     {executor?.avatarUrl ? (
                         <img
@@ -97,6 +101,14 @@ export function TicketCardWithExecutor({ ticket, executor, onOpenTicket }) {
                     </div>
                 </div>
             </div>
+
+            {shouldShowUrgencyBadge ? (
+                <span
+                    className={`absolute right-4 bottom-4 rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] ${urgencyBadgeClassName}`}
+                >
+                    Срочно
+                </span>
+            ) : null}
 
             {shouldShowGradient ? (
                 <span

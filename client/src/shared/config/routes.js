@@ -1,5 +1,6 @@
 export const routePaths = {
   dashboard: "/dashboard",
+  editor: "/editor",
   profile: "/profile",
   memberProfilePattern: "/profile/:userId",
   profileArchivePattern: "/profile/:userId/archive",

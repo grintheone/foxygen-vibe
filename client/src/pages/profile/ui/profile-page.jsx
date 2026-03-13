@@ -3,6 +3,7 @@ import ticketClosedIcon from "../../../assets/icons/ticket-closed.svg";
 import ticketDoneIcon from "../../../assets/icons/ticket-done.svg";
 import ticketAssignedIcon from "../../../assets/icons/ticket-assigned.svg";
 import { useNavigate, useParams } from "react-router";
+import { useAuth } from "../../../features/auth";
 import {
   useGetMyProfileQuery,
   useGetProfileByIdQuery,
@@ -210,8 +211,42 @@ function ActiveTicketsSection({ archiveHref, isMemberProfile, onOpenArchive, onO
   );
 }
 
+function ProfileActionsSection({ canOpenEditor, isOwnProfile, onEditorOpen, onSignOut }) {
+  if (!isOwnProfile) {
+    return null;
+  }
+
+  return (
+    <section className="rounded-3xl border border-white/10 bg-slate-950/35 p-6 shadow-xl shadow-black/20 backdrop-blur">
+      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Действия</p>
+      <div className="mt-5 grid gap-3 sm:grid-cols-2">
+        <button
+          type="button"
+          onClick={onEditorOpen}
+          disabled={!canOpenEditor}
+          className={`rounded-2xl px-4 py-3 text-sm font-semibold transition ${
+            canOpenEditor
+              ? "border border-cyan-200/25 bg-cyan-400/15 text-cyan-50 hover:border-cyan-100/40 hover:bg-cyan-400/20"
+              : "cursor-not-allowed border border-white/10 bg-white/5 text-slate-500 opacity-70"
+          }`}
+        >
+          Редактор
+        </button>
+        <button
+          type="button"
+          onClick={onSignOut}
+          className="rounded-2xl border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-50 transition hover:border-rose-200/35 hover:bg-rose-500/15"
+        >
+          Выйти из аккаунта
+        </button>
+      </div>
+    </section>
+  );
+}
+
 export function ProfilePage() {
   const navigate = useNavigate();
+  const { signOut } = useAuth();
   const { userId } = useParams();
   const isMemberProfile = Boolean(userId);
   const {
@@ -245,6 +280,7 @@ export function ProfilePage() {
   const phoneValue = profile?.phone?.trim() || "Не указан";
   const archiveHref = profile?.user_id ? routePaths.profileArchiveById(profile.user_id) : "";
   const activeTickets = profile?.activeTickets || [];
+  const canOpenEditor = profile?.role === "coordinator" || profile?.role === "admin";
 
   function handleBack() {
     navigate(routePaths.dashboard);
@@ -260,6 +296,19 @@ export function ProfilePage() {
 
   function handleOpenTicket(ticketId) {
     navigate(routePaths.ticketById(ticketId));
+  }
+
+  function handleSignOut() {
+    signOut();
+    navigate(routePaths.signIn);
+  }
+
+  function handleOpenEditor() {
+    if (!canOpenEditor) {
+      return;
+    }
+
+    navigate(routePaths.editor);
   }
 
   return (
@@ -343,6 +392,13 @@ export function ProfilePage() {
               onOpenArchive={handleOpenArchive}
               onOpenTicket={handleOpenTicket}
               tickets={activeTickets}
+            />
+
+            <ProfileActionsSection
+              canOpenEditor={canOpenEditor}
+              isOwnProfile={!isMemberProfile}
+              onEditorOpen={handleOpenEditor}
+              onSignOut={handleSignOut}
             />
           </>
         ) : null}

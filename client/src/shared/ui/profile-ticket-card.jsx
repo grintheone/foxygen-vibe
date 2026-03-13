@@ -74,6 +74,9 @@ export function ProfileTicketCard({ ticket, onOpenTicket }) {
   const gradientClassName = deadlineDisplay.isOverdue
     ? "from-rose-500/0 via-rose-400/80 to-rose-300/0"
     : "from-cyan-500/0 via-cyan-400/80 to-cyan-300/0";
+  const urgencyBadgeClassName = deadlineDisplay.isOverdue
+    ? "border-rose-200/30 bg-rose-500/20 text-rose-50"
+    : "border-cyan-200/30 bg-cyan-400/20 text-cyan-50";
 
   return (
     <button
@@ -85,7 +88,7 @@ export function ProfileTicketCard({ ticket, onOpenTicket }) {
         <div className="min-w-0 flex-1 space-y-2">
           <p className="text-sm font-semibold text-cyan-100">{reasonValue}</p>
           <p className="text-xl font-semibold tracking-tight text-white">{ticket?.deviceName || "Устройство не указано"}</p>
-          <p className="text-sm text-slate-300">{ticket?.clientName || "Клиент не указан"}</p>
+          <p className="text-sm text-slate-300">{detailsValue || "Описание не указано"}</p>
         </div>
 
         <div className="flex flex-col items-end gap-2">
@@ -101,9 +104,17 @@ export function ProfileTicketCard({ ticket, onOpenTicket }) {
       </div>
 
       <div className="mt-4 grid gap-2 border-t border-white/10 pt-4 text-sm text-slate-300">
-        <p>{detailsValue || "Описание не указано"}</p>
+        <p>{ticket?.clientName || "Клиент не указан"}</p>
         {ticket?.clientAddress ? <p className="text-slate-400">{ticket.clientAddress}</p> : null}
       </div>
+
+      {ticket?.urgent ? (
+        <span
+          className={`absolute right-4 bottom-4 rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] ${urgencyBadgeClassName}`}
+        >
+          Срочно
+        </span>
+      ) : null}
 
       {shouldShowGradient ? (
         <span

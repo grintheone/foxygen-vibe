@@ -7,6 +7,7 @@ import { ClientPage } from "../../pages/client";
 import { DashboardPage } from "../../pages/dashboard";
 import { DeviceArchivePage } from "../../pages/device-archive";
 import { DevicePage } from "../../pages/device";
+import { EditorPage } from "../../pages/editor";
 import { ProfilePage } from "../../pages/profile";
 import { ProfileArchivePage } from "../../pages/profile-archive";
 import { SignInPage } from "../../pages/sign-in";
@@ -22,6 +23,7 @@ export function AppRouter() {
         </Route>
         <Route element={<ProtectedRoute />}>
           <Route path={routePaths.dashboard} element={<DashboardPage />} />
+          <Route path={routePaths.editor} element={<EditorPage />} />
           <Route path={routePaths.profile} element={<ProfilePage />} />
           <Route path={routePaths.profileArchivePattern} element={<ProfileArchivePage />} />
           <Route path={routePaths.memberProfilePattern} element={<ProfilePage />} />

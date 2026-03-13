@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { routePaths } from "../../../shared/config/routes";
+import { ProfileTicketCard } from "../../../shared/ui/profile-ticket-card";
 import { formatWorkDuration, resolveTicketReason } from "../lib/dashboard-formatters";
 import { useDashboardTickets } from "../lib/use-dashboard-tickets";
-import { TicketCardWithStatus } from "./ticket-card-with-status";
 
 export function EngineerDashboard({ executorId }) {
   const navigate = useNavigate();
@@ -171,7 +171,7 @@ export function EngineerDashboard({ executorId }) {
         {!isLoading && !isError && assignedTickets.length > 0 ? (
           <div className="grid gap-3">
             {assignedTickets.map((ticket) => (
-              <TicketCardWithStatus key={ticket.id} ticket={ticket} onOpenTicket={handleOpenTicket} />
+              <ProfileTicketCard key={ticket.id} ticket={ticket} onOpenTicket={handleOpenTicket} />
             ))}
           </div>
         ) : !isLoading && !isError ? (
