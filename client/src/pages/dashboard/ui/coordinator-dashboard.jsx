@@ -1,8 +1,7 @@
 import { useMemo } from "react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { routePaths } from "../../../shared/config/routes";
-import { useGetDepartmentTicketsQuery } from "../../../shared/api/tickets-api";
-import { MOCK_DEPARTMENT_MEMBERS } from "../model/mock-dashboard-data";
+import { useGetDepartmentMembersQuery, useGetDepartmentTicketsQuery } from "../../../shared/api/tickets-api";
 import { TicketCardWithExecutor } from "./ticket-card-with-executor";
 import { TicketCardWithStatus } from "./ticket-card-with-status";
 
@@ -79,7 +78,7 @@ function DisabledBadgeIcon() {
     );
 }
 
-function MemberCard({ member, totalTickets }) {
+function MemberCard({ latestClientAddress, member, to, totalTickets }) {
     const status = member.latestTicketStatus;
     const isDisabled = member.isDisabled || status === "disabled";
     const isInWork = status === "inWork";
@@ -87,28 +86,29 @@ function MemberCard({ member, totalTickets }) {
     const toneClass = isDisabled
         ? "border-rose-300/25 bg-rose-500/10"
         : isInWork
-        ? "border-emerald-300/25 bg-emerald-500/10"
+        ? "border-[#9f85ff]/45 bg-[#6A3BF2]/24"
         : isDone
-          ? "border-fuchsia-300/25 bg-fuchsia-500/10"
+          ? "border-emerald-300/35 bg-emerald-500/18"
           : "border-cyan-300/25 bg-cyan-500/10";
-    const pulseClass = isInWork ? "bg-[#6A3BF2]/45" : "bg-emerald-400/35";
+    const pulseClass = isInWork ? "bg-[#6A3BF2]/55" : "bg-emerald-400/35";
     const cardClass = isDisabled
         ? "border-rose-300/20 bg-rose-950/25"
         : isInWork
-        ? "border-emerald-300/20 bg-slate-950/35"
+        ? "border-[#8d73ff]/45 bg-[#4b24c7]/32 shadow-[#6A3BF2]/30"
         : isDone
-          ? "border-fuchsia-300/20 bg-slate-950/35"
+          ? "border-emerald-300/35 bg-emerald-950/30 shadow-emerald-500/20"
           : "border-white/10 bg-slate-950/35";
     const statusTextClass = isDisabled
         ? "text-rose-200"
         : isInWork
-        ? "text-emerald-200"
+        ? "text-[#ede7ff]"
         : isDone
-          ? "text-fuchsia-200"
+          ? "text-emerald-100"
           : "text-cyan-200";
 
     return (
-        <article
+        <Link
+            to={to}
             className={`h-[19rem] w-[14rem] shrink-0 overflow-hidden rounded-[1.65rem] border p-3 text-slate-100 shadow-xl shadow-black/20 backdrop-blur ${cardClass}`}
         >
             <div className={`flex justify-center rounded-[1.3rem] border p-3 ${toneClass}`}>
@@ -142,18 +142,22 @@ function MemberCard({ member, totalTickets }) {
 
             <p className="mt-3 text-[1.75rem] leading-7 font-semibold tracking-tight text-white">{member.name}</p>
 
-            <div className="mt-2 min-h-[1.8rem] text-sm font-semibold">
+            <div className="mt-2 min-h-[3.2rem] text-sm font-semibold">
                 {isDisabled ? (
                     <p className={statusTextClass}>Временно недоступен</p>
                 ) : isInWork ? (
-                    <p className={statusTextClass}>В работе</p>
+                    <p className={`${statusTextClass} text-[0.95rem] leading-5`}>
+                        {latestClientAddress?.trim() || "Адрес клиента не указан"}
+                    </p>
                 ) : isDone ? (
-                    <p className={statusTextClass}>Работы завершены</p>
+                    <p className={`${statusTextClass} text-[0.95rem] leading-5`}>
+                        {latestClientAddress?.trim() || "Адрес клиента не указан"}
+                    </p>
                 ) : (
                     <p className={statusTextClass}>{`${totalTickets} тикетов`}</p>
                 )}
             </div>
-        </article>
+        </Link>
     );
 }
 
@@ -164,18 +168,18 @@ export function CoordinatorDashboard({ department }) {
         normalizedDepartment || "__no_department__",
         { skip: !normalizedDepartment },
     );
+    const {
+        data: departmentMembers = [],
+        isError: isDepartmentMembersError,
+        isFetching: isDepartmentMembersFetching,
+        isLoading: isDepartmentMembersLoading,
+    } = useGetDepartmentMembersQuery(undefined, {
+        skip: !normalizedDepartment,
+    });
 
     const unassignedTickets = useMemo(() => {
         return sortByAssignedEndDesc(departmentTickets.filter((ticket) => ticket.status === "created"));
     }, [departmentTickets]);
-
-    const departmentMembers = useMemo(() => {
-        if (!normalizedDepartment) {
-            return MOCK_DEPARTMENT_MEMBERS;
-        }
-
-        return MOCK_DEPARTMENT_MEMBERS.filter((member) => (member.department || "").trim() === normalizedDepartment);
-    }, [normalizedDepartment]);
 
     const activeDepartmentTickets = useMemo(() => {
         const excludedStatuses = new Set(["canceled", "cancelled", "closed"]);
@@ -186,10 +190,67 @@ export function CoordinatorDashboard({ department }) {
 
     const departmentMemberById = useMemo(() => {
         return departmentMembers.reduce((accumulator, member) => {
-            accumulator[member.userId] = member;
+            accumulator[member.id] = member;
             return accumulator;
         }, {});
     }, [departmentMembers]);
+
+    const latestDepartmentTicketById = useMemo(() => {
+        return departmentTickets.reduce((accumulator, ticket) => {
+            accumulator[ticket.id] = ticket;
+            return accumulator;
+        }, {});
+    }, [departmentTickets]);
+
+    const inWorkTicketByExecutor = useMemo(() => {
+        return departmentTickets.reduce((accumulator, ticket) => {
+            if (ticket.status !== "inWork" || !ticket.executor) {
+                return accumulator;
+            }
+
+            const currentTicket = accumulator[ticket.executor];
+            if (!currentTicket || toTimestampOrMin(ticket.workstarted_at) > toTimestampOrMin(currentTicket.workstarted_at)) {
+                accumulator[ticket.executor] = ticket;
+            }
+
+            return accumulator;
+        }, {});
+    }, [departmentTickets]);
+
+    const worksDoneTicketByExecutor = useMemo(() => {
+        return departmentTickets.reduce((accumulator, ticket) => {
+            if (ticket.status !== "worksDone" || !ticket.executor) {
+                return accumulator;
+            }
+
+            const currentTicket = accumulator[ticket.executor];
+            if (
+                !currentTicket ||
+                toTimestampOrMin(ticket.workfinished_at) > toTimestampOrMin(currentTicket.workfinished_at)
+            ) {
+                accumulator[ticket.executor] = ticket;
+            }
+
+            return accumulator;
+        }, {});
+    }, [departmentTickets]);
+
+    const latestClientAddressByMemberId = useMemo(() => {
+        return departmentMembers.reduce((accumulator, member) => {
+            const latestTicket = member.latestTicket ? latestDepartmentTicketById[member.latestTicket] : null;
+            const latestAddressTicket =
+                latestTicket?.status === "inWork" || latestTicket?.status === "worksDone"
+                    ? latestTicket
+                    : member.latestTicketStatus === "inWork"
+                      ? inWorkTicketByExecutor[member.id]
+                      : member.latestTicketStatus === "worksDone"
+                        ? worksDoneTicketByExecutor[member.id]
+                        : null;
+
+            accumulator[member.id] = latestAddressTicket?.clientAddress || "";
+            return accumulator;
+        }, {});
+    }, [departmentMembers, inWorkTicketByExecutor, latestDepartmentTicketById, worksDoneTicketByExecutor]);
 
     const ticketsByExecutor = useMemo(() => {
         return departmentTickets.reduce((accumulator, ticket) => {
@@ -236,13 +297,23 @@ export function CoordinatorDashboard({ department }) {
                 <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
                     {`Отдел ${departmentMembers.length}`}
                 </h2>
-                {departmentMembers.length > 0 ? (
-                    <div className="flex gap-4 overflow-x-auto pb-2 pr-2">
+                {isDepartmentMembersLoading || isDepartmentMembersFetching ? (
+                    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+                        Загружаем сотрудников...
+                    </div>
+                ) : isDepartmentMembersError ? (
+                    <div className="rounded-2xl border border-rose-300/30 bg-rose-500/10 p-4 text-sm text-rose-100">
+                        Не удалось загрузить сотрудников отдела.
+                    </div>
+                ) : departmentMembers.length > 0 ? (
+                    <div className="flex gap-4 overflow-x-auto px-1 pt-1 pb-5 pr-3">
                         {departmentMembers.map((member) => (
                             <MemberCard
-                                key={member.userId}
+                                key={member.id}
+                                latestClientAddress={latestClientAddressByMemberId[member.id]}
                                 member={member}
-                                totalTickets={ticketsByExecutor[member.userId] || 0}
+                                to={routePaths.profileById(member.id)}
+                                totalTickets={ticketsByExecutor[member.id] || 0}
                             />
                         ))}
                     </div>
@@ -276,12 +347,12 @@ export function CoordinatorDashboard({ department }) {
                                     : null;
 
                             return (
-                            <TicketCardWithExecutor
-                                key={ticket.id}
-                                ticket={ticket}
-                                executor={departmentMemberById[ticket.executor] || fallbackExecutor}
-                                onOpenTicket={handleOpenTicket}
-                            />
+                                <TicketCardWithExecutor
+                                    key={ticket.id}
+                                    ticket={ticket}
+                                    executor={departmentMemberById[ticket.executor] || fallbackExecutor}
+                                    onOpenTicket={handleOpenTicket}
+                                />
                             );
                         })}
                     </div>

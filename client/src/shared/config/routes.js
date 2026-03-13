@@ -1,6 +1,7 @@
 export const routePaths = {
   dashboard: "/dashboard",
   profile: "/profile",
+  memberProfilePattern: "/profile/:userId",
   signIn: "/",
   clientPattern: "/clients/:clientId",
   clientArchivePattern: "/clients/:clientId/archive",
@@ -29,5 +30,8 @@ export const routePaths = {
   },
   ticketById(ticketId) {
     return `/tickets/${ticketId}`;
+  },
+  profileById(userId) {
+    return `/profile/${userId}`;
   },
 };

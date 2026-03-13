@@ -223,6 +223,7 @@ export const ticketsApi = createApi({
       }),
       invalidatesTags: (_, __, { client, device }) => [
         "Tickets",
+        "DepartmentMember",
         ...(client ? [{ type: "Client", id: client }] : []),
         ...(device ? [{ type: "Device", id: device }] : []),
       ],
@@ -256,6 +257,7 @@ export const ticketsApi = createApi({
         }
       },
       invalidatesTags: (_, __, { ticketId }) => [
+        "DepartmentMember",
         "Tickets",
         { type: "Ticket", id: ticketId },
       ],

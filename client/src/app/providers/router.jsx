@@ -22,6 +22,7 @@ export function AppRouter() {
         <Route element={<ProtectedRoute />}>
           <Route path={routePaths.dashboard} element={<DashboardPage />} />
           <Route path={routePaths.profile} element={<ProfilePage />} />
+          <Route path={routePaths.memberProfilePattern} element={<ProfilePage />} />
           <Route path={routePaths.clientAgreementsPattern} element={<ClientAgreementsPage />} />
           <Route path={routePaths.clientArchivePattern} element={<ClientArchivePage />} />
           <Route path={routePaths.clientContactsPattern} element={<ClientContactsPage />} />

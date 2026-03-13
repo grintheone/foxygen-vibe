@@ -158,6 +158,26 @@ func queryFacetValues(ctx context.Context, db *pgxpool.Pool, query string, args 
 	return values, nil
 }
 
+type sqlExecutor interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+}
+
+func updateLatestTicketReference(ctx context.Context, executor sqlExecutor, userID pgtype.UUID, ticketID pgtype.UUID) error {
+	result, err := executor.Exec(ctx, `
+		UPDATE users
+		SET latest_ticket = $1
+		WHERE user_id = $2
+	`, ticketID, userID)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+
+	return nil
+}
+
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	type response struct {
 		Status   string `json:"status"`
@@ -564,16 +584,52 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var userID pgtype.UUID
-	if err := userID.Scan(claims.Subject); err != nil {
+	requesterID := pgtype.UUID{}
+	if err := requesterID.Scan(claims.Subject); err != nil {
 		http.Error(w, "invalid access token", http.StatusUnauthorized)
 		return
+	}
+
+	targetID := requesterID
+	if r.URL.Path != "/api/profile" {
+		targetValue := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/profile/"), "/")
+		if targetValue == "" {
+			http.NotFound(w, r)
+			return
+		}
+		if err := targetID.Scan(targetValue); err != nil {
+			http.Error(w, "invalid user id", http.StatusBadRequest)
+			return
+		}
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
 
-	profile, err := s.queries.GetUserProfileByUserID(ctx, userID)
+	if requesterID != targetID {
+		var allowed bool
+		if err := s.db.QueryRow(ctx, `
+			SELECT EXISTS (
+				SELECT 1
+				FROM users requester
+				JOIN users target ON target.user_id = $2
+				WHERE requester.user_id = $1
+				  AND requester.department IS NOT NULL
+				  AND requester.department = target.department
+			)
+		`, requesterID, targetID).Scan(&allowed); err != nil {
+			log.Printf("check profile access failed: %v", err)
+			http.Error(w, "failed to load profile", http.StatusInternalServerError)
+			return
+		}
+
+		if !allowed {
+			http.Error(w, "profile not found", http.StatusNotFound)
+			return
+		}
+	}
+
+	profile, err := s.queries.GetUserProfileByUserID(ctx, targetID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			http.Error(w, "profile not found", http.StatusNotFound)
@@ -2000,10 +2056,13 @@ func (s *Server) handleDepartments(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleDepartmentMembers(w http.ResponseWriter, r *http.Request) {
 	type departmentMemberResponse struct {
-		ID         string `json:"id"`
-		Name       string `json:"name"`
-		Username   string `json:"username"`
-		Department string `json:"department"`
+		ID                 string  `json:"id"`
+		Name               string  `json:"name"`
+		Username           string  `json:"username"`
+		Department         string  `json:"department"`
+		IsDisabled         bool    `json:"isDisabled"`
+		LatestTicket       *string `json:"latestTicket,omitempty"`
+		LatestTicketStatus string  `json:"latestTicketStatus"`
 	}
 
 	if r.Method != http.MethodGet {
@@ -2036,17 +2095,20 @@ func (s *Server) handleDepartmentMembers(w http.ResponseWriter, r *http.Request)
 			u.user_id,
 			TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))) AS name,
 			a.username,
-			COALESCE(d.title, '')
+			COALESCE(d.title, ''),
+			a.disabled,
+			u.latest_ticket,
+			COALESCE(lt.status, '')
 		FROM users u
 		JOIN accounts a ON a.user_id = u.user_id
 		LEFT JOIN departments d ON d.id = u.department
+		LEFT JOIN tickets lt ON lt.id = u.latest_ticket
 		WHERE u.department = (
 			SELECT department
 			FROM users
 			WHERE user_id = $1
 		)
 		  AND u.department IS NOT NULL
-		  AND a.disabled = FALSE
 		ORDER BY
 			TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))) ASC,
 			a.username ASC,
@@ -2062,23 +2124,29 @@ func (s *Server) handleDepartmentMembers(w http.ResponseWriter, r *http.Request)
 	response := make([]departmentMemberResponse, 0)
 	for rows.Next() {
 		var (
-			id         pgtype.UUID
-			name       string
-			username   string
-			department string
+			id                 pgtype.UUID
+			name               string
+			username           string
+			department         string
+			isDisabled         bool
+			latestTicket       pgtype.UUID
+			latestTicketStatus string
 		)
 
-		if err := rows.Scan(&id, &name, &username, &department); err != nil {
+		if err := rows.Scan(&id, &name, &username, &department, &isDisabled, &latestTicket, &latestTicketStatus); err != nil {
 			log.Printf("scan department member failed: %v", err)
 			http.Error(w, "failed to load department members", http.StatusInternalServerError)
 			return
 		}
 
 		response = append(response, departmentMemberResponse{
-			ID:         uuidToString(id),
-			Name:       name,
-			Username:   username,
-			Department: department,
+			ID:                 uuidToString(id),
+			Name:               name,
+			Username:           username,
+			Department:         department,
+			IsDisabled:         isDisabled,
+			LatestTicket:       nullableUUIDToString(latestTicket),
+			LatestTicketStatus: latestTicketStatus,
 		})
 	}
 
@@ -2578,8 +2646,17 @@ func (s *Server) handleTicketsCreate(w http.ResponseWriter, r *http.Request, req
 		assignedAt         pgtype.Timestamp
 		storedStart        pgtype.Timestamp
 		storedEnd          pgtype.Timestamp
+		tx                 pgx.Tx
 	)
-	if err := s.db.QueryRow(ctx, `
+	tx, err = s.db.Begin(ctx)
+	if err != nil {
+		log.Printf("begin create ticket transaction failed: %v", err)
+		http.Error(w, "failed to create ticket", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	if err := tx.QueryRow(ctx, `
 		INSERT INTO tickets (
 			assigned_at,
 			assigned_start,
@@ -2622,6 +2699,18 @@ func (s *Server) handleTicketsCreate(w http.ResponseWriter, r *http.Request, req
 		&storedEnd,
 	); err != nil {
 		log.Printf("create ticket failed: %v", err)
+		http.Error(w, "failed to create ticket", http.StatusInternalServerError)
+		return
+	}
+
+	if err := updateLatestTicketReference(ctx, tx, executorID, createdTicketID); err != nil {
+		log.Printf("update latest ticket reference failed: %v", err)
+		http.Error(w, "failed to create ticket", http.StatusInternalServerError)
+		return
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		log.Printf("commit create ticket transaction failed: %v", err)
 		http.Error(w, "failed to create ticket", http.StatusInternalServerError)
 		return
 	}
@@ -3077,12 +3166,21 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 		result                pgconn.CommandTag
 		conflictMessage       = "ticket must be assigned to you and in expected status"
 		expectedCurrentStatus string
+		latestTicketUserID    *pgtype.UUID
 		response              patchTicketResponse
 		tx                    pgx.Tx
 	)
 
 	response.ID = ticketID.String()
 	response.Status = input.Status
+
+	tx, err = s.db.Begin(ctx)
+	if err != nil {
+		log.Printf("begin patch ticket transaction failed: %v", err)
+		http.Error(w, "failed to update ticket", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback(ctx)
 
 	switch input.Status {
 	case "assigned":
@@ -3223,7 +3321,7 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 
 		expectedCurrentStatus = "created"
 		conflictMessage = "ticket must belong to your department and be in created status"
-		result, err = s.db.Exec(ctx, `
+		result, err = tx.Exec(ctx, `
 			UPDATE tickets
 			SET status = $1,
 				description = $2,
@@ -3240,6 +3338,7 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 			  AND status = $12
 		`, input.Status, input.Description, input.Reason, contactPersonID, executorID, input.Urgent, userID, assignedStart, assignedEnd, ticketID, requesterDepartment, expectedCurrentStatus)
 		if err == nil {
+			latestTicketUserID = &executorID
 			formattedAssignedAt := time.Now().UTC().Format(time.RFC3339)
 			formattedAssignedStart := assignedStart.UTC().Format(time.RFC3339)
 			formattedAssignedEnd := assignedEnd.UTC().Format(time.RFC3339)
@@ -3265,7 +3364,7 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 		}
 
 		expectedCurrentStatus = "assigned"
-		result, err = s.db.Exec(ctx, `
+		result, err = tx.Exec(ctx, `
 			UPDATE tickets
 			SET status = $1,
 				workstarted_at = $2
@@ -3274,6 +3373,7 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 			  AND status = $5
 		`, input.Status, workstartedAt.UTC(), ticketID, userID, expectedCurrentStatus)
 		if err == nil {
+			latestTicketUserID = &userID
 			formatted := workstartedAt.UTC().Format(time.RFC3339)
 			response.WorkstartedAt = &formatted
 		}
@@ -3290,7 +3390,7 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 		}
 
 		expectedCurrentStatus = "inWork"
-		result, err = s.db.Exec(ctx, `
+		result, err = tx.Exec(ctx, `
 			UPDATE tickets
 			SET status = $1,
 				workfinished_at = $2
@@ -3299,6 +3399,7 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 			  AND status = $5
 		`, input.Status, workfinishedAt.UTC(), ticketID, userID, expectedCurrentStatus)
 		if err == nil {
+			latestTicketUserID = &userID
 			formatted := workfinishedAt.UTC().Format(time.RFC3339)
 			response.WorkfinishedAt = &formatted
 		}
@@ -3322,14 +3423,6 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 			return
 		}
 
-		tx, err = s.db.Begin(ctx)
-		if err != nil {
-			log.Printf("begin patch ticket transaction failed: %v", err)
-			http.Error(w, "failed to update ticket", http.StatusInternalServerError)
-			return
-		}
-		defer tx.Rollback(ctx)
-
 		expectedCurrentStatus = "worksDone"
 		result, err = tx.Exec(ctx, `
 			UPDATE tickets
@@ -3346,6 +3439,7 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 		}
 
 		if err == nil {
+			latestTicketUserID = &userID
 			formatted := closedAt.UTC().Format(time.RFC3339)
 			response.ClosedAt = &formatted
 		}
@@ -3437,6 +3531,19 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 
 		http.Error(w, conflictMessage, http.StatusConflict)
 		return
+	}
+
+	if latestTicketUserID != nil {
+		if err := updateLatestTicketReference(ctx, tx, *latestTicketUserID, ticketID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				http.Error(w, "profile not found", http.StatusNotFound)
+				return
+			}
+
+			log.Printf("update latest ticket reference failed: %v", err)
+			http.Error(w, "failed to update ticket", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	if tx != nil {

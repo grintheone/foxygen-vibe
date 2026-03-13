@@ -1,20 +1,20 @@
-import { MOCK_TICKET_REASONS } from "../model/mock-dashboard-data";
-
 export function resolveTicketReason(ticket) {
-  const reason = MOCK_TICKET_REASONS.find((item) => item.id === ticket.reason);
-  if (!reason) {
-    return ticket?.reason || "Не указано";
+  const resolvedReason = ticket?.resolvedReason?.trim();
+  if (resolvedReason) {
+    return resolvedReason;
   }
 
-  if (ticket.status === "assigned") {
-    return reason.future || reason.title || "Не указано";
+  const reasonTitle = ticket?.reasonTitle?.trim();
+  if (reasonTitle) {
+    return reasonTitle;
   }
 
-  if (ticket.status === "worksDone") {
-    return reason.past || reason.title || "Не указано";
+  const reason = ticket?.reason?.trim();
+  if (reason) {
+    return reason;
   }
 
-  return reason.present || reason.title || "Не указано";
+  return "Не указано";
 }
 
 export function formatWorkDuration(startedAt, finishedAt) {
