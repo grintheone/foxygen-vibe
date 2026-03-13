@@ -37,7 +37,7 @@ func buildTicketAttachmentDownloadURL(ticketID string, attachmentID string) stri
 
 func (s *Server) loadTicketAttachments(ctx context.Context, ticketID pgtype.UUID) ([]ticketAttachmentResponse, error) {
 	rows, err := s.db.Query(ctx, `
-		SELECT id, name, media_type, ext, size_bytes, uploaded_at, object_key
+		SELECT id, name, media_type, ext, size_bytes, uploaded_at
 		FROM attachments
 		WHERE ref_id = $1
 		ORDER BY uploaded_at ASC, id ASC
@@ -56,23 +56,20 @@ func (s *Server) loadTicketAttachments(ctx context.Context, ticketID pgtype.UUID
 			ext        string
 			sizeBytes  int64
 			uploadedAt pgtype.Timestamptz
-			objectKey  string
 		)
 
-		if err := rows.Scan(&id, &name, &mediaType, &ext, &sizeBytes, &uploadedAt, &objectKey); err != nil {
+		if err := rows.Scan(&id, &name, &mediaType, &ext, &sizeBytes, &uploadedAt); err != nil {
 			return nil, err
 		}
 
 		attachment := ticketAttachmentResponse{
-			ID:         id,
-			Name:       name,
-			MediaType:  mediaType,
-			Ext:        ext,
-			SizeBytes:  sizeBytes,
-			UploadedAt: timestamptzToRFC3339(uploadedAt),
-		}
-		if strings.TrimSpace(objectKey) != "" {
-			attachment.DownloadURL = buildTicketAttachmentDownloadURL(ticketID.String(), id)
+			ID:          id,
+			Name:        name,
+			MediaType:   mediaType,
+			Ext:         ext,
+			SizeBytes:   sizeBytes,
+			UploadedAt:  timestamptzToRFC3339(uploadedAt),
+			DownloadURL: buildTicketAttachmentDownloadURL(ticketID.String(), id),
 		}
 
 		attachments = append(attachments, attachment)
@@ -152,10 +149,10 @@ func (s *Server) handleTicketAttachmentUpload(w http.ResponseWriter, r *http.Req
 
 	var uploadedAt pgtype.Timestamptz
 	if err := s.db.QueryRow(ctx, `
-		INSERT INTO attachments (id, name, media_type, ext, ref_id, object_key, size_bytes)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO attachments (id, name, media_type, ext, ref_id, size_bytes)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING uploaded_at
-	`, attachmentID, fileName, mediaType, ext, ticketID, objectKey, uploaded.Size).Scan(&uploadedAt); err != nil {
+	`, attachmentID, fileName, mediaType, ext, ticketID, uploaded.Size).Scan(&uploadedAt); err != nil {
 		if cleanupErr := s.storage.RemoveObject(context.Background(), objectKey); cleanupErr != nil {
 			log.Printf("cleanup orphaned attachment object failed: %v", cleanupErr)
 		}
@@ -192,17 +189,15 @@ func (s *Server) handleTicketAttachmentDownload(w http.ResponseWriter, r *http.R
 	var (
 		name      string
 		mediaType string
-		objectKey string
 	)
 
 	err := s.db.QueryRow(ctx, `
-		SELECT a.name, a.media_type, a.object_key
+		SELECT a.name, a.media_type
 		FROM attachments a
 		JOIN tickets t ON t.id = a.ref_id
 		WHERE a.ref_id = $1
 		  AND a.id = $2
-		  AND a.object_key <> ''
-	`, ticketID, attachmentID).Scan(&name, &mediaType, &objectKey)
+	`, ticketID, attachmentID).Scan(&name, &mediaType)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			http.Error(w, "attachment not found", http.StatusNotFound)
@@ -214,7 +209,7 @@ func (s *Server) handleTicketAttachmentDownload(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	object, info, err := s.storage.GetObject(ctx, objectKey)
+	object, info, err := s.storage.GetObject(ctx, attachmentID)
 	if err != nil {
 		log.Printf("download attachment from MinIO failed: %v", err)
 		http.Error(w, "failed to download attachment", http.StatusBadGateway)

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"unicode"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -57,8 +56,6 @@ type Client struct {
 }
 
 func NewMinIO(ctx context.Context, config Config) (*Client, error) {
-	return nil, nil
-
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
@@ -148,28 +145,5 @@ func (c *Client) RemoveObject(ctx context.Context, objectKey string) error {
 }
 
 func TicketAttachmentObjectKey(_ string, attachmentID string, fileName string) string {
-	base := strings.TrimSpace(attachmentID)
-	ext := sanitizeObjectKeyExtension(fileName)
-	if ext == "" {
-		return base
-	}
-
-	return base + "." + ext
-}
-
-func sanitizeObjectKeyExtension(fileName string) string {
-	trimmed := strings.TrimSpace(fileName)
-	dotIndex := strings.LastIndex(trimmed, ".")
-	if dotIndex < 0 || dotIndex == len(trimmed)-1 {
-		return ""
-	}
-
-	var builder strings.Builder
-	for _, char := range strings.ToLower(trimmed[dotIndex+1:]) {
-		if unicode.IsDigit(char) || (char >= 'a' && char <= 'z') {
-			builder.WriteRune(char)
-		}
-	}
-
-	return builder.String()
+	return strings.TrimSpace(attachmentID)
 }

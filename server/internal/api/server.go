@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -15,6 +16,8 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+var newMinIOClient = storage.NewMinIO
 
 type Server struct {
 	databaseConfigured bool
@@ -62,11 +65,7 @@ func New() (*Server, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		client, err := storage.NewMinIO(ctx, storageConfig)
-		if err != nil {
-			return nil, err
-		}
-		api.storage = client
+		api.connectStorage(ctx, storageConfig)
 	}
 
 	if databaseURL == "" {
@@ -94,6 +93,16 @@ func New() (*Server, error) {
 	}
 
 	return api, nil
+}
+
+func (s *Server) connectStorage(ctx context.Context, config storage.Config) {
+	client, err := newMinIOClient(ctx, config)
+	if err != nil {
+		log.Printf("object storage is configured but unavailable; continuing without it: %v", err)
+		return
+	}
+
+	s.storage = client
 }
 
 func (s *Server) Close() {
