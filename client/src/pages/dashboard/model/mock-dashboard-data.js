@@ -209,7 +209,8 @@ export const MOCK_DEPARTMENT_MEMBERS = [
         userId: "01eaedd4-1bf2-11ef-811c-40b0765b1e01",
         name: "Владимир Елисеев",
         department: "Сервис ЛИС",
-        latestTicketStatus: "inWork",
+        latestTicketStatus: "disabled",
+        isDisabled: true,
         avatarUrl: "",
     },
     {

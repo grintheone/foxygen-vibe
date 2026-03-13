@@ -60,22 +60,48 @@ function DoneBadgeIcon() {
     );
 }
 
+function DisabledBadgeIcon() {
+    return (
+        <span className="absolute -bottom-1 -right-1 inline-flex h-8 w-8 items-center justify-center rounded-full bg-rose-100 text-rose-700 shadow-md shadow-rose-950/30">
+            <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                className="h-4.5 w-4.5"
+                aria-hidden="true"
+            >
+                <circle cx="12" cy="12" r="8" />
+                <path d="M6.3 6.3l11.4 11.4" />
+            </svg>
+        </span>
+    );
+}
+
 function MemberCard({ member, totalTickets }) {
     const status = member.latestTicketStatus;
+    const isDisabled = member.isDisabled || status === "disabled";
     const isInWork = status === "inWork";
     const isDone = status === "worksDone";
-    const toneClass = isInWork
+    const toneClass = isDisabled
+        ? "border-rose-300/25 bg-rose-500/10"
+        : isInWork
         ? "border-emerald-300/25 bg-emerald-500/10"
         : isDone
           ? "border-fuchsia-300/25 bg-fuchsia-500/10"
           : "border-cyan-300/25 bg-cyan-500/10";
     const pulseClass = isInWork ? "bg-[#6A3BF2]/45" : "bg-emerald-400/35";
-    const cardClass = isInWork
+    const cardClass = isDisabled
+        ? "border-rose-300/20 bg-rose-950/25"
+        : isInWork
         ? "border-emerald-300/20 bg-slate-950/35"
         : isDone
           ? "border-fuchsia-300/20 bg-slate-950/35"
           : "border-white/10 bg-slate-950/35";
-    const statusTextClass = isInWork
+    const statusTextClass = isDisabled
+        ? "text-rose-200"
+        : isInWork
         ? "text-emerald-200"
         : isDone
           ? "text-fuchsia-200"
@@ -99,22 +125,27 @@ function MemberCard({ member, totalTickets }) {
                         <img
                             src={member.avatarUrl}
                             alt={member.name}
-                            className="relative h-full w-full rounded-full border border-white/10 object-cover"
+                            className={`relative h-full w-full rounded-full border border-white/10 object-cover ${isDisabled ? "grayscale opacity-80" : ""}`}
                         />
                     ) : (
-                        <div className="relative flex h-full w-full items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-400">
+                        <div
+                            className={`relative flex h-full w-full items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-400 ${isDisabled ? "text-rose-200/70" : ""}`}
+                        >
                             <PersonIcon className="h-10 w-10" />
                         </div>
                     )}
 
-                    {isDone ? <DoneBadgeIcon /> : null}
+                    {isDisabled ? <DisabledBadgeIcon /> : null}
+                    {!isDisabled && isDone ? <DoneBadgeIcon /> : null}
                 </div>
             </div>
 
             <p className="mt-3 text-[1.75rem] leading-7 font-semibold tracking-tight text-white">{member.name}</p>
 
             <div className="mt-2 min-h-[1.8rem] text-sm font-semibold">
-                {isInWork ? (
+                {isDisabled ? (
+                    <p className={statusTextClass}>Временно недоступен</p>
+                ) : isInWork ? (
                     <p className={statusTextClass}>В работе</p>
                 ) : isDone ? (
                     <p className={statusTextClass}>Работы завершены</p>
