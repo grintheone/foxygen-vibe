@@ -3,7 +3,6 @@ package regions
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -13,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -193,18 +191,22 @@ func ensureRegionsSchema(ctx context.Context, db *pgxpool.Pool) error {
 
 	if _, err := db.Exec(
 		ctx,
-		`ALTER TABLE regions
-		 ADD CONSTRAINT regions_title_key UNIQUE (title)`,
-	); err != nil && !isDuplicateConstraintError(err, "regions_title_key") {
+		`DO $$
+		BEGIN
+		  IF NOT EXISTS (
+		    SELECT 1
+		    FROM pg_constraint
+		    WHERE conname = 'regions_title_key'
+		  ) THEN
+		    ALTER TABLE regions
+		    ADD CONSTRAINT regions_title_key UNIQUE (title);
+		  END IF;
+		END $$;`,
+	); err != nil {
 		return fmt.Errorf("ensure regions.title unique constraint: %w", err)
 	}
 
 	return nil
-}
-
-func isDuplicateConstraintError(err error, constraintName string) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == "42710" && pgErr.ConstraintName == constraintName
 }
 
 func trimLegacyPrefix(value string) string {

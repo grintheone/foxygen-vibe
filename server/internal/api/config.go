@@ -123,12 +123,16 @@ func resolveStorageConfig() (storage.Config, error) {
 	}
 
 	useSSLValue := getConfigValue(fileEnv, "MINIO_USE_SSL")
+	region := getConfigValue(fileEnv, "MINIO_REGION")
+	if region == "" {
+		region = getConfigValue(fileEnv, "MINIO_LOCATION")
+	}
 	config := storage.Config{
 		Endpoint:        getConfigValue(fileEnv, "MINIO_ENDPOINT"),
 		AccessKeyID:     getConfigValue(fileEnv, "MINIO_ACCESS_KEY"),
 		SecretAccessKey: getConfigValue(fileEnv, "MINIO_SECRET_KEY"),
 		Bucket:          getConfigValue(fileEnv, "MINIO_BUCKET"),
-		Region:          getConfigValue(fileEnv, "MINIO_REGION"),
+		Region:          region,
 	}
 
 	useSSL, err := resolveBool(fileEnv, "MINIO_USE_SSL", false)

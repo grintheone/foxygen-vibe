@@ -1,0 +1,65 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="64" height="64" rx="18" fill="url(#bg)"/>
+  <rect x="17" y="17" width="30" height="30" rx="8" fill="url(#chip)" stroke="#9B7BFF" stroke-opacity="0.45" stroke-width="1.5"/>
+  <rect x="24" y="24" width="16" height="16" rx="4" fill="#08111F" stroke="#B49CFF" stroke-opacity="0.55" stroke-width="1.25"/>
+
+  <path d="M20 12V18" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/>
+  <path d="M28 12V18" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/>
+  <path d="M36 12V18" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/>
+  <path d="M44 12V18" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/>
+  <path d="M20 46V52" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/>
+  <path d="M28 46V52" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/>
+  <path d="M36 46V52" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/>
+  <path d="M44 46V52" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/>
+  <path d="M12 20H18" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/>
+  <path d="M12 28H18" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/>
+  <path d="M12 36H18" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/>
+  <path d="M12 44H18" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/>
+  <path d="M46 20H52" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/>
+  <path d="M46 28H52" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/>
+  <path d="M46 36H52" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/>
+  <path d="M46 44H52" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/>
+
+  <path d="M18 28H25" stroke="url(#trace)" stroke-width="2.2" stroke-linecap="round"/>
+  <circle cx="26.5" cy="28" r="1.8" fill="#9B7BFF"/>
+  <path d="M38.5 28H46" stroke="url(#trace)" stroke-width="2.2" stroke-linecap="round"/>
+  <circle cx="37.5" cy="28" r="1.8" fill="#9B7BFF"/>
+  <path d="M32 18V24" stroke="url(#traceStrong)" stroke-width="2.2" stroke-linecap="round"/>
+  <circle cx="32" cy="25.5" r="1.8" fill="#6A3BF2"/>
+  <path d="M32 40V46" stroke="url(#traceStrong)" stroke-width="2.2" stroke-linecap="round"/>
+  <circle cx="32" cy="38.5" r="1.8" fill="#6A3BF2"/>
+
+  <path
+    d="M35.83 29H29.75V31.2H33.18L28.8 36.05V37H35.26V34.8H31.82L36.2 29.96V29H35.83Z"
+    fill="url(#mark)"
+  />
+  <circle cx="32" cy="32" r="13.5" fill="url(#glow)" fill-opacity="0.15"/>
+
+  <defs>
+    <linearGradient id="bg" x1="6" y1="4" x2="58" y2="60" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0F172A"/>
+      <stop offset="1" stop-color="#020617"/>
+    </linearGradient>
+    <linearGradient id="chip" x1="17" y1="17" x2="47" y2="47" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1B1735"/>
+      <stop offset="1" stop-color="#0B1022"/>
+    </linearGradient>
+    <linearGradient id="trace" x1="18" y1="28" x2="46" y2="28" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#B49CFF"/>
+      <stop offset="1" stop-color="#9B7BFF"/>
+    </linearGradient>
+    <linearGradient id="traceStrong" x1="32" y1="18" x2="32" y2="46" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#9B7BFF"/>
+      <stop offset="1" stop-color="#6A3BF2"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="28.8" y1="29" x2="36.2" y2="37" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E7DEFF"/>
+      <stop offset="0.5" stop-color="#9B7BFF"/>
+      <stop offset="1" stop-color="#6A3BF2"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(32 32) rotate(90) scale(17)">
+      <stop stop-color="#6A3BF2"/>
+      <stop offset="1" stop-color="#6A3BF2" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+</svg>

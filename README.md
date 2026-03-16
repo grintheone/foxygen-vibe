@@ -5,6 +5,58 @@ Minimal fullstack starter:
 - `client/`: React + Tailwind (Vite)
 - `server/`: Go API with PostgreSQL-ready environment wiring
 - `docker-compose.yml`: local PostgreSQL and MinIO services
+- `docker-compose.production.yml`: production-oriented full stack with frontend, API, PostgreSQL, MinIO, and first-start import bootstrap
+
+## Run the production stack with Docker
+
+The production compose file builds and runs:
+
+- the React frontend behind Nginx
+- the Go API
+- PostgreSQL
+- an optional MinIO container profile for local/self-hosted object storage
+
+On container startup the API bootstrap step:
+
+- waits for PostgreSQL
+- applies every SQL file in `server/db/schema/`
+- waits for MinIO when storage is configured
+- runs `server/cmd/import-dump` only if the database is still empty
+
+Setup:
+
+1. Put the legacy dump at `deploy/production/bootstrap/dump.json`.
+2. Create `deploy/production/.env` from `deploy/production/.env.example`.
+3. In `deploy/production/.env`, change at least:
+   `POSTGRES_PASSWORD`
+   `JWT_SECRET`
+   `IMPORT_DEFAULT_PASSWORD`
+4. Keep the provided company object-storage values unless your infra team gives you newer ones.
+5. Start the stack:
+   `docker compose --env-file deploy/production/.env -f docker-compose.production.yml up -d --build`
+
+For your current company setup, the object-storage section should look like this:
+
+`MINIO_ENDPOINT=s3.internal.int.best`
+`MINIO_ACCESS_KEY=3L8BYP2lYjnGokfkaxX2`
+`MINIO_SECRET_KEY=RcnbKT1i9QpPi59Xc7Ejg8gRLD2otbd5t3fpRR2O`
+`MINIO_BUCKET=mobile-engineer`
+`MINIO_USE_SSL=true`
+`MINIO_LOCATION=ru-sp-01`
+
+If you want to run your own MinIO container instead of an external S3/MinIO endpoint, start with:
+
+`docker compose --profile with-minio --env-file deploy/production/.env -f docker-compose.production.yml up -d --build`
+
+Useful notes:
+
+- The frontend is exposed on `PUBLIC_HTTP_PORT` from the env file and proxies `/api/*` to the backend container.
+- PostgreSQL stays on the internal Docker network by default, which is safer for a company server.
+- For object storage, set `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET`, and either `MINIO_REGION` or `MINIO_LOCATION`.
+- The first-start import is controlled by `BOOTSTRAP_IMPORT_ENABLED=true|false`.
+- Imported users receive the temporary password from `IMPORT_DEFAULT_PASSWORD`.
+- If the database already contains app data, the bootstrap step skips the import and starts the API normally.
+- Your current production path uses the company object storage endpoint and does not need the local `with-minio` profile.
 
 ## Run the server
 

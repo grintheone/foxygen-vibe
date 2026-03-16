@@ -1,0 +1,15 @@
+{
+  "name": "Foxygen Vibe",
+  "short_name": "Foxygen",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "theme_color": "#050816",
+  "background_color": "#050816",
+  "display": "standalone"
+}

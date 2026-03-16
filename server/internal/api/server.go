@@ -2,15 +2,12 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
-	"os"
-	"path/filepath"
-	"sort"
 	"time"
 
 	appdb "foxygen-vibe/server/internal/db"
+	"foxygen-vibe/server/internal/dbinit"
 	"foxygen-vibe/server/internal/storage"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -87,7 +84,7 @@ func New() (*Server, error) {
 
 	api.db = db
 	api.queries = appdb.New(db)
-	if err := api.ensureSchema(ctx); err != nil {
+	if err := dbinit.EnsureSchema(ctx, db, "db/schema/*.sql"); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -131,26 +128,4 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/tickets/department", s.handleDepartmentTickets)
 
 	return withRequestLogging(withCORS(mux))
-}
-
-func (s *Server) ensureSchema(ctx context.Context) error {
-	schemaFiles, err := filepath.Glob("db/schema/*.sql")
-	if err != nil {
-		return fmt.Errorf("list schema files: %w", err)
-	}
-
-	sort.Strings(schemaFiles)
-
-	for _, schemaFile := range schemaFiles {
-		schema, readErr := os.ReadFile(schemaFile)
-		if readErr != nil {
-			return fmt.Errorf("read schema %s: %w", schemaFile, readErr)
-		}
-
-		if _, execErr := s.db.Exec(ctx, string(schema)); execErr != nil {
-			return fmt.Errorf("apply schema %s: %w", schemaFile, execErr)
-		}
-	}
-
-	return nil
 }
