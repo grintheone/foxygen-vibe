@@ -14,6 +14,7 @@ import { routePaths } from "../../../shared/config/routes";
 import { ContactCard } from "../../../shared/ui/contact-card";
 import { NavigationCard } from "../../../shared/ui/navigation-card";
 import { PageShell } from "../../../shared/ui/page-shell";
+import { UserAvatar } from "../../../shared/ui/user-avatar";
 
 function resolveLocationPoint(location) {
   const items = Array.isArray(location) ? location : location ? [location] : [];
@@ -390,7 +391,13 @@ function ClientCommentsSection({
 
               <div className="mt-6 flex items-end justify-between gap-4">
                 <div className="flex items-center gap-4">
-                  <div className="h-10 w-10 rounded-full bg-slate-950 sm:h-12 sm:w-12" aria-hidden="true" />
+                  <UserAvatar
+                    avatarUrl={comment.avatarUrl}
+                    userId={comment.author_id}
+                    name={comment.authorName}
+                    className="h-10 w-10 sm:h-12 sm:w-12"
+                    iconClassName="h-5 w-5 sm:h-6 sm:w-6"
+                  />
                   <div>
                     <p className="text-lg font-semibold text-slate-100">{comment.authorName || "Не указано"}</p>
                     <p className="text-sm text-slate-400 sm:text-lg">{comment.department || "Отдел не указан"}</p>

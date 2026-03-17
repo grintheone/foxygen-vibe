@@ -2,6 +2,7 @@ import ticketAssignedIcon from "../../../../assets/icons/ticket-assigned.svg";
 import ticketClosedIcon from "../../../../assets/icons/ticket-closed.svg";
 import ticketDoneIcon from "../../../../assets/icons/ticket-done.svg";
 import ticketInWorkIcon from "../../../../assets/icons/ticket-inwork.svg";
+import { UserAvatar } from "../../../../shared/ui/user-avatar";
 import { ticketSurfaceClassName } from "./ticket-surface";
 
 function formatHistoryDate(value) {
@@ -43,6 +44,8 @@ function buildHistoryEntries(ticket) {
             id: "assigned",
             title: "Назначил",
             actorName: ticket?.assignedByName,
+            actorId: ticket?.assignedBy,
+            avatarUrl: ticket?.assignedByAvatarUrl,
             happenedAt: ticket?.assigned_at,
             icon: ticketAssignedIcon,
         },
@@ -50,6 +53,8 @@ function buildHistoryEntries(ticket) {
             id: "inWork",
             title: "Начал работы",
             actorName: ticket?.executorName,
+            actorId: ticket?.executor,
+            avatarUrl: ticket?.executorAvatarUrl,
             happenedAt: ticket?.workstarted_at,
             icon: ticketInWorkIcon,
         },
@@ -57,6 +62,8 @@ function buildHistoryEntries(ticket) {
             id: "worksDone",
             title: "Завершил работы",
             actorName: ticket?.executorName,
+            actorId: ticket?.executor,
+            avatarUrl: ticket?.executorAvatarUrl,
             happenedAt: ticket?.workfinished_at,
             icon: ticketDoneIcon,
         },
@@ -64,6 +71,8 @@ function buildHistoryEntries(ticket) {
             id: "closed",
             title: "Закрыл тикет",
             actorName: ticket?.executorName,
+            actorId: ticket?.executor,
+            avatarUrl: ticket?.executorAvatarUrl,
             happenedAt: ticket?.closed_at,
             icon: ticketClosedIcon,
         },
@@ -97,7 +106,13 @@ export function TicketHistorySection({ ticket }) {
                     return (
                         <article key={entry.id} className="grid grid-cols-[1fr_auto] gap-4">
                             <div className="flex min-w-0 items-start gap-4">
-                                <span className="mt-1 inline-flex h-12 w-12 shrink-0 rounded-full bg-slate-950" />
+                                <UserAvatar
+                                    avatarUrl={entry.avatarUrl}
+                                    userId={entry.actorId}
+                                    name={entry.actorName}
+                                    className="mt-1 h-12 w-12"
+                                    iconClassName="h-6 w-6"
+                                />
                                 <div className="min-w-0">
                                     <p className="text-sm text-slate-400 sm:text-lg">{entry.title}</p>
                                     <p className="text-lg font-semibold leading-tight text-slate-100 sm:text-2xl">{entry.actorName}</p>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { loadTicketAttachmentPreviewUrl } from "../../../../shared/api/tickets-api";
+import { UserAvatar } from "../../../../shared/ui/user-avatar";
 
 function formatAttachmentSize(sizeBytes) {
     if (!sizeBytes) {
@@ -114,9 +115,13 @@ export function TicketWorkResultSection({ ticket, workDuration, onDownloadAttach
 
             <div className="rounded-2xl border border-white/15 bg-slate-900/35 p-5 shadow-lg shadow-black/20 backdrop-blur-sm">
                 <div className="flex items-start gap-4">
-                    <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-950/90 text-sm font-semibold text-slate-100">
-                        {ticket.executorName ? ticket.executorName.trim().charAt(0).toUpperCase() : "?"}
-                    </span>
+                    <UserAvatar
+                        avatarUrl={ticket.executorAvatarUrl}
+                        userId={ticket.executor}
+                        name={ticket.executorName}
+                        className="h-12 w-12"
+                        iconClassName="h-6 w-6"
+                    />
                     <div className="min-w-0">
                         <p className="text-lg font-semibold leading-tight text-slate-100 sm:text-2xl">
                             {ticket.executorName || "Исполнитель не назначен"}

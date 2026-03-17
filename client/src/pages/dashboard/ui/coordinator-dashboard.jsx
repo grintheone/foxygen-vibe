@@ -340,6 +340,7 @@ export function CoordinatorDashboard({ department }) {
                             const fallbackExecutor =
                                 ticket.executorName || ticket.executorDepartment
                                     ? {
+                                          id: ticket.executor,
                                           name: ticket.executorName || "Исполнитель не назначен",
                                           department: ticket.executorDepartment || "Отдел не указан",
                                           avatarUrl: "",

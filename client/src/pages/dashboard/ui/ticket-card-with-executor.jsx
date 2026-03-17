@@ -5,24 +5,8 @@ import ticketClosedIcon from "../../../assets/icons/ticket-closed.svg";
 import ticketCreatedIcon from "../../../assets/icons/ticket-created.svg";
 import ticketDoneIcon from "../../../assets/icons/ticket-done.svg";
 import ticketInWorkIcon from "../../../assets/icons/ticket-inwork.svg";
+import { UserAvatar } from "../../../shared/ui/user-avatar";
 import { resolveTicketDeadlineDisplay, resolveTicketReason } from "../lib/dashboard-formatters";
-
-function PersonIcon({ className }) {
-    return (
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            className={className}
-            aria-hidden="true"
-        >
-            <circle cx="12" cy="8" r="3.6" />
-            <path d="M4.5 19.2C5.9 15.9 8.6 14.4 12 14.4s6.1 1.5 7.5 4.8" />
-        </svg>
-    );
-}
 
 const statusIconByType = {
     assigned: ticketAssignedIcon,
@@ -58,11 +42,22 @@ export function TicketCardWithExecutor({ ticket, executor, onOpenTicket }) {
         ? "border-rose-200/30 bg-rose-500/20 text-rose-50"
         : "border-cyan-200/30 bg-cyan-400/20 text-cyan-50";
 
+    function handleCardKeyDown(event) {
+        if (event.key !== "Enter" && event.key !== " ") {
+            return;
+        }
+
+        event.preventDefault();
+        onOpenTicket(ticket.id);
+    }
+
     return (
-        <button
-            type="button"
+        <article
+            role="button"
+            tabIndex={0}
             onClick={() => onOpenTicket(ticket.id)}
-            className="relative w-full overflow-hidden rounded-3xl border border-white/10 bg-slate-950/35 text-left shadow-xl shadow-black/20 transition hover:border-white/20 hover:bg-slate-950/45"
+            onKeyDown={handleCardKeyDown}
+            className="relative w-full cursor-pointer overflow-hidden rounded-3xl border border-white/10 bg-slate-950/35 text-left shadow-xl shadow-black/20 transition hover:border-white/20 hover:bg-slate-950/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
         >
             <div className="grid grid-cols-[1fr_auto] gap-3 p-5">
                 <div className="space-y-2">
@@ -79,17 +74,13 @@ export function TicketCardWithExecutor({ ticket, executor, onOpenTicket }) {
 
             <div className="border-t border-white/10 bg-white/5 px-5 py-4">
                 <div className="flex items-center gap-3">
-                    {executor?.avatarUrl ? (
-                        <img
-                            src={executor.avatarUrl}
-                            alt={executor.name}
-                            className="h-10 w-10 rounded-full object-cover"
-                        />
-                    ) : (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500">
-                            <PersonIcon className="h-5 w-5" />
-                        </div>
-                    )}
+                    <UserAvatar
+                        avatarUrl={executor?.avatarUrl}
+                        userId={executor?.id}
+                        name={executor?.name}
+                        className="h-10 w-10"
+                        stopPropagation
+                    />
 
                     <div className="min-w-0">
                         <p className="truncate text-base font-semibold text-slate-100">
@@ -116,6 +107,6 @@ export function TicketCardWithExecutor({ ticket, executor, onOpenTicket }) {
                     className={`pointer-events-none absolute inset-x-0 bottom-0 h-[3px] rounded-full bg-gradient-to-r ${gradientClassName}`}
                 />
             ) : null}
-        </button>
+        </article>
     );
 }

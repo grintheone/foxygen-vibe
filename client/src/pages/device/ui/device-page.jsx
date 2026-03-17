@@ -19,6 +19,7 @@ import { BottomPageAction } from "../../../shared/ui/bottom-page-action";
 import { PageShell } from "../../../shared/ui/page-shell";
 import { SelectField } from "../../../shared/ui/select-field";
 import { SlideOverSheet } from "../../../shared/ui/slide-over-sheet";
+import { UserAvatar } from "../../../shared/ui/user-avatar";
 
 function formatCommentDate(value) {
     if (!value) {
@@ -215,17 +216,17 @@ function DeviceOverviewSection({ device, propertyEntries }) {
 function DeviceServiceSection({ agreement, isError, isLoading, onOpenClient, onOpenExpiredAgreements }) {
     return (
         <section className="space-y-4">
-            <h2 className="text-2xl font-bold tracking-tight text-slate-50 sm:text-3xl">Сервисные услуги</h2>
+            <h2 className="text-2xl font-bold tracking-tight text-slate-50 sm:text-3xl">Сервисные условия</h2>
 
             {isLoading ? (
                 <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-                    <p className="text-sm text-slate-300">Загрузка сервисных услуг...</p>
+                    <p className="text-sm text-slate-300">Загрузка сервисных условий...</p>
                 </div>
             ) : null}
 
             {isError ? (
                 <div className="rounded-3xl border border-rose-300/30 bg-rose-500/10 p-6">
-                    <p className="text-sm text-rose-100">Не удалось загрузить сервисные услуги.</p>
+                    <p className="text-sm text-rose-100">Не удалось загрузить сервисные условия.</p>
                 </div>
             ) : null}
 
@@ -237,7 +238,7 @@ function DeviceServiceSection({ agreement, isError, isLoading, onOpenClient, onO
                         className="w-full rounded-3xl border border-white/10 bg-slate-950/35 p-6 text-left shadow-xl shadow-black/20 backdrop-blur transition hover:border-white/20 hover:bg-slate-950/45"
                     >
                         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
-                            Активная услуга
+                            Активный контракт
                         </p>
                         <p className="mt-3 text-2xl font-semibold tracking-tight text-slate-50">
                             {agreement.clientName || "Не указано"}
@@ -251,7 +252,7 @@ function DeviceServiceSection({ agreement, isError, isLoading, onOpenClient, onO
                         onClick={() => onOpenExpiredAgreements(agreement.client)}
                         className="inline-flex items-center gap-3 rounded-2xl px-2 py-1 text-lg font-semibold text-[#8B5CFF] transition hover:text-[#A27BFF]"
                     >
-                        <span>Истекшие сервисные услуги</span>
+                        <span>Истекшие сервисные условия</span>
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
                             viewBox="0 0 24 24"
@@ -271,7 +272,9 @@ function DeviceServiceSection({ agreement, isError, isLoading, onOpenClient, onO
 
             {!isLoading && !isError && !agreement?.client ? (
                 <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-                    <p className="text-sm text-slate-300">Для этого устройства не найдено активных сервисных услуг.</p>
+                    <p className="text-sm text-slate-300">
+                        Для этого устройства не найдено активных сервисных условий.
+                    </p>
                 </div>
             ) : null}
         </section>
@@ -387,9 +390,12 @@ function DeviceCommentsSection({
 
                             <div className="mt-6 flex items-end justify-between gap-4">
                                 <div className="flex items-center gap-4">
-                                    <div
-                                        className="h-10 w-10 rounded-full bg-slate-950 sm:h-12 sm:w-12"
-                                        aria-hidden="true"
+                                    <UserAvatar
+                                        avatarUrl={comment.avatarUrl}
+                                        userId={comment.author_id}
+                                        name={comment.authorName}
+                                        className="h-10 w-10 sm:h-12 sm:w-12"
+                                        iconClassName="h-5 w-5 sm:h-6 sm:w-6"
                                     />
                                     <div>
                                         <p className="text-lg font-semibold text-slate-100">

@@ -1168,6 +1168,7 @@ func (s *Server) handleComments(w http.ResponseWriter, r *http.Request) {
 		ID          int32   `json:"id"`
 		AuthorID    string  `json:"author_id"`
 		AuthorName  string  `json:"authorName"`
+		AvatarURL   string  `json:"avatarUrl"`
 		Department  string  `json:"department"`
 		ReferenceID string  `json:"reference_id"`
 		Text        string  `json:"text"`
@@ -1229,6 +1230,7 @@ func (s *Server) handleComments(w http.ResponseWriter, r *http.Request) {
 				c.id,
 				c.author_id,
 				TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))),
+				COALESCE(u.logo, ''),
 				COALESCE(d.title, ''),
 				c.reference_id,
 				COALESCE(c.text, ''),
@@ -1252,13 +1254,14 @@ func (s *Server) handleComments(w http.ResponseWriter, r *http.Request) {
 				id         int32
 				authorID   pgtype.UUID
 				authorName string
+				avatarURL  string
 				department string
 				refID      pgtype.UUID
 				text       string
 				createdAt  pgtype.Timestamp
 			)
 
-			if err := rows.Scan(&id, &authorID, &authorName, &department, &refID, &text, &createdAt); err != nil {
+			if err := rows.Scan(&id, &authorID, &authorName, &avatarURL, &department, &refID, &text, &createdAt); err != nil {
 				log.Printf("scan comment failed: %v", err)
 				http.Error(w, "failed to load comments", http.StatusInternalServerError)
 				return
@@ -1268,6 +1271,7 @@ func (s *Server) handleComments(w http.ResponseWriter, r *http.Request) {
 				ID:          id,
 				AuthorID:    uuidToString(authorID),
 				AuthorName:  authorName,
+				AvatarURL:   avatarURL,
 				Department:  department,
 				ReferenceID: uuidToString(refID),
 				Text:        text,
@@ -1335,6 +1339,7 @@ func (s *Server) handleComments(w http.ResponseWriter, r *http.Request) {
 				i.id,
 				i.author_id,
 				TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))),
+				COALESCE(u.logo, ''),
 				COALESCE(d.title, ''),
 				i.reference_id,
 				i.text,
@@ -1348,13 +1353,14 @@ func (s *Server) handleComments(w http.ResponseWriter, r *http.Request) {
 			id         int32
 			authorID   pgtype.UUID
 			authorName string
+			avatarURL  string
 			department string
 			refID      pgtype.UUID
 			text       string
 			createdAt  pgtype.Timestamp
 		)
 
-		if err := row.Scan(&id, &authorID, &authorName, &department, &refID, &text, &createdAt); err != nil {
+		if err := row.Scan(&id, &authorID, &authorName, &avatarURL, &department, &refID, &text, &createdAt); err != nil {
 			log.Printf("insert comment failed: %v", err)
 			http.Error(w, "failed to create comment", http.StatusInternalServerError)
 			return
@@ -1364,6 +1370,7 @@ func (s *Server) handleComments(w http.ResponseWriter, r *http.Request) {
 			ID:          id,
 			AuthorID:    uuidToString(authorID),
 			AuthorName:  authorName,
+			AvatarURL:   avatarURL,
 			Department:  department,
 			ReferenceID: uuidToString(refID),
 			Text:        text,
@@ -2535,6 +2542,7 @@ func (s *Server) handleDepartmentMembers(w http.ResponseWriter, r *http.Request)
 		Name               string  `json:"name"`
 		Username           string  `json:"username"`
 		Department         string  `json:"department"`
+		AvatarURL          string  `json:"avatarUrl"`
 		IsDisabled         bool    `json:"isDisabled"`
 		LatestTicket       *string `json:"latestTicket,omitempty"`
 		LatestTicketStatus string  `json:"latestTicketStatus"`
@@ -2571,6 +2579,7 @@ func (s *Server) handleDepartmentMembers(w http.ResponseWriter, r *http.Request)
 			TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))) AS name,
 			a.username,
 			COALESCE(d.title, ''),
+			COALESCE(u.logo, ''),
 			a.disabled,
 			u.latest_ticket,
 			COALESCE(lt.status, '')
@@ -2603,12 +2612,13 @@ func (s *Server) handleDepartmentMembers(w http.ResponseWriter, r *http.Request)
 			name               string
 			username           string
 			department         string
+			avatarURL          string
 			isDisabled         bool
 			latestTicket       pgtype.UUID
 			latestTicketStatus string
 		)
 
-		if err := rows.Scan(&id, &name, &username, &department, &isDisabled, &latestTicket, &latestTicketStatus); err != nil {
+		if err := rows.Scan(&id, &name, &username, &department, &avatarURL, &isDisabled, &latestTicket, &latestTicketStatus); err != nil {
 			log.Printf("scan department member failed: %v", err)
 			http.Error(w, "failed to load department members", http.StatusInternalServerError)
 			return
@@ -2619,6 +2629,7 @@ func (s *Server) handleDepartmentMembers(w http.ResponseWriter, r *http.Request)
 			Name:               name,
 			Username:           username,
 			Department:         department,
+			AvatarURL:          avatarURL,
 			IsDisabled:         isDisabled,
 			LatestTicket:       nullableUUIDToString(latestTicket),
 			LatestTicketStatus: latestTicketStatus,
@@ -3236,6 +3247,7 @@ func (s *Server) handleTicketByID(w http.ResponseWriter, r *http.Request) {
 		DepartmentTitle    string                     `json:"departmentTitle"`
 		AssignedBy         *string                    `json:"assignedBy"`
 		AssignedByName     string                     `json:"assignedByName"`
+		AssignedByAvatar   string                     `json:"assignedByAvatarUrl"`
 		ContactPerson      *string                    `json:"contactPerson"`
 		ContactName        string                     `json:"contactName"`
 		ContactPosition    string                     `json:"contactPosition"`
@@ -3243,6 +3255,7 @@ func (s *Server) handleTicketByID(w http.ResponseWriter, r *http.Request) {
 		ContactEmail       string                     `json:"contactEmail"`
 		Executor           *string                    `json:"executor"`
 		ExecutorName       string                     `json:"executorName"`
+		ExecutorAvatar     string                     `json:"executorAvatarUrl"`
 		ExecutorDepartment string                     `json:"executorDepartment"`
 		ReferenceTicket    *string                    `json:"referenceTicket"`
 		UsedMaterials      []string                   `json:"usedMaterials"`
@@ -3358,6 +3371,7 @@ func (s *Server) handleTicketByID(w http.ResponseWriter, r *http.Request) {
 			COALESCE(dpt.title, ''),
 			t.assigned_by,
 			TRIM(CONCAT(COALESCE(u_assigned.first_name, ''), ' ', COALESCE(u_assigned.last_name, ''))),
+			COALESCE(u_assigned.logo, ''),
 			t.contact_person,
 			COALESCE(cp.name, ''),
 			COALESCE(cp.position, ''),
@@ -3365,6 +3379,7 @@ func (s *Server) handleTicketByID(w http.ResponseWriter, r *http.Request) {
 			COALESCE(cp.email, ''),
 			t.executor,
 			TRIM(CONCAT(COALESCE(u_exec.first_name, ''), ' ', COALESCE(u_exec.last_name, ''))),
+			COALESCE(u_exec.logo, ''),
 			COALESCE(d_exec.title, ''),
 			t.reference_ticket,
 			t.used_materials
@@ -3418,6 +3433,7 @@ func (s *Server) handleTicketByID(w http.ResponseWriter, r *http.Request) {
 		departmentTitle    string
 		assignedBy         pgtype.UUID
 		assignedByName     string
+		assignedByAvatar   string
 		contactPerson      pgtype.UUID
 		contactName        string
 		contactPosition    string
@@ -3425,6 +3441,7 @@ func (s *Server) handleTicketByID(w http.ResponseWriter, r *http.Request) {
 		contactEmail       string
 		executor           pgtype.UUID
 		executorName       string
+		executorAvatar     string
 		executorDepartment string
 		referenceTicket    pgtype.UUID
 		usedMaterials      []pgtype.UUID
@@ -3464,6 +3481,7 @@ func (s *Server) handleTicketByID(w http.ResponseWriter, r *http.Request) {
 		&departmentTitle,
 		&assignedBy,
 		&assignedByName,
+		&assignedByAvatar,
 		&contactPerson,
 		&contactName,
 		&contactPosition,
@@ -3471,6 +3489,7 @@ func (s *Server) handleTicketByID(w http.ResponseWriter, r *http.Request) {
 		&contactEmail,
 		&executor,
 		&executorName,
+		&executorAvatar,
 		&executorDepartment,
 		&referenceTicket,
 		&usedMaterials,
@@ -3527,6 +3546,7 @@ func (s *Server) handleTicketByID(w http.ResponseWriter, r *http.Request) {
 		DepartmentTitle:    departmentTitle,
 		AssignedBy:         nullableUUIDToString(assignedBy),
 		AssignedByName:     assignedByName,
+		AssignedByAvatar:   assignedByAvatar,
 		ContactPerson:      nullableUUIDToString(contactPerson),
 		ContactName:        contactName,
 		ContactPosition:    contactPosition,
@@ -3534,6 +3554,7 @@ func (s *Server) handleTicketByID(w http.ResponseWriter, r *http.Request) {
 		ContactEmail:       contactEmail,
 		Executor:           nullableUUIDToString(executor),
 		ExecutorName:       executorName,
+		ExecutorAvatar:     executorAvatar,
 		ExecutorDepartment: executorDepartment,
 		ReferenceTicket:    nullableUUIDToString(referenceTicket),
 		UsedMaterials:      uuidSliceToString(usedMaterials),
