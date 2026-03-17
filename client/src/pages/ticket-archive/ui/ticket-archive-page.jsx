@@ -555,10 +555,32 @@ function ArchiveTicketsSection({
     ticketsErrorMessage,
     ticketsHeading,
 }) {
+    const [expandedGroups, setExpandedGroups] = useState(() => new Set());
     const totalPages = pagination.total > 0 ? Math.ceil(pagination.total / pagination.limit) : 0;
     const currentPage = totalPages > 0 ? Math.floor(pagination.offset / pagination.limit) + 1 : 0;
     const currentRangeStart = pagination.total > 0 ? pagination.offset + 1 : 0;
     const currentRangeEnd = pagination.total > 0 ? pagination.offset + pagination.pageItemsCount : 0;
+    const visibleGroupsSignature = groupedTickets
+        .map((group) => `${group.label}:${group.items.map((ticket) => ticket.id).join(",")}`)
+        .join("|");
+
+    useEffect(() => {
+        setExpandedGroups(new Set());
+    }, [visibleGroupsSignature]);
+
+    function handleToggleGroup(groupLabel) {
+        setExpandedGroups((currentValue) => {
+            const nextValue = new Set(currentValue);
+
+            if (nextValue.has(groupLabel)) {
+                nextValue.delete(groupLabel);
+            } else {
+                nextValue.add(groupLabel);
+            }
+
+            return nextValue;
+        });
+    }
 
     return (
         <section className="space-y-4">
@@ -609,32 +631,64 @@ function ArchiveTicketsSection({
                 <div className="space-y-5">
                     {groupedTickets.map((group) => (
                         <section key={group.label} className="space-y-3">
-                            <div className="sticky top-4 z-10 rounded-2xl border border-white/10 bg-slate-950/85 px-4 py-3 shadow-lg shadow-black/20 backdrop-blur">
-                                <div className="flex items-center justify-between gap-4">
-                                    <p className="text-sm font-semibold text-slate-200 sm:text-base">{group.label}</p>
-                                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-300">
-                                        {group.items.length}
-                                    </span>
-                                </div>
+                            <div className="sticky top-4 z-10">
+                                <button
+                                    type="button"
+                                    onClick={() => handleToggleGroup(group.label)}
+                                    aria-expanded={expandedGroups.has(group.label)}
+                                    className="w-full rounded-2xl border border-white/10 bg-slate-950/85 px-4 py-3 text-left shadow-lg shadow-black/20 backdrop-blur transition hover:border-white/20 hover:bg-slate-950"
+                                >
+                                    <div className="flex items-center justify-between gap-4">
+                                        <div className="min-w-0">
+                                            <p className="text-sm font-semibold text-slate-200 sm:text-base">{group.label}</p>
+                                            <p className="mt-1 text-xs text-slate-400">
+                                                {expandedGroups.has(group.label) ? "Скрыть записи" : "Показать записи"}
+                                            </p>
+                                        </div>
+
+                                        <div className="flex shrink-0 items-center gap-3">
+                                            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-300">
+                                                {group.items.length}
+                                            </span>
+                                            <svg
+                                                xmlns="http://www.w3.org/2000/svg"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                strokeWidth="1.9"
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                className={`h-5 w-5 text-slate-300 transition-transform ${
+                                                    expandedGroups.has(group.label) ? "rotate-180" : ""
+                                                }`}
+                                                aria-hidden="true"
+                                            >
+                                                <path d="m6 9 6 6 6-6" />
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </button>
                             </div>
 
-                            <div className="grid gap-3">
-                                {group.items.map((ticket) =>
-                                    entityType === "profile" ? (
-                                        <ProfileTicketCard key={ticket.id} ticket={ticket} onOpenTicket={onOpenTicket} />
-                                    ) : (
-                                        <TicketCardWithExecutor
-                                            key={ticket.id}
-                                            ticket={ticket}
-                                            executor={{
-                                                department: ticket.executorDepartment,
-                                                name: ticket.executorName,
-                                            }}
-                                            onOpenTicket={onOpenTicket}
-                                        />
-                                    ),
-                                )}
-                            </div>
+                            {expandedGroups.has(group.label) ? (
+                                <div className="grid gap-3">
+                                    {group.items.map((ticket) =>
+                                        entityType === "profile" ? (
+                                            <ProfileTicketCard key={ticket.id} ticket={ticket} onOpenTicket={onOpenTicket} />
+                                        ) : (
+                                            <TicketCardWithExecutor
+                                                key={ticket.id}
+                                                ticket={ticket}
+                                                executor={{
+                                                    department: ticket.executorDepartment,
+                                                    name: ticket.executorName,
+                                                }}
+                                                onOpenTicket={onOpenTicket}
+                                            />
+                                        ),
+                                    )}
+                                </div>
+                            ) : null}
                         </section>
                     ))}
                 </div>
