@@ -35,3 +35,12 @@ func TestTicketAttachmentObjectKeyUsesAttachmentID(t *testing.T) {
 		t.Fatalf("expected attachment id object key, got %q", key)
 	}
 }
+
+func TestProfileAvatarObjectKeyUsesUserID(t *testing.T) {
+	t.Parallel()
+
+	key := ProfileAvatarObjectKey(" user-42 ")
+	if key != "profile-avatars/user-42" {
+		t.Fatalf("expected user-based avatar object key, got %q", key)
+	}
+}

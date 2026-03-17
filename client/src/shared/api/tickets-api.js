@@ -300,6 +300,57 @@ export const ticketsApi = createApi({
       }),
       invalidatesTags: (_, __, { referenceId }) => [{ type: "Comment", id: referenceId }],
     }),
+    uploadProfileAvatar: builder.mutation({
+      query: ({ file }) => {
+        const body = new FormData();
+        body.append("file", file);
+
+        return {
+          body,
+          method: "POST",
+          url: "api/profile/avatar",
+        };
+      },
+      async onQueryStarted(_, { dispatch, queryFulfilled }) {
+        try {
+          const { data } = await queryFulfilled;
+
+          dispatch(
+            ticketsApi.util.updateQueryData("getMyProfile", undefined, (draft) => {
+              if (!draft) {
+                return;
+              }
+
+              draft.logo = data?.logo || draft.logo;
+            }),
+          );
+
+          if (data?.user_id) {
+            dispatch(
+              ticketsApi.util.updateQueryData("getProfileById", data.user_id, (draft) => {
+                if (!draft) {
+                  return;
+                }
+
+                draft.logo = data.logo || draft.logo;
+              }),
+            );
+          }
+        } catch {
+          // Let the calling component render the upload error state.
+        }
+      },
+      invalidatesTags: (result) => [
+        "Client",
+        "Comment",
+        "DepartmentMember",
+        "Device",
+        "Profile",
+        "Ticket",
+        "Tickets",
+        ...(result?.user_id ? [{ type: "Profile", id: result.user_id }] : []),
+      ],
+    }),
     uploadTicketAttachment: builder.mutation({
       query: ({ file, ticketId }) => {
         const body = new FormData();
@@ -381,5 +432,6 @@ export const {
   useGetTicketReasonsQuery,
   useCreateTicketMutation,
   usePatchTicketMutation,
+  useUploadProfileAvatarMutation,
   useUploadTicketAttachmentMutation,
 } = ticketsApi;

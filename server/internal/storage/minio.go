@@ -147,3 +147,7 @@ func (c *Client) RemoveObject(ctx context.Context, objectKey string) error {
 func TicketAttachmentObjectKey(_ string, attachmentID string, fileName string) string {
 	return strings.TrimSpace(attachmentID)
 }
+
+func ProfileAvatarObjectKey(userID string) string {
+	return "profile-avatars/" + strings.TrimSpace(userID)
+}

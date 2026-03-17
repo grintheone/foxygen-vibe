@@ -789,3 +789,31 @@ func TestProfileEndpointReturnsProfile(t *testing.T) {
 		}
 	}
 }
+
+func TestProfileAvatarDownloadEndpointUsesPublicRoute(t *testing.T) {
+	t.Parallel()
+
+	srv := &Server{auth: testAuthConfig()}
+	req := httptest.NewRequest(http.MethodGet, "/api/profile/11111111-1111-1111-1111-111111111111/avatar", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
+	}
+}
+
+func TestProfileAvatarUploadEndpointRejectsMissingToken(t *testing.T) {
+	t.Parallel()
+
+	srv := &Server{auth: testAuthConfig()}
+	req := httptest.NewRequest(http.MethodPost, "/api/profile/avatar", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status %d, got %d", http.StatusUnauthorized, rec.Code)
+	}
+}

@@ -1,9 +1,11 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -11,18 +13,28 @@ import (
 	"time"
 
 	appdb "foxygen-vibe/server/internal/db"
+	"foxygen-vibe/server/internal/storage"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/minio/minio-go/v7"
 	"golang.org/x/crypto/bcrypt"
 )
 
 const (
-	defaultTicketListLimit = 50
-	maxTicketListLimit     = 100
+	defaultTicketListLimit     = 50
+	maxTicketListLimit         = 100
+	maxProfileAvatarUploadSize = 10 << 20
 )
+
+var supportedProfileAvatarMediaTypes = map[string]struct{}{
+	"image/gif":  {},
+	"image/jpeg": {},
+	"image/png":  {},
+	"image/webp": {},
+}
 
 type paginatedResponse[T any] struct {
 	Items   []T  `json:"items"`
@@ -308,6 +320,166 @@ func updateLatestTicketReference(ctx context.Context, executor sqlExecutor, user
 	}
 
 	return nil
+}
+
+func buildProfileAvatarDownloadURL(userID string) string {
+	return "/api/profile/" + strings.TrimSpace(userID) + "/avatar"
+}
+
+func buildVersionedProfileAvatarURL(userID string, version int64) string {
+	return buildProfileAvatarDownloadURL(userID) + "?v=" + strconv.FormatInt(version, 10)
+}
+
+func isSupportedProfileAvatarMediaType(mediaType string) bool {
+	_, ok := supportedProfileAvatarMediaTypes[strings.TrimSpace(strings.ToLower(mediaType))]
+	return ok
+}
+
+func (s *Server) handleProfileAvatarUpload(w http.ResponseWriter, r *http.Request) {
+	claims, err := parseAuthorizationHeader(s.auth.jwtSecret, r.Header.Get("Authorization"))
+	if err != nil {
+		http.Error(w, "invalid access token", http.StatusUnauthorized)
+		return
+	}
+
+	userID := pgtype.UUID{}
+	if err := userID.Scan(claims.Subject); err != nil {
+		http.Error(w, "invalid access token", http.StatusUnauthorized)
+		return
+	}
+
+	if s.db == nil {
+		http.Error(w, "database not configured", http.StatusServiceUnavailable)
+		return
+	}
+	if s.storage == nil {
+		http.Error(w, "object storage not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxProfileAvatarUploadSize+(1<<20))
+
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "file is required", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	fileBytes, err := io.ReadAll(file)
+	if err != nil {
+		http.Error(w, "failed to read uploaded file", http.StatusBadRequest)
+		return
+	}
+	if len(fileBytes) == 0 {
+		http.Error(w, "file must not be empty", http.StatusBadRequest)
+		return
+	}
+	if len(fileBytes) > maxProfileAvatarUploadSize {
+		http.Error(w, "profile photo must not exceed 10 MB", http.StatusRequestEntityTooLarge)
+		return
+	}
+
+	sniffLength := 512
+	if len(fileBytes) < sniffLength {
+		sniffLength = len(fileBytes)
+	}
+	mediaType := http.DetectContentType(fileBytes[:sniffLength])
+	if !isSupportedProfileAvatarMediaType(mediaType) {
+		http.Error(w, "only JPG, PNG, GIF, and WebP images are supported", http.StatusUnsupportedMediaType)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
+	defer cancel()
+
+	objectKey := storage.ProfileAvatarObjectKey(userID.String())
+	if _, err := s.storage.PutObject(ctx, objectKey, bytes.NewReader(fileBytes), int64(len(fileBytes)), mediaType); err != nil {
+		log.Printf("upload profile avatar to MinIO failed: %v", err)
+		http.Error(w, "failed to upload profile photo", http.StatusBadGateway)
+		return
+	}
+
+	logo := buildVersionedProfileAvatarURL(userID.String(), time.Now().UTC().UnixMilli())
+	result, err := s.db.Exec(ctx, `
+		UPDATE users
+		SET logo = $2
+		WHERE user_id = $1
+	`, userID, logo)
+	if err != nil {
+		log.Printf("update profile avatar failed: %v", err)
+		http.Error(w, "failed to upload profile photo", http.StatusInternalServerError)
+		return
+	}
+	if result.RowsAffected() == 0 {
+		http.Error(w, "profile not found", http.StatusNotFound)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"logo":    logo,
+		"user_id": userID.String(),
+	})
+}
+
+func (s *Server) handleProfileAvatarDownload(w http.ResponseWriter, r *http.Request, userID pgtype.UUID) {
+	if s.db == nil {
+		http.Error(w, "database not configured", http.StatusServiceUnavailable)
+		return
+	}
+	if s.storage == nil {
+		http.Error(w, "object storage not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
+	defer cancel()
+
+	var hasAvatar bool
+	if err := s.db.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM users
+			WHERE user_id = $1
+			  AND COALESCE(logo, '') <> ''
+		)
+	`, userID).Scan(&hasAvatar); err != nil {
+		log.Printf("check profile avatar failed: %v", err)
+		http.Error(w, "failed to load profile photo", http.StatusInternalServerError)
+		return
+	}
+	if !hasAvatar {
+		http.Error(w, "profile photo not found", http.StatusNotFound)
+		return
+	}
+
+	object, info, err := s.storage.GetObject(ctx, storage.ProfileAvatarObjectKey(userID.String()))
+	if err != nil {
+		if minio.ToErrorResponse(err).Code == "NoSuchKey" {
+			http.Error(w, "profile photo not found", http.StatusNotFound)
+			return
+		}
+
+		log.Printf("download profile avatar from MinIO failed: %v", err)
+		http.Error(w, "failed to load profile photo", http.StatusBadGateway)
+		return
+	}
+	defer object.Close()
+
+	mediaType := strings.TrimSpace(info.ContentType)
+	if mediaType == "" {
+		mediaType = "application/octet-stream"
+	}
+
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	w.Header().Set("Content-Type", mediaType)
+	if info.Size >= 0 {
+		w.Header().Set("Content-Length", strconv.FormatInt(info.Size, 10))
+	}
+
+	if _, err := io.Copy(w, object); err != nil {
+		log.Printf("stream profile avatar failed: %v", err)
+	}
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -704,6 +876,33 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 		LatestTicketStatus string                     `json:"latestTicketStatus"`
 		TicketStats        profileTicketStatsResponse `json:"ticketStats"`
 		ActiveTickets      []profileTicketResponse    `json:"activeTickets"`
+	}
+
+	if r.Method == http.MethodPost && r.URL.Path == "/api/profile/avatar" {
+		s.handleProfileAvatarUpload(w, r)
+		return
+	}
+
+	if r.Method == http.MethodGet && r.URL.Path == "/api/profile/avatar" {
+		http.NotFound(w, r)
+		return
+	}
+
+	if r.Method == http.MethodGet && r.URL.Path != "/api/profile" {
+		profilePath := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/profile/"), "/")
+		if profilePath != "" {
+			pathParts := strings.Split(profilePath, "/")
+			if len(pathParts) == 2 && pathParts[1] == "avatar" {
+				targetID := pgtype.UUID{}
+				if err := targetID.Scan(pathParts[0]); err != nil {
+					http.Error(w, "invalid user id", http.StatusBadRequest)
+					return
+				}
+
+				s.handleProfileAvatarDownload(w, r, targetID)
+				return
+			}
+		}
 	}
 
 	if r.Method != http.MethodGet {

@@ -1,3 +1,4 @@
+import { useRef, useState } from "react";
 import fireIcon from "../../../assets/icons/fire-icon.svg";
 import ticketClosedIcon from "../../../assets/icons/ticket-closed.svg";
 import ticketDoneIcon from "../../../assets/icons/ticket-done.svg";
@@ -7,6 +8,7 @@ import { useAuth } from "../../../features/auth";
 import {
   useGetMyProfileQuery,
   useGetProfileByIdQuery,
+  useUploadProfileAvatarMutation,
 } from "../../../shared/api/tickets-api";
 import { routePaths } from "../../../shared/config/routes";
 import { ProfileTicketCard } from "../../../shared/ui/profile-ticket-card";
@@ -42,6 +44,23 @@ function PersonIcon({ className }) {
   );
 }
 
+function CameraIcon({ className }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M4.5 8.7a2.2 2.2 0 0 1 2.2-2.2H9l1.1-1.8c.4-.6 1-.9 1.7-.9h.4c.7 0 1.3.3 1.7.9L15 6.5h2.3a2.2 2.2 0 0 1 2.2 2.2v7.8a2.2 2.2 0 0 1-2.2 2.2H6.7a2.2 2.2 0 0 1-2.2-2.2V8.7Z" />
+      <circle cx="12" cy="12.6" r="3.2" />
+    </svg>
+  );
+}
+
 function BackButton({ onClick }) {
   return (
     <button
@@ -67,7 +86,7 @@ function BackButton({ onClick }) {
   );
 }
 
-function ProfileAvatar({ logo, name }) {
+function ProfileAvatar({ canUpload = false, isUploading = false, logo, name, onUploadClick }) {
   const initials = (name || "")
     .trim()
     .split(/\s+/)
@@ -75,17 +94,13 @@ function ProfileAvatar({ logo, name }) {
     .map((part) => part.charAt(0).toUpperCase())
     .join("");
 
-  if (logo?.trim()) {
-    return (
-      <img
-        src={logo}
-        alt={name || "Фото сотрудника"}
-        className="h-28 w-28 rounded-[2rem] border border-white/10 object-cover shadow-lg shadow-black/20 sm:h-32 sm:w-32"
-      />
-    );
-  }
-
-  return (
+  const avatarContent = logo?.trim() ? (
+    <img
+      src={logo}
+      alt={name || "Фото сотрудника"}
+      className="h-28 w-28 rounded-[2rem] border border-white/10 object-cover shadow-lg shadow-black/20 sm:h-32 sm:w-32"
+    />
+  ) : (
     <div className="flex h-28 w-28 items-center justify-center rounded-[2rem] border border-white/10 bg-gradient-to-br from-cyan-400/25 via-[#6A3BF2]/30 to-emerald-400/25 text-white shadow-lg shadow-black/20 sm:h-32 sm:w-32">
       {initials ? (
         <span className="text-3xl font-semibold tracking-[0.08em]">{initials}</span>
@@ -93,6 +108,26 @@ function ProfileAvatar({ logo, name }) {
         <PersonIcon className="h-10 w-10" />
       )}
     </div>
+  );
+
+  if (!canUpload) {
+    return avatarContent;
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onUploadClick}
+      disabled={isUploading}
+      aria-label={isUploading ? "Загрузка фото профиля" : "Загрузить фото профиля"}
+      className="group relative inline-flex rounded-[2rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:cursor-wait"
+    >
+      {avatarContent}
+      <span className="absolute inset-x-2 bottom-2 inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950/75 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-white opacity-100 shadow-lg shadow-black/30 transition sm:opacity-0 sm:group-hover:opacity-100">
+        <CameraIcon className="h-3.5 w-3.5" />
+        <span>{isUploading ? "Загрузка" : "Сменить фото"}</span>
+      </span>
+    </button>
   );
 }
 
@@ -248,6 +283,9 @@ export function ProfilePage() {
   const navigate = useNavigate();
   const { signOut } = useAuth();
   const { userId } = useParams();
+  const avatarInputRef = useRef(null);
+  const [avatarFeedback, setAvatarFeedback] = useState(null);
+  const [uploadProfileAvatar, { isLoading: isAvatarUploading }] = useUploadProfileAvatarMutation();
   const isMemberProfile = Boolean(userId);
   const {
     data: ownProfile,
@@ -281,6 +319,7 @@ export function ProfilePage() {
   const archiveHref = profile?.user_id ? routePaths.profileArchiveById(profile.user_id) : "";
   const activeTickets = profile?.activeTickets || [];
   const canOpenEditor = profile?.role === "coordinator" || profile?.role === "admin";
+  const canUploadAvatar = !isMemberProfile;
 
   function handleBack() {
     navigate(-1);
@@ -311,6 +350,54 @@ export function ProfilePage() {
     navigate(routePaths.editor);
   }
 
+  function handleAvatarUploadClick() {
+    if (!canUploadAvatar || isAvatarUploading) {
+      return;
+    }
+
+    avatarInputRef.current?.click();
+  }
+
+  async function handleAvatarFileChange(event) {
+    const selectedFile = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!selectedFile) {
+      return;
+    }
+
+    if (!selectedFile.type.startsWith("image/")) {
+      setAvatarFeedback({
+        tone: "error",
+        message: "Можно загружать только изображения.",
+      });
+      return;
+    }
+
+    if (selectedFile.size > 10 * 1024 * 1024) {
+      setAvatarFeedback({
+        tone: "error",
+        message: "Фото профиля должно быть меньше 10 МБ.",
+      });
+      return;
+    }
+
+    setAvatarFeedback(null);
+
+    try {
+      await uploadProfileAvatar({ file: selectedFile }).unwrap();
+      setAvatarFeedback({
+        tone: "success",
+        message: "Фото профиля обновлено.",
+      });
+    } catch (error) {
+      setAvatarFeedback({
+        tone: "error",
+        message: resolveErrorMessage(error, "Не удалось загрузить фото профиля."),
+      });
+    }
+  }
+
   return (
     <PageShell>
       <section className="w-full space-y-6">
@@ -328,11 +415,33 @@ export function ProfilePage() {
 
         {!isLoading && !hasError && profile ? (
           <>
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/gif,image/webp"
+              className="hidden"
+              onChange={handleAvatarFileChange}
+            />
+
             <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
               <article className="rounded-[2rem] border border-white/10 bg-white/10 p-6 shadow-2xl shadow-[#6A3BF2]/20 backdrop-blur-xl sm:p-8">
                 <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
                   <div className="flex items-start gap-4 sm:gap-5">
-                    <ProfileAvatar logo={profile.logo} name={displayName} />
+                    <div className="space-y-3">
+                      <ProfileAvatar
+                        canUpload={canUploadAvatar}
+                        isUploading={isAvatarUploading}
+                        logo={profile.logo}
+                        name={displayName}
+                        onUploadClick={handleAvatarUploadClick}
+                      />
+
+                      {canUploadAvatar ? (
+                        <p className="max-w-32 text-center text-xs font-medium text-slate-300">
+                          {isAvatarUploading ? "Загружаем фото..." : "Нажмите на фото, чтобы обновить аватар"}
+                        </p>
+                      ) : null}
+                    </div>
 
                     <div className="min-w-0">
                       <p className="text-xs font-semibold uppercase tracking-[0.32em] text-cyan-200">
@@ -352,6 +461,12 @@ export function ProfilePage() {
                   <ProfileInfoRow label="Email" value={emailValue} />
                   <ProfileInfoRow label="Телефон" value={phoneValue} />
                 </div>
+
+                {avatarFeedback ? (
+                  <div className="mt-6">
+                    <StatusMessage feedback={avatarFeedback} />
+                  </div>
+                ) : null}
               </article>
 
               <section className="grid gap-4 sm:grid-cols-2">

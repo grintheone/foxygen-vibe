@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { routePaths } from "../config/routes";
 
@@ -40,10 +41,20 @@ export function UserAvatar({
     const normalizedUserId = typeof userId === "string" ? userId.trim() : "";
     const label = name?.trim() || "Профиль пользователя";
     const rootClassName = mergeClassNames("inline-flex shrink-0 overflow-hidden rounded-full", className);
-    const content = normalizedAvatarUrl ? (
+    const [hasImageError, setHasImageError] = useState(false);
+
+    useEffect(() => {
+        setHasImageError(false);
+    }, [normalizedAvatarUrl]);
+
+    const shouldRenderImage = normalizedAvatarUrl && !hasImageError;
+    const content = shouldRenderImage ? (
         <img
             src={normalizedAvatarUrl}
             alt={name || "Аватар пользователя"}
+            loading="lazy"
+            decoding="async"
+            onError={() => setHasImageError(true)}
             className={mergeClassNames("h-full w-full rounded-full object-cover", imageClassName)}
         />
     ) : (
