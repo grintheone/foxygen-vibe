@@ -916,18 +916,7 @@ export function TicketArchivePage({ entityType }) {
     }, [archiveOffset, pagination.total]);
 
     function handleBack() {
-        if (!entityId) {
-            navigate(-1);
-            return;
-        }
-
-        navigate(
-            isClientArchive
-                ? routePaths.clientById(entityId)
-                : isProfileArchive
-                  ? routePaths.profileById(entityId)
-                  : routePaths.deviceById(entityId),
-        );
+        navigate(-1);
     }
 
     function handleDraftChange(key, value) {

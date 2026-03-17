@@ -47,7 +47,7 @@ function BackButton({ onClick }) {
     <button
       type="button"
       onClick={onClick}
-      aria-label="Назад на дашборд"
+      aria-label="Назад"
       className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[#6A3BF2] text-white shadow-lg shadow-[#6A3BF2]/35 transition hover:bg-[#7C52F5]"
     >
       <svg
@@ -283,7 +283,7 @@ export function ProfilePage() {
   const canOpenEditor = profile?.role === "coordinator" || profile?.role === "admin";
 
   function handleBack() {
-    navigate(routePaths.dashboard);
+    navigate(-1);
   }
 
   function handleOpenArchive() {

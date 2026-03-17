@@ -3,7 +3,6 @@ import {
   useGetClientByIdQuery,
   useGetClientContactsQuery,
 } from "../../../shared/api/tickets-api";
-import { routePaths } from "../../../shared/config/routes";
 import { ContactCard } from "../../../shared/ui/contact-card";
 import { PageShell } from "../../../shared/ui/page-shell";
 
@@ -87,7 +86,7 @@ export function ClientContactsPage() {
       <section className="w-full space-y-6">
         <ClientContactsHeader
           title={pageTitle}
-          onBack={() => navigate(routePaths.clientById(clientId))}
+          onBack={() => navigate(-1)}
         />
 
         {isClientLoading || isClientFetching ? (

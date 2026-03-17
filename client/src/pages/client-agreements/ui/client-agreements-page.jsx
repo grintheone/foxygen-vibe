@@ -67,7 +67,7 @@ export function ClientAgreementsPage() {
     return (
         <PageShell>
             <section className="w-full space-y-6">
-                <ClientAgreementsHeader title={pageTitle} onBack={() => navigate(routePaths.clientById(clientId))} />
+                <ClientAgreementsHeader title={pageTitle} onBack={() => navigate(-1)} />
 
                 {isClientLoading || isClientFetching ? (
                     <div className="rounded-3xl border border-white/10 bg-white/5 p-6">

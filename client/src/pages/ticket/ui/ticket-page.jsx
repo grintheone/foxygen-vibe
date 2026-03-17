@@ -215,7 +215,7 @@ export function TicketPage() {
                     statusIcon={statusIcon}
                     statusAlt={statusAlt}
                     finishedDate={finishedDate}
-                    onBack={() => navigate(routePaths.dashboard)}
+                    onBack={() => navigate(-1)}
                 />
 
                 {isInitialTicketLoad ? (

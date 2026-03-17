@@ -1,6 +1,5 @@
 import { useNavigate } from "react-router";
 import { useAuth } from "../../../features/auth";
-import { routePaths } from "../../../shared/config/routes";
 import { PageShell } from "../../../shared/ui/page-shell";
 
 function BackButton({ onClick }) {
@@ -34,7 +33,7 @@ export function EditorPage() {
   const canOpenEditor = session?.role === "coordinator" || session?.role === "admin";
 
   function handleBack() {
-    navigate(routePaths.profile);
+    navigate(-1);
   }
 
   if (!canOpenEditor) {
