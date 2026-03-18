@@ -153,10 +153,8 @@ func loadLegacyExternalUsers(path string) ([]legacyExternalUser, error) {
 			}
 			userIDs[legacyID] = true
 
-			name := normalizeName(strings.TrimSpace(strings.Join([]string{doc.FirstName, doc.LastName}, " ")))
-			if name != "" {
-				userNames[name] = append(userNames[name], legacyID)
-			}
+			addNameCandidate(userNames, strings.Join([]string{doc.FirstName, doc.LastName}, " "), legacyID)
+			addNameCandidate(userNames, strings.Join([]string{doc.LastName, doc.FirstName}, " "), legacyID)
 		}
 	}
 
@@ -288,6 +286,21 @@ func loadIDSet(ctx context.Context, db *pgxpool.Pool, query string) (map[string]
 
 func normalizeName(value string) string {
 	return strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(value)), " "))
+}
+
+func addNameCandidate(userNames map[string][]string, rawName, legacyID string) {
+	name := normalizeName(rawName)
+	if name == "" || strings.TrimSpace(legacyID) == "" {
+		return
+	}
+
+	for _, existingID := range userNames[name] {
+		if existingID == legacyID {
+			return
+		}
+	}
+
+	userNames[name] = append(userNames[name], legacyID)
 }
 
 func trimLegacyPrefix(value string) string {

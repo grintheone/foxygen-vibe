@@ -56,6 +56,19 @@ func TestLoadLegacyExternalUsers(t *testing.T) {
 	    },
 	    {
 	      "doc": {
+	        "_id": "user_1_12121212-1212-1212-1212-121212121212",
+	        "firstName": "Ivan",
+	        "lastName": "Petrov"
+	      }
+	    },
+	    {
+	      "doc": {
+	        "_id": "externalUser_1_13131313-1313-1313-1313-131313131313",
+	        "title": "Petrov Ivan"
+	      }
+	    },
+	    {
+	      "doc": {
 	        "_id": "externalUser_1_ffffffff-ffff-ffff-ffff-ffffffffffff",
 	        "title": "Gamma User"
 	      }
@@ -78,23 +91,27 @@ func TestLoadLegacyExternalUsers(t *testing.T) {
 		t.Fatalf("loadLegacyExternalUsers: %v", err)
 	}
 
-	if len(items) != 4 {
-		t.Fatalf("expected 4 external users, got %d", len(items))
+	if len(items) != 5 {
+		t.Fatalf("expected 5 external users, got %d", len(items))
 	}
 
-	if items[0].ID != "99999999-9999-9999-9999-999999999999" {
-		t.Fatalf("expected items sorted by id, got %q", items[0].ID)
+	if items[0].ID != "13131313-1313-1313-1313-131313131313" || items[0].LinkedUserID != "12121212-1212-1212-1212-121212121212" {
+		t.Fatalf("expected reversed-name title match to link and sort first, got %#v", items[0])
 	}
 
-	if items[1].ID != "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" || items[1].LinkedUserID != "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" {
-		t.Fatalf("expected shared id to link directly, got %#v", items[1])
+	if items[1].ID != "99999999-9999-9999-9999-999999999999" || items[1].LinkedUserID != "" {
+		t.Fatalf("expected unmatched title to stay unlinked, got %#v", items[1])
 	}
 
-	if items[2].ID != "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee" || items[2].LinkedUserID != "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb" {
-		t.Fatalf("expected unique title match to link, got %#v", items[2])
+	if items[2].ID != "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" || items[2].LinkedUserID != "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" {
+		t.Fatalf("expected shared id to link directly, got %#v", items[2])
 	}
 
-	if items[3].ID != "ffffffff-ffff-ffff-ffff-ffffffffffff" || items[3].LinkedUserID != "" {
-		t.Fatalf("expected ambiguous title match to stay unlinked, got %#v", items[3])
+	if items[3].ID != "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee" || items[3].LinkedUserID != "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb" {
+		t.Fatalf("expected unique title match to link, got %#v", items[3])
+	}
+
+	if items[4].ID != "ffffffff-ffff-ffff-ffff-ffffffffffff" || items[4].LinkedUserID != "" {
+		t.Fatalf("expected ambiguous title match to stay unlinked, got %#v", items[4])
 	}
 }
