@@ -1,0 +1,2 @@
+ALTER TABLE tickets
+ADD COLUMN IF NOT EXISTS external_author UUID REFERENCES external_users(id) ON DELETE SET NULL;

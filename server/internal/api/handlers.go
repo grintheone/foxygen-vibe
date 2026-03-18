@@ -1600,6 +1600,7 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 		Reason             string  `json:"reason"`
 		ReasonTitle        string  `json:"reasonTitle"`
 		Urgent             bool    `json:"urgent"`
+		ExternalAuthor     *string `json:"externalAuthor"`
 		Executor           *string `json:"executor"`
 		ExecutorName       string  `json:"executorName"`
 		ExecutorDepartment string  `json:"executorDepartment"`
@@ -1782,6 +1783,7 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 				) AS resolved_reason,
 				COALESCE(NULLIF(tr.title, ''), 'Не указано') AS reason_title,
 				t.urgent,
+				t.external_author,
 				t.executor,
 				TRIM(CONCAT(COALESCE(u_exec.first_name, ''), ' ', COALESCE(u_exec.last_name, ''))),
 				COALESCE(d_exec.title, ''),
@@ -1833,6 +1835,7 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 				reason         string
 				reasonTitle    string
 				urgent         bool
+				externalAuthor pgtype.UUID
 				executor       pgtype.UUID
 				executorName   string
 				executorDept   string
@@ -1855,6 +1858,7 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 				&reason,
 				&reasonTitle,
 				&urgent,
+				&externalAuthor,
 				&executor,
 				&executorName,
 				&executorDept,
@@ -1881,6 +1885,7 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 				Reason:             reason,
 				ReasonTitle:        reasonTitle,
 				Urgent:             urgent,
+				ExternalAuthor:     nullableUUIDToString(externalAuthor),
 				Executor:           nullableUUIDToString(executor),
 				ExecutorName:       executorName,
 				ExecutorDepartment: executorDept,
@@ -2168,6 +2173,7 @@ func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 		Reason             string  `json:"reason"`
 		ReasonTitle        string  `json:"reasonTitle"`
 		Urgent             bool    `json:"urgent"`
+		ExternalAuthor     *string `json:"externalAuthor"`
 		Executor           *string `json:"executor"`
 		ExecutorName       string  `json:"executorName"`
 		ExecutorDepartment string  `json:"executorDepartment"`
@@ -2329,6 +2335,7 @@ func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 				) AS resolved_reason,
 				COALESCE(NULLIF(tr.title, ''), 'Не указано') AS reason_title,
 				t.urgent,
+				t.external_author,
 				t.executor,
 				TRIM(CONCAT(COALESCE(u_exec.first_name, ''), ' ', COALESCE(u_exec.last_name, ''))),
 				COALESCE(d_exec.title, ''),
@@ -2380,6 +2387,7 @@ func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 				reason         string
 				reasonTitle    string
 				urgent         bool
+				externalAuthor pgtype.UUID
 				executor       pgtype.UUID
 				executorName   string
 				executorDept   string
@@ -2402,6 +2410,7 @@ func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 				&reason,
 				&reasonTitle,
 				&urgent,
+				&externalAuthor,
 				&executor,
 				&executorName,
 				&executorDept,
@@ -2428,6 +2437,7 @@ func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 				Reason:             reason,
 				ReasonTitle:        reasonTitle,
 				Urgent:             urgent,
+				ExternalAuthor:     nullableUUIDToString(externalAuthor),
 				Executor:           nullableUUIDToString(executor),
 				ExecutorName:       executorName,
 				ExecutorDepartment: executorDept,
@@ -2934,6 +2944,7 @@ func (s *Server) handleTickets(w http.ResponseWriter, r *http.Request) {
 		Description        string  `json:"description"`
 		Reason             string  `json:"reason"`
 		Urgent             bool    `json:"urgent"`
+		ExternalAuthor     *string `json:"externalAuthor"`
 		Executor           *string `json:"executor"`
 		ExecutorName       string  `json:"executorName"`
 		ExecutorDepartment string  `json:"executorDepartment"`
@@ -2995,6 +3006,7 @@ func (s *Server) handleTickets(w http.ResponseWriter, r *http.Request) {
 				'Не указано'
 			) AS resolved_reason,
 			t.urgent,
+			t.external_author,
 			t.executor,
 			TRIM(CONCAT(COALESCE(u_exec.first_name, ''), ' ', COALESCE(u_exec.last_name, ''))),
 			COALESCE(d_exec.title, ''),
@@ -3031,6 +3043,7 @@ func (s *Server) handleTickets(w http.ResponseWriter, r *http.Request) {
 			description    string
 			reason         string
 			urgent         bool
+			externalAuthor pgtype.UUID
 			executor       pgtype.UUID
 			executorName   string
 			executorDept   string
@@ -3050,6 +3063,7 @@ func (s *Server) handleTickets(w http.ResponseWriter, r *http.Request) {
 			&description,
 			&reason,
 			&urgent,
+			&externalAuthor,
 			&executor,
 			&executorName,
 			&executorDept,
@@ -3073,6 +3087,7 @@ func (s *Server) handleTickets(w http.ResponseWriter, r *http.Request) {
 			Description:        description,
 			Reason:             reason,
 			Urgent:             urgent,
+			ExternalAuthor:     nullableUUIDToString(externalAuthor),
 			Executor:           nullableUUIDToString(executor),
 			ExecutorName:       executorName,
 			ExecutorDepartment: executorDept,
@@ -3441,6 +3456,7 @@ func (s *Server) handleTicketByID(w http.ResponseWriter, r *http.Request) {
 		DeviceName         string                     `json:"deviceName"`
 		DeviceSerialNumber string                     `json:"deviceSerialNumber"`
 		Author             *string                    `json:"author"`
+		ExternalAuthor     *string                    `json:"externalAuthor"`
 		AuthorName         string                     `json:"authorName"`
 		Department         *string                    `json:"department"`
 		DepartmentTitle    string                     `json:"departmentTitle"`
@@ -3564,8 +3580,13 @@ func (s *Server) handleTicketByID(w http.ResponseWriter, r *http.Request) {
 			t.device,
 			COALESCE(cls.title, ''),
 			COALESCE(d.serial_number, ''),
-			t.author,
-			TRIM(CONCAT(COALESCE(u_author.first_name, ''), ' ', COALESCE(u_author.last_name, ''))),
+			COALESCE(t.author, eu.linked_user_id),
+			t.external_author,
+			COALESCE(
+				NULLIF(TRIM(CONCAT(COALESCE(u_author.first_name, ''), ' ', COALESCE(u_author.last_name, ''))), ''),
+				NULLIF(TRIM(CONCAT(COALESCE(u_external.first_name, ''), ' ', COALESCE(u_external.last_name, ''))), ''),
+				COALESCE(eu.title, '')
+			),
 			t.department,
 			COALESCE(dpt.title, ''),
 			t.assigned_by,
@@ -3592,6 +3613,8 @@ func (s *Server) handleTicketByID(w http.ResponseWriter, r *http.Request) {
 		LEFT JOIN users u_exec ON u_exec.user_id = t.executor
 		LEFT JOIN departments d_exec ON d_exec.id = u_exec.department
 		LEFT JOIN users u_author ON u_author.user_id = t.author
+		LEFT JOIN external_users eu ON eu.id = t.external_author
+		LEFT JOIN users u_external ON u_external.user_id = eu.linked_user_id
 		LEFT JOIN users u_assigned ON u_assigned.user_id = t.assigned_by
 		LEFT JOIN departments dpt ON dpt.id = t.department
 		LEFT JOIN contacts cp ON cp.id = t.contact_person
@@ -3627,6 +3650,7 @@ func (s *Server) handleTicketByID(w http.ResponseWriter, r *http.Request) {
 		deviceName         string
 		deviceSerialNumber string
 		author             pgtype.UUID
+		externalAuthor     pgtype.UUID
 		authorName         string
 		department         pgtype.UUID
 		departmentTitle    string
@@ -3675,6 +3699,7 @@ func (s *Server) handleTicketByID(w http.ResponseWriter, r *http.Request) {
 		&deviceName,
 		&deviceSerialNumber,
 		&author,
+		&externalAuthor,
 		&authorName,
 		&department,
 		&departmentTitle,
@@ -3740,6 +3765,7 @@ func (s *Server) handleTicketByID(w http.ResponseWriter, r *http.Request) {
 		DeviceName:         deviceName,
 		DeviceSerialNumber: deviceSerialNumber,
 		Author:             nullableUUIDToString(author),
+		ExternalAuthor:     nullableUUIDToString(externalAuthor),
 		AuthorName:         authorName,
 		Department:         nullableUUIDToString(department),
 		DepartmentTitle:    departmentTitle,
@@ -4260,6 +4286,7 @@ func (s *Server) handleDepartmentTickets(w http.ResponseWriter, r *http.Request)
 		Description        string  `json:"description"`
 		Reason             string  `json:"reason"`
 		Urgent             bool    `json:"urgent"`
+		ExternalAuthor     *string `json:"externalAuthor"`
 		Executor           *string `json:"executor"`
 		ExecutorName       string  `json:"executorName"`
 		ExecutorDepartment string  `json:"executorDepartment"`
@@ -4316,6 +4343,7 @@ func (s *Server) handleDepartmentTickets(w http.ResponseWriter, r *http.Request)
 				'Не указано'
 			) AS resolved_reason,
 			t.urgent,
+			t.external_author,
 			t.executor,
 			TRIM(CONCAT(COALESCE(u_exec.first_name, ''), ' ', COALESCE(u_exec.last_name, ''))),
 			COALESCE(d_exec.title, ''),
@@ -4354,6 +4382,7 @@ func (s *Server) handleDepartmentTickets(w http.ResponseWriter, r *http.Request)
 			description    string
 			reason         string
 			urgent         bool
+			externalAuthor pgtype.UUID
 			executor       pgtype.UUID
 			executorName   string
 			executorDept   string
@@ -4373,6 +4402,7 @@ func (s *Server) handleDepartmentTickets(w http.ResponseWriter, r *http.Request)
 			&description,
 			&reason,
 			&urgent,
+			&externalAuthor,
 			&executor,
 			&executorName,
 			&executorDept,
@@ -4396,6 +4426,7 @@ func (s *Server) handleDepartmentTickets(w http.ResponseWriter, r *http.Request)
 			Description:        description,
 			Reason:             reason,
 			Urgent:             urgent,
+			ExternalAuthor:     nullableUUIDToString(externalAuthor),
 			Executor:           nullableUUIDToString(executor),
 			ExecutorName:       executorName,
 			ExecutorDepartment: executorDept,

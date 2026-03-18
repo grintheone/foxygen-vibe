@@ -319,6 +319,10 @@ func importTickets(ctx context.Context, db *pgxpool.Pool, items []legacyTicket, 
 	if err != nil {
 		return stats, fmt.Errorf("load accounts: %w", err)
 	}
+	externalUserLinks, err := loadOptionalIDMap(ctx, db, `SELECT id, COALESCE(linked_user_id::text, '') FROM external_users`)
+	if err != nil {
+		return stats, fmt.Errorf("load external users: %w", err)
+	}
 	departmentIDs, err := loadIDSet(ctx, db, `SELECT id FROM departments`)
 	if err != nil {
 		return stats, fmt.Errorf("load departments: %w", err)
@@ -349,7 +353,7 @@ func importTickets(ctx context.Context, db *pgxpool.Pool, items []legacyTicket, 
 		if !ok && item.DeviceID != "" {
 			stats.MissingDevice++
 		}
-		authorID, ok := resolveOptional(item.AuthorID, accountIDs)
+		authorID, externalAuthorID, ok := resolveTicketAuthor(item.AuthorID, accountIDs, externalUserLinks)
 		if !ok && item.AuthorID != "" {
 			stats.MissingAuthor++
 		}
@@ -391,6 +395,7 @@ func importTickets(ctx context.Context, db *pgxpool.Pool, items []legacyTicket, 
 				deviceID,
 				ticketType,
 				authorID,
+				externalAuthorID,
 				departmentID,
 				assignedByID,
 				reasonID,
@@ -409,6 +414,7 @@ func importTickets(ctx context.Context, db *pgxpool.Pool, items []legacyTicket, 
 				deviceID,
 				ticketType,
 				authorID,
+				externalAuthorID,
 				departmentID,
 				assignedByID,
 				reasonID,
@@ -445,6 +451,7 @@ func upsertTicketWithNumber(
 	deviceID any,
 	ticketType any,
 	authorID any,
+	externalAuthorID any,
 	departmentID any,
 	assignedByID any,
 	reasonID any,
@@ -471,6 +478,7 @@ func upsertTicketWithNumber(
 			device,
 			ticket_type,
 			author,
+			external_author,
 			department,
 			assigned_by,
 			reason,
@@ -487,7 +495,7 @@ func upsertTicketWithNumber(
 		VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
 			FALSE, $11, $12, $13, $14, $15, $16, $17, $18, $19,
-			$20, $21, $22, $23, '{}'::uuid[], NULL, FALSE
+			$20, $21, $22, $23, $24, '{}'::uuid[], NULL, FALSE
 		)
 		ON CONFLICT (id) DO UPDATE
 		SET created_at = EXCLUDED.created_at,
@@ -504,6 +512,7 @@ func upsertTicketWithNumber(
 		    device = EXCLUDED.device,
 		    ticket_type = EXCLUDED.ticket_type,
 		    author = EXCLUDED.author,
+		    external_author = EXCLUDED.external_author,
 		    department = EXCLUDED.department,
 		    assigned_by = EXCLUDED.assigned_by,
 		    reason = EXCLUDED.reason,
@@ -530,6 +539,7 @@ func upsertTicketWithNumber(
 		deviceID,
 		ticketType,
 		authorID,
+		externalAuthorID,
 		departmentID,
 		assignedByID,
 		reasonID,
@@ -554,6 +564,7 @@ func upsertTicketWithoutNumber(
 	deviceID any,
 	ticketType any,
 	authorID any,
+	externalAuthorID any,
 	departmentID any,
 	assignedByID any,
 	reasonID any,
@@ -579,6 +590,7 @@ func upsertTicketWithoutNumber(
 			device,
 			ticket_type,
 			author,
+			external_author,
 			department,
 			assigned_by,
 			reason,
@@ -594,7 +606,7 @@ func upsertTicketWithoutNumber(
 		VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, $9,
 			FALSE, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-			$19, $20, $21, $22, '{}'::uuid[], NULL, FALSE
+			$19, $20, $21, $22, $23, '{}'::uuid[], NULL, FALSE
 		)
 		ON CONFLICT (id) DO UPDATE
 		SET created_at = EXCLUDED.created_at,
@@ -611,6 +623,7 @@ func upsertTicketWithoutNumber(
 		    device = EXCLUDED.device,
 		    ticket_type = EXCLUDED.ticket_type,
 		    author = EXCLUDED.author,
+		    external_author = EXCLUDED.external_author,
 		    department = EXCLUDED.department,
 		    assigned_by = EXCLUDED.assigned_by,
 		    reason = EXCLUDED.reason,
@@ -636,6 +649,7 @@ func upsertTicketWithoutNumber(
 		deviceID,
 		ticketType,
 		authorID,
+		externalAuthorID,
 		departmentID,
 		assignedByID,
 		reasonID,
@@ -655,6 +669,17 @@ func upsertTicketWithoutNumber(
 func ensureTicketsSchema(ctx context.Context, db *pgxpool.Pool) error {
 	if _, err := db.Exec(
 		ctx,
+		`CREATE TABLE IF NOT EXISTS external_users (
+			id UUID PRIMARY KEY,
+			title TEXT NOT NULL DEFAULT '',
+			linked_user_id UUID REFERENCES accounts(user_id) ON DELETE SET NULL
+		)`,
+	); err != nil {
+		return fmt.Errorf("ensure external_users table for tickets: %w", err)
+	}
+
+	if _, err := db.Exec(
+		ctx,
 		`CREATE TABLE IF NOT EXISTS tickets (
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			number INT GENERATED ALWAYS AS IDENTITY,
@@ -672,6 +697,7 @@ func ensureTicketsSchema(ctx context.Context, db *pgxpool.Pool) error {
 			device UUID REFERENCES devices(id) ON DELETE SET NULL,
 			ticket_type VARCHAR(128) REFERENCES ticket_types(type) ON DELETE SET NULL,
 			author UUID REFERENCES accounts(user_id) ON DELETE SET NULL,
+			external_author UUID REFERENCES external_users(id) ON DELETE SET NULL,
 			department UUID REFERENCES departments(id) ON DELETE SET NULL,
 			assigned_by UUID REFERENCES accounts(user_id) ON DELETE SET NULL DEFAULT NULL,
 			reason VARCHAR(128) REFERENCES ticket_reasons(id) ON DELETE SET NULL,
@@ -707,6 +733,7 @@ func ensureTicketsSchema(ctx context.Context, db *pgxpool.Pool) error {
 		{`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS device UUID REFERENCES devices(id) ON DELETE SET NULL`, "device"},
 		{`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS ticket_type VARCHAR(128) REFERENCES ticket_types(type) ON DELETE SET NULL`, "ticket_type"},
 		{`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS author UUID REFERENCES accounts(user_id) ON DELETE SET NULL`, "author"},
+		{`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS external_author UUID REFERENCES external_users(id) ON DELETE SET NULL`, "external_author"},
 		{`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS department UUID REFERENCES departments(id) ON DELETE SET NULL`, "department"},
 		{`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS assigned_by UUID REFERENCES accounts(user_id) ON DELETE SET NULL DEFAULT NULL`, "assigned_by"},
 		{`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS reason VARCHAR(128) REFERENCES ticket_reasons(id) ON DELETE SET NULL`, "reason"},
@@ -752,6 +779,30 @@ func loadIDSet(ctx context.Context, db *pgxpool.Pool, query string) (map[string]
 	return ids, nil
 }
 
+func loadOptionalIDMap(ctx context.Context, db *pgxpool.Pool, query string) (map[string]string, error) {
+	rows, err := db.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	values := make(map[string]string)
+	for rows.Next() {
+		var id string
+		var linked string
+		if err := rows.Scan(&id, &linked); err != nil {
+			return nil, err
+		}
+		values[id] = linked
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return values, nil
+}
+
 func resolveOptional(value string, allowed map[string]bool) (any, bool) {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -761,6 +812,28 @@ func resolveOptional(value string, allowed map[string]bool) (any, bool) {
 		return value, true
 	}
 	return nil, false
+}
+
+func resolveTicketAuthor(value string, accountIDs map[string]bool, externalUserLinks map[string]string) (any, any, bool) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil, nil, true
+	}
+	if accountIDs[value] {
+		return value, nil, true
+	}
+
+	linkedUserID, ok := externalUserLinks[value]
+	if !ok {
+		return nil, nil, false
+	}
+
+	var authorID any
+	if accountIDs[linkedUserID] {
+		authorID = linkedUserID
+	}
+
+	return authorID, value, true
 }
 
 func parseLegacyTicketNumber(raw json.RawMessage) (*int, bool, error) {

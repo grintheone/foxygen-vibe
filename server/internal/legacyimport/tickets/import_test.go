@@ -113,3 +113,35 @@ func TestLoadLegacyTickets(t *testing.T) {
 		t.Fatalf("unexpected stats %#v", stats)
 	}
 }
+
+func TestResolveTicketAuthor(t *testing.T) {
+	t.Parallel()
+
+	accountIDs := map[string]bool{
+		"real-user": true,
+	}
+	externalUserLinks := map[string]string{
+		"external-linked": "real-user",
+		"external-only":   "",
+	}
+
+	authorID, externalAuthorID, ok := resolveTicketAuthor("real-user", accountIDs, externalUserLinks)
+	if !ok || authorID != "real-user" || externalAuthorID != nil {
+		t.Fatalf("expected direct account author, got author=%v external=%v ok=%v", authorID, externalAuthorID, ok)
+	}
+
+	authorID, externalAuthorID, ok = resolveTicketAuthor("external-linked", accountIDs, externalUserLinks)
+	if !ok || authorID != "real-user" || externalAuthorID != "external-linked" {
+		t.Fatalf("expected linked external author, got author=%v external=%v ok=%v", authorID, externalAuthorID, ok)
+	}
+
+	authorID, externalAuthorID, ok = resolveTicketAuthor("external-only", accountIDs, externalUserLinks)
+	if !ok || authorID != nil || externalAuthorID != "external-only" {
+		t.Fatalf("expected external-only author, got author=%v external=%v ok=%v", authorID, externalAuthorID, ok)
+	}
+
+	authorID, externalAuthorID, ok = resolveTicketAuthor("missing", accountIDs, externalUserLinks)
+	if ok || authorID != nil || externalAuthorID != nil {
+		t.Fatalf("expected missing author to stay unresolved, got author=%v external=%v ok=%v", authorID, externalAuthorID, ok)
+	}
+}

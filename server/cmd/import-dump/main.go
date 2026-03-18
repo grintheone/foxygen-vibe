@@ -15,6 +15,7 @@ import (
 	"foxygen-vibe/server/internal/legacyimport/clients"
 	"foxygen-vibe/server/internal/legacyimport/contacts"
 	"foxygen-vibe/server/internal/legacyimport/devices"
+	"foxygen-vibe/server/internal/legacyimport/externalusers"
 	"foxygen-vibe/server/internal/legacyimport/manufacturers"
 	"foxygen-vibe/server/internal/legacyimport/regions"
 	"foxygen-vibe/server/internal/legacyimport/researchtypes"
@@ -43,6 +44,7 @@ var importSteps = []importStep{
 	{Name: "ticket-types", Package: "./cmd/import-ticket-types"},
 	{Name: "ticket-reasons", Package: "./cmd/import-ticket-reasons"},
 	{Name: "users", Package: "./cmd/import-users", NeedsPassword: true},
+	{Name: "external-users", Package: "./cmd/import-external-users"},
 	{Name: "tickets", Package: "./cmd/import-tickets"},
 	{Name: "attachments", Package: "./cmd/import-attachments"},
 	{Name: "agreements", Package: "./cmd/import-agreements"},
@@ -227,6 +229,8 @@ func runStep(step importStep, options runOptions) error {
 		return ticketreasons.Run(options.SourcePath, options.DryRun, options.Timeout)
 	case "users":
 		return users.Run(options.SourcePath, options.DefaultPassword, options.DryRun, options.Timeout, options.PerUserTimeout)
+	case "external-users":
+		return externalusers.Run(options.SourcePath, options.DryRun, options.Timeout)
 	case "tickets":
 		return tickets.Run(options.SourcePath, options.DryRun, options.Timeout)
 	case "attachments":
