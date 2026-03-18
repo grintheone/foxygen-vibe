@@ -39,4 +39,10 @@ export const routePaths = {
   profileArchiveById(userId) {
     return `/profile/${userId}/archive`;
   },
+  editorClients() {
+    return "/editor?entity=clients";
+  },
+  editorContacts() {
+    return "/editor?entity=contacts";
+  },
 };
