@@ -735,6 +735,47 @@ func TestProfileEndpointRejectsMissingToken(t *testing.T) {
 	}
 }
 
+func TestEditorClientsEndpointRejectsMissingToken(t *testing.T) {
+	t.Parallel()
+
+	srv := &Server{auth: testAuthConfig()}
+	req := httptest.NewRequest(http.MethodGet, "/api/editor/clients", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status %d, got %d", http.StatusUnauthorized, rec.Code)
+	}
+}
+
+func TestEditorClientsEndpointRequiresDatabase(t *testing.T) {
+	t.Parallel()
+
+	secret := testAuthConfig().jwtSecret
+	token, err := signJWT(secret, accessTokenClaims{
+		Subject:   "11111111-1111-1111-1111-111111111111",
+		Username:  "coordinator",
+		TokenType: accessTokenType,
+		ExpiresAt: time.Now().Add(time.Minute).Unix(),
+		IssuedAt:  time.Now().Unix(),
+	})
+	if err != nil {
+		t.Fatalf("sign jwt: %v", err)
+	}
+
+	srv := &Server{auth: testAuthConfig()}
+	req := httptest.NewRequest(http.MethodGet, "/api/editor/clients", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
+	}
+}
+
 func TestProfileEndpointReturnsProfile(t *testing.T) {
 	t.Parallel()
 

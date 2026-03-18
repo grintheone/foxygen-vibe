@@ -10,6 +10,7 @@ import {
   getRefreshToken,
   storeTokens,
 } from "../../../shared/lib/auth-tokens";
+import { editorApi } from "../../../shared/api/editor-api";
 import { sessionCleared } from "../../../shared/lib/session-events";
 import { ticketsApi } from "../../../shared/api/tickets-api";
 
@@ -209,6 +210,7 @@ export function signOut() {
   return function signOutThunk(dispatch) {
     clearStoredTokens();
     dispatch(sessionCleared());
+    dispatch(editorApi.util.resetApiState());
     dispatch(ticketsApi.util.resetApiState());
     dispatch(
       setFeedback({
