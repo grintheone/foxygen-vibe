@@ -15,6 +15,11 @@ const EditorAgreementsPage = lazy(() =>
     default: module.EditorAgreementsPage,
   })),
 );
+const EditorClassificatorsPage = lazy(() =>
+  import("./editor-classificators-page").then((module) => ({
+    default: module.EditorClassificatorsPage,
+  })),
+);
 const EditorContactsPage = lazy(() =>
   import("./editor-contacts-page").then((module) => ({
     default: module.EditorContactsPage,
@@ -69,6 +74,14 @@ export function EditorPage() {
     );
   }
 
+  if (entity === "classificators") {
+    return (
+      <Suspense fallback={<EditorPageLoader message="Загружаем редактор классификаторов..." />}>
+        <EditorClassificatorsPage />
+      </Suspense>
+    );
+  }
+
   if (entity === "contacts") {
     return (
       <Suspense fallback={<EditorPageLoader message="Загружаем редактор контактов..." />}>
@@ -90,7 +103,7 @@ export function EditorPage() {
       <section className="w-full space-y-6">
         <EditorPageHeader
           title="Выбор сущности"
-          description="Выберите, что именно хотите редактировать. Сейчас доступны рабочие срезы для клиентов, договоров, контактов и устройств."
+          description="Выберите, что именно хотите редактировать. Сейчас доступны рабочие срезы для клиентов, договоров, классификаторов, контактов и устройств."
           action={<DashboardButton onClick={handleOpenDashboard} />}
         />
 
@@ -106,6 +119,12 @@ export function EditorPage() {
             badge="Готово"
             description="Редактирование клиента, дистрибьютора, устройства, статуса, гарантии и дат договора."
             onClick={() => navigate(routePaths.editorAgreements())}
+          />
+          <EditorEntityCard
+            title="Классификаторы"
+            badge="Готово"
+            description="Редактирование названия, производителя, типа исследования, JSON-документов и вложений."
+            onClick={() => navigate(routePaths.editorClassificators())}
           />
           <EditorEntityCard
             title="Контакты"

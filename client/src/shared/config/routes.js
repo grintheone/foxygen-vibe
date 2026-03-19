@@ -45,6 +45,9 @@ export const routePaths = {
   editorAgreements() {
     return "/editor?entity=agreements";
   },
+  editorClassificators() {
+    return "/editor?entity=classificators";
+  },
   editorContacts() {
     return "/editor?entity=contacts";
   },

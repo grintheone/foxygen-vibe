@@ -4,7 +4,16 @@ import { baseQueryWithAuth } from "./authenticated-fetch";
 export const editorApi = createApi({
   reducerPath: "editorApi",
   baseQuery: baseQueryWithAuth,
-  tagTypes: ["EditorAgreement", "EditorClassificator", "EditorClient", "EditorContact", "EditorDevice", "EditorRegion"],
+  tagTypes: [
+    "EditorAgreement",
+    "EditorClassificator",
+    "EditorClient",
+    "EditorContact",
+    "EditorDevice",
+    "EditorManufacturer",
+    "EditorRegion",
+    "EditorResearchType",
+  ],
   endpoints: (builder) => ({
     getEditorAgreements: builder.query({
       query: ({ limit = 50, q = "" } = {}) => ({
@@ -29,7 +38,13 @@ export const editorApi = createApi({
       providesTags: (_, __, agreementId) => [{ type: "EditorAgreement", id: agreementId }],
     }),
     getEditorClassificators: builder.query({
-      query: () => "api/editor/classificators",
+      query: ({ limit = 100, q = "" } = {}) => ({
+        params: {
+          ...(limit ? { limit } : {}),
+          ...(q ? { q } : {}),
+        },
+        url: "api/editor/classificators",
+      }),
       providesTags: (result) => [
         { type: "EditorClassificator", id: "LIST" },
         ...(Array.isArray(result)
@@ -39,6 +54,10 @@ export const editorApi = createApi({
             }))
           : []),
       ],
+    }),
+    getEditorClassificatorById: builder.query({
+      query: (classificatorId) => `api/editor/classificators/${classificatorId}`,
+      providesTags: (_, __, classificatorId) => [{ type: "EditorClassificator", id: classificatorId }],
     }),
     getEditorClients: builder.query({
       query: ({ limit = 50, q = "" } = {}) => ({
@@ -110,6 +129,30 @@ export const editorApi = createApi({
       query: () => "api/editor/regions",
       providesTags: ["EditorRegion"],
     }),
+    getEditorManufacturers: builder.query({
+      query: () => "api/editor/manufacturers",
+      providesTags: (result) => [
+        { type: "EditorManufacturer", id: "LIST" },
+        ...(Array.isArray(result)
+          ? result.map((manufacturer) => ({
+              type: "EditorManufacturer",
+              id: manufacturer.id,
+            }))
+          : []),
+      ],
+    }),
+    getEditorResearchTypes: builder.query({
+      query: () => "api/editor/research-types",
+      providesTags: (result) => [
+        { type: "EditorResearchType", id: "LIST" },
+        ...(Array.isArray(result)
+          ? result.map((researchType) => ({
+              type: "EditorResearchType",
+              id: researchType.id,
+            }))
+          : []),
+      ],
+    }),
     patchEditorAgreement: builder.mutation({
       query: ({ agreementId, patch }) => ({
         body: patch,
@@ -122,6 +165,20 @@ export const editorApi = createApi({
       invalidatesTags: (_, __, { agreementId }) => [
         { type: "EditorAgreement", id: agreementId },
         { type: "EditorAgreement", id: "LIST" },
+      ],
+    }),
+    patchEditorClassificator: builder.mutation({
+      query: ({ classificatorId, patch }) => ({
+        body: patch,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "PATCH",
+        url: `api/editor/classificators/${classificatorId}`,
+      }),
+      invalidatesTags: (_, __, { classificatorId }) => [
+        { type: "EditorClassificator", id: classificatorId },
+        { type: "EditorClassificator", id: "LIST" },
       ],
     }),
     patchEditorClient: builder.mutation({
@@ -172,6 +229,7 @@ export const editorApi = createApi({
 export const {
   useGetEditorAgreementByIdQuery,
   useGetEditorAgreementsQuery,
+  useGetEditorClassificatorByIdQuery,
   useGetEditorClassificatorsQuery,
   useGetEditorClientByIdQuery,
   useGetEditorClientsQuery,
@@ -179,8 +237,11 @@ export const {
   useGetEditorContactsQuery,
   useGetEditorDeviceByIdQuery,
   useGetEditorDevicesQuery,
+  useGetEditorManufacturersQuery,
   useGetEditorRegionsQuery,
+  useGetEditorResearchTypesQuery,
   usePatchEditorAgreementMutation,
+  usePatchEditorClassificatorMutation,
   usePatchEditorContactMutation,
   usePatchEditorClientMutation,
   usePatchEditorDeviceMutation,

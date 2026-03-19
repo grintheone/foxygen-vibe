@@ -18,27 +18,31 @@ import (
 var newMinIOClient = storage.NewMinIO
 
 type Server struct {
-	databaseConfigured          bool
-	storageConfigured           bool
-	db                          *pgxpool.Pool
-	queries                     accountStore
-	auth                        authConfig
-	sync                        syncConfig
-	storage                     *storage.Client
-	editorAccessCheck           func(http.ResponseWriter, *http.Request) (pgtype.UUID, bool)
-	editorRoleLookup            func(context.Context, pgtype.UUID) (string, error)
-	editorAgreementDetailLoader func(context.Context, pgtype.UUID) (editorAgreementDetailResponse, bool, error)
-	editorClientDetailLoader    func(context.Context, pgtype.UUID) (editorClientDetailResponse, bool, error)
-	editorContactDetailLoader   func(context.Context, pgtype.UUID) (editorContactDetailResponse, bool, error)
-	editorDeviceDetailLoader    func(context.Context, pgtype.UUID) (editorDeviceDetailResponse, bool, error)
-	editorRegionExists          func(context.Context, pgtype.UUID) (bool, error)
-	editorClientExists          func(context.Context, pgtype.UUID) (bool, error)
-	editorDeviceExists          func(context.Context, pgtype.UUID) (bool, error)
-	editorClassificatorExists   func(context.Context, pgtype.UUID) (bool, error)
-	editorAgreementUpdater      func(context.Context, pgtype.UUID, pgtype.UUID, any, any, any, any, bool, bool) (int64, error)
-	editorClientUpdater         func(context.Context, pgtype.UUID, string, string, any, any) (int64, error)
-	editorContactUpdater        func(context.Context, pgtype.UUID, string, string, string, string, pgtype.UUID) (int64, error)
-	editorDeviceUpdater         func(context.Context, pgtype.UUID, any, string, json.RawMessage, bool, bool) (int64, error)
+	databaseConfigured              bool
+	storageConfigured               bool
+	db                              *pgxpool.Pool
+	queries                         accountStore
+	auth                            authConfig
+	sync                            syncConfig
+	storage                         *storage.Client
+	editorAccessCheck               func(http.ResponseWriter, *http.Request) (pgtype.UUID, bool)
+	editorRoleLookup                func(context.Context, pgtype.UUID) (string, error)
+	editorAgreementDetailLoader     func(context.Context, pgtype.UUID) (editorAgreementDetailResponse, bool, error)
+	editorClassificatorDetailLoader func(context.Context, pgtype.UUID) (editorClassificatorDetailResponse, bool, error)
+	editorClientDetailLoader        func(context.Context, pgtype.UUID) (editorClientDetailResponse, bool, error)
+	editorContactDetailLoader       func(context.Context, pgtype.UUID) (editorContactDetailResponse, bool, error)
+	editorDeviceDetailLoader        func(context.Context, pgtype.UUID) (editorDeviceDetailResponse, bool, error)
+	editorRegionExists              func(context.Context, pgtype.UUID) (bool, error)
+	editorClientExists              func(context.Context, pgtype.UUID) (bool, error)
+	editorDeviceExists              func(context.Context, pgtype.UUID) (bool, error)
+	editorManufacturerExists        func(context.Context, pgtype.UUID) (bool, error)
+	editorResearchTypeExists        func(context.Context, pgtype.UUID) (bool, error)
+	editorClassificatorExists       func(context.Context, pgtype.UUID) (bool, error)
+	editorAgreementUpdater          func(context.Context, pgtype.UUID, pgtype.UUID, any, any, any, any, bool, bool) (int64, error)
+	editorClassificatorUpdater      func(context.Context, pgtype.UUID, string, any, any, json.RawMessage, json.RawMessage, []string, []string) (int64, error)
+	editorClientUpdater             func(context.Context, pgtype.UUID, string, string, any, any) (int64, error)
+	editorContactUpdater            func(context.Context, pgtype.UUID, string, string, string, string, pgtype.UUID) (int64, error)
+	editorDeviceUpdater             func(context.Context, pgtype.UUID, any, string, json.RawMessage, bool, bool) (int64, error)
 }
 
 type accountStore interface {
@@ -142,11 +146,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/editor/clients", s.handleEditorClients)
 	mux.HandleFunc("/api/editor/clients/", s.handleEditorClientByID)
 	mux.HandleFunc("/api/editor/classificators", s.handleEditorClassificators)
+	mux.HandleFunc("/api/editor/classificators/", s.handleEditorClassificatorByID)
 	mux.HandleFunc("/api/editor/contacts", s.handleEditorContacts)
 	mux.HandleFunc("/api/editor/contacts/", s.handleEditorContactByID)
 	mux.HandleFunc("/api/editor/devices", s.handleEditorDevices)
 	mux.HandleFunc("/api/editor/devices/", s.handleEditorDeviceByID)
+	mux.HandleFunc("/api/editor/manufacturers", s.handleEditorManufacturers)
 	mux.HandleFunc("/api/editor/regions", s.handleEditorRegions)
+	mux.HandleFunc("/api/editor/research-types", s.handleEditorResearchTypes)
 	mux.HandleFunc("/api/profile", s.handleProfile)
 	mux.HandleFunc("/api/profile/", s.handleProfile)
 	mux.HandleFunc("/api/clients/", s.handleClientByID)

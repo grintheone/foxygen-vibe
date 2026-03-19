@@ -1460,3 +1460,259 @@ func TestEditorAgreementByIDRejectsUnsupportedMethod(t *testing.T) {
 		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
 	}
 }
+
+func TestEditorClassificatorPatchRejectsInvalidBody(t *testing.T) {
+	t.Parallel()
+
+	srv := &Server{}
+	req := httptest.NewRequest(http.MethodPatch, "/api/editor/classificators/11111111-1111-1111-1111-111111111111", strings.NewReader(`{"title":"Analyzer","extra":true}`))
+	rec := httptest.NewRecorder()
+
+	srv.handleEditorClassificatorPatch(rec, req, pgtype.UUID{})
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestEditorClassificatorPatchRequiresTitle(t *testing.T) {
+	t.Parallel()
+
+	srv := &Server{}
+	req := httptest.NewRequest(http.MethodPatch, "/api/editor/classificators/11111111-1111-1111-1111-111111111111", strings.NewReader(`{"title":" "}`))
+	rec := httptest.NewRecorder()
+
+	srv.handleEditorClassificatorPatch(rec, req, pgtype.UUID{})
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "title is required") {
+		t.Fatalf("expected missing title error, got %q", body)
+	}
+}
+
+func TestEditorClassificatorPatchRejectsInvalidManufacturerUUID(t *testing.T) {
+	t.Parallel()
+
+	srv := &Server{}
+	req := httptest.NewRequest(http.MethodPatch, "/api/editor/classificators/11111111-1111-1111-1111-111111111111", strings.NewReader(`{"title":"Analyzer","manufacturer":"not-a-uuid"}`))
+	rec := httptest.NewRecorder()
+
+	srv.handleEditorClassificatorPatch(rec, req, pgtype.UUID{})
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "manufacturer must be a valid UUID") {
+		t.Fatalf("expected invalid manufacturer error, got %q", body)
+	}
+}
+
+func TestEditorClassificatorPatchRejectsInvalidRegistrationCertificateJSON(t *testing.T) {
+	t.Parallel()
+
+	srv := &Server{}
+	req := httptest.NewRequest(http.MethodPatch, "/api/editor/classificators/11111111-1111-1111-1111-111111111111", strings.NewReader(`{"title":"Analyzer","registrationCertificate":"{"}`))
+	rec := httptest.NewRecorder()
+
+	srv.handleEditorClassificatorPatch(rec, req, pgtype.UUID{})
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "registrationCertificate must be valid JSON") {
+		t.Fatalf("expected invalid registration certificate error, got %q", body)
+	}
+}
+
+func TestEditorClassificatorPatchReturnsUpdatedClassificator(t *testing.T) {
+	t.Parallel()
+
+	classificatorID := mustUUID(t, "dddddddd-dddd-dddd-dddd-dddddddddddd")
+	manufacturerID := mustUUID(t, "11111111-1111-1111-1111-111111111111")
+	researchTypeID := mustUUID(t, "22222222-2222-2222-2222-222222222222")
+
+	var (
+		gotClassificatorID         pgtype.UUID
+		gotTitle                   string
+		gotManufacturer            any
+		gotResearchType            any
+		gotRegistrationCertificate json.RawMessage
+		gotMaintenanceRegulations  json.RawMessage
+		gotAttachments             []string
+		gotImages                  []string
+	)
+
+	srv := &Server{
+		editorManufacturerExists: func(_ context.Context, id pgtype.UUID) (bool, error) {
+			if id != manufacturerID {
+				t.Fatalf("expected manufacturer lookup id %s, got %s", manufacturerID.String(), id.String())
+			}
+			return true, nil
+		},
+		editorResearchTypeExists: func(_ context.Context, id pgtype.UUID) (bool, error) {
+			if id != researchTypeID {
+				t.Fatalf("expected research type lookup id %s, got %s", researchTypeID.String(), id.String())
+			}
+			return true, nil
+		},
+		editorClassificatorUpdater: func(
+			_ context.Context,
+			id pgtype.UUID,
+			title string,
+			manufacturer any,
+			researchType any,
+			registrationCertificate json.RawMessage,
+			maintenanceRegulations json.RawMessage,
+			attachments []string,
+			images []string,
+		) (int64, error) {
+			gotClassificatorID = id
+			gotTitle = title
+			gotManufacturer = manufacturer
+			gotResearchType = researchType
+			gotRegistrationCertificate = registrationCertificate
+			gotMaintenanceRegulations = maintenanceRegulations
+			gotAttachments = attachments
+			gotImages = images
+			return 1, nil
+		},
+		editorClassificatorDetailLoader: func(_ context.Context, id pgtype.UUID) (editorClassificatorDetailResponse, bool, error) {
+			if id != classificatorID {
+				t.Fatalf("expected reloaded classificator id %s, got %s", classificatorID.String(), id.String())
+			}
+			return editorClassificatorDetailResponse{
+				ID:                      classificatorID.String(),
+				Title:                   "Analyzer X",
+				Manufacturer:            stringPointer(manufacturerID.String()),
+				ManufacturerTitle:       "Acme",
+				ResearchType:            stringPointer(researchTypeID.String()),
+				ResearchTypeTitle:       "Blood",
+				RegistrationCertificate: json.RawMessage(`{"code":"RU-1"}`),
+				MaintenanceRegulations:  json.RawMessage(`{"interval":"monthly"}`),
+				Attachments:             []string{"manual.pdf", "spec.docx"},
+				Images:                  []string{"photo-1.jpg"},
+				DeviceCount:             4,
+			}, true, nil
+		},
+	}
+
+	req := httptest.NewRequest(
+		http.MethodPatch,
+		"/api/editor/classificators/"+classificatorID.String(),
+		strings.NewReader(`{"title":"  Analyzer X  ","manufacturer":"11111111-1111-1111-1111-111111111111","researchType":"22222222-2222-2222-2222-222222222222","registrationCertificate":"{\"code\":\"RU-1\"}","maintenanceRegulations":"{\"interval\":\"monthly\"}","attachments":[" manual.pdf ","","spec.docx"],"images":["photo-1.jpg"," "]}`),
+	)
+	rec := httptest.NewRecorder()
+
+	srv.handleEditorClassificatorPatch(rec, req, classificatorID)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if gotClassificatorID != classificatorID || gotTitle != "Analyzer X" {
+		t.Fatalf("unexpected updater payload id=%s title=%q", gotClassificatorID.String(), gotTitle)
+	}
+
+	gotManufacturerID, ok := gotManufacturer.(pgtype.UUID)
+	if !ok || gotManufacturerID != manufacturerID {
+		t.Fatalf("expected manufacturer uuid, got %#v", gotManufacturer)
+	}
+	gotResearchTypeID, ok := gotResearchType.(pgtype.UUID)
+	if !ok || gotResearchTypeID != researchTypeID {
+		t.Fatalf("expected research type uuid, got %#v", gotResearchType)
+	}
+	if string(gotRegistrationCertificate) != `{"code":"RU-1"}` {
+		t.Fatalf("unexpected registration certificate: %s", string(gotRegistrationCertificate))
+	}
+	if string(gotMaintenanceRegulations) != `{"interval":"monthly"}` {
+		t.Fatalf("unexpected maintenance regulations: %s", string(gotMaintenanceRegulations))
+	}
+	if strings.Join(gotAttachments, ",") != "manual.pdf,spec.docx" {
+		t.Fatalf("unexpected attachments: %#v", gotAttachments)
+	}
+	if strings.Join(gotImages, ",") != "photo-1.jpg" {
+		t.Fatalf("unexpected images: %#v", gotImages)
+	}
+
+	body := rec.Body.String()
+	for _, want := range []string{`"title":"Analyzer X"`, `"manufacturerTitle":"Acme"`, `"deviceCount":4`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("expected response body to contain %q, got %s", want, body)
+		}
+	}
+}
+
+func TestEditorClassificatorDetailReturnsClassificator(t *testing.T) {
+	t.Parallel()
+
+	classificatorID := mustUUID(t, "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee")
+	srv := &Server{
+		editorClassificatorDetailLoader: func(_ context.Context, id pgtype.UUID) (editorClassificatorDetailResponse, bool, error) {
+			if id != classificatorID {
+				t.Fatalf("expected classificator detail id %s, got %s", classificatorID.String(), id.String())
+			}
+			return editorClassificatorDetailResponse{
+				ID:    classificatorID.String(),
+				Title: "Analyzer Q",
+			}, true, nil
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/editor/classificators/"+classificatorID.String(), nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleEditorClassificatorDetail(rec, req, classificatorID)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, `"title":"Analyzer Q"`) {
+		t.Fatalf("expected response body to contain classificator title, got %s", body)
+	}
+}
+
+func TestEditorClassificatorByIDRejectsNestedPath(t *testing.T) {
+	t.Parallel()
+
+	srv := &Server{editorAccessCheck: allowEditorAccess}
+	req := httptest.NewRequest(http.MethodGet, "/api/editor/classificators/11111111-1111-1111-1111-111111111111/extra", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected status %d, got %d", http.StatusNotFound, rec.Code)
+	}
+}
+
+func TestEditorClassificatorByIDRejectsInvalidID(t *testing.T) {
+	t.Parallel()
+
+	srv := &Server{editorAccessCheck: allowEditorAccess}
+	req := httptest.NewRequest(http.MethodGet, "/api/editor/classificators/not-a-uuid", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "invalid classificator id") {
+		t.Fatalf("expected invalid classificator id error, got %q", body)
+	}
+}
+
+func TestEditorClassificatorByIDRejectsUnsupportedMethod(t *testing.T) {
+	t.Parallel()
+
+	srv := &Server{editorAccessCheck: allowEditorAccess}
+	req := httptest.NewRequest(http.MethodDelete, "/api/editor/classificators/11111111-1111-1111-1111-111111111111", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	}
+}

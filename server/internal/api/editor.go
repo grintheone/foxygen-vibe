@@ -19,6 +19,11 @@ const (
 	maxEditorClientListLimit     = 100
 )
 
+type editorLookupResponse struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+}
+
 type editorAgreementListItemResponse struct {
 	ActualClient       *string `json:"actualClient"`
 	ActualClientName   string  `json:"actualClientName"`
@@ -128,9 +133,30 @@ type editorDeviceDetailResponse struct {
 	Title             string          `json:"title"`
 }
 
-type editorClassificatorResponse struct {
-	ID    string `json:"id"`
-	Title string `json:"title"`
+type editorClassificatorListItemResponse struct {
+	AttachmentCount   int     `json:"attachmentCount"`
+	DeviceCount       int     `json:"deviceCount"`
+	ID                string  `json:"id"`
+	ImageCount        int     `json:"imageCount"`
+	Manufacturer      *string `json:"manufacturer"`
+	ManufacturerTitle string  `json:"manufacturerTitle"`
+	ResearchType      *string `json:"researchType"`
+	ResearchTypeTitle string  `json:"researchTypeTitle"`
+	Title             string  `json:"title"`
+}
+
+type editorClassificatorDetailResponse struct {
+	Attachments             []string        `json:"attachments"`
+	DeviceCount             int             `json:"deviceCount"`
+	ID                      string          `json:"id"`
+	Images                  []string        `json:"images"`
+	MaintenanceRegulations  json.RawMessage `json:"maintenanceRegulations"`
+	Manufacturer            *string         `json:"manufacturer"`
+	ManufacturerTitle       string          `json:"manufacturerTitle"`
+	RegistrationCertificate json.RawMessage `json:"registrationCertificate"`
+	ResearchType            *string         `json:"researchType"`
+	ResearchTypeTitle       string          `json:"researchTypeTitle"`
+	Title                   string          `json:"title"`
 }
 
 func (s *Server) handleEditorAgreements(w http.ResponseWriter, r *http.Request) {
@@ -682,17 +708,54 @@ func (s *Server) handleEditorClassificators(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	limit := maxEditorClientListLimit
+	if rawLimit := strings.TrimSpace(r.URL.Query().Get("limit")); rawLimit != "" {
+		parsedLimit, err := strconv.Atoi(rawLimit)
+		if err != nil || parsedLimit <= 0 {
+			http.Error(w, "limit must be a positive integer", http.StatusBadRequest)
+			return
+		}
+		if parsedLimit > maxEditorClientListLimit {
+			parsedLimit = maxEditorClientListLimit
+		}
+		limit = parsedLimit
+	}
+
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
 
 	rows, err := s.db.Query(ctx, `
-		SELECT id, COALESCE(title, '')
-		FROM classificators
+		SELECT
+			cls.id,
+			COALESCE(cls.title, ''),
+			cls.manufacturer,
+			COALESCE(m.title, ''),
+			cls.research_type,
+			COALESCE(rt.title, ''),
+			COALESCE(array_length(cls.attachments, 1), 0),
+			COALESCE(array_length(cls.images, 1), 0),
+			(
+				SELECT COUNT(*)
+				FROM devices d
+				WHERE d.classificator = cls.id
+			) AS device_count
+		FROM classificators cls
+		LEFT JOIN manufacturers m ON m.id = cls.manufacturer
+		LEFT JOIN research_type rt ON rt.id = cls.research_type
+		WHERE (
+			$1 = ''
+			OR COALESCE(cls.title, '') ILIKE '%' || $1 || '%'
+			OR COALESCE(m.title, '') ILIKE '%' || $1 || '%'
+			OR COALESCE(rt.title, '') ILIKE '%' || $1 || '%'
+		)
 		ORDER BY
-			CASE WHEN COALESCE(title, '') = '' THEN 1 ELSE 0 END ASC,
-			COALESCE(title, '') ASC,
-			id ASC
-	`)
+			CASE WHEN COALESCE(cls.title, '') = '' THEN 1 ELSE 0 END ASC,
+			COALESCE(cls.title, '') ASC,
+			cls.id ASC
+		LIMIT $2
+	`, query, limit)
 	if err != nil {
 		log.Printf("query editor classificators failed: %v", err)
 		http.Error(w, "failed to load classificators", http.StatusInternalServerError)
@@ -700,7 +763,91 @@ func (s *Server) handleEditorClassificators(w http.ResponseWriter, r *http.Reque
 	}
 	defer rows.Close()
 
-	response := make([]editorClassificatorResponse, 0)
+	response := make([]editorClassificatorListItemResponse, 0)
+	for rows.Next() {
+		var (
+			id                pgtype.UUID
+			title             string
+			manufacturerID    pgtype.UUID
+			manufacturerTitle string
+			researchTypeID    pgtype.UUID
+			researchTypeTitle string
+			attachmentCount   int
+			imageCount        int
+			deviceCount       int
+		)
+
+		if err := rows.Scan(
+			&id,
+			&title,
+			&manufacturerID,
+			&manufacturerTitle,
+			&researchTypeID,
+			&researchTypeTitle,
+			&attachmentCount,
+			&imageCount,
+			&deviceCount,
+		); err != nil {
+			log.Printf("scan editor classificator failed: %v", err)
+			http.Error(w, "failed to load classificators", http.StatusInternalServerError)
+			return
+		}
+
+		response = append(response, editorClassificatorListItemResponse{
+			AttachmentCount:   attachmentCount,
+			DeviceCount:       deviceCount,
+			ID:                uuidToString(id),
+			ImageCount:        imageCount,
+			Manufacturer:      nullableUUIDToString(manufacturerID),
+			ManufacturerTitle: manufacturerTitle,
+			ResearchType:      nullableUUIDToString(researchTypeID),
+			ResearchTypeTitle: researchTypeTitle,
+			Title:             title,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("iterate editor classificators failed: %v", err)
+		http.Error(w, "failed to load classificators", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (s *Server) handleEditorManufacturers(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/api/editor/manufacturers" {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if _, ok := s.requireEditorAccess(w, r); !ok {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	rows, err := s.db.Query(ctx, `
+		SELECT id, COALESCE(title, '')
+		FROM manufacturers
+		ORDER BY
+			CASE WHEN COALESCE(title, '') = '' THEN 1 ELSE 0 END ASC,
+			COALESCE(title, '') ASC,
+			id ASC
+	`)
+	if err != nil {
+		log.Printf("query editor manufacturers failed: %v", err)
+		http.Error(w, "failed to load manufacturers", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	response := make([]editorLookupResponse, 0)
 	for rows.Next() {
 		var (
 			id    pgtype.UUID
@@ -708,20 +855,80 @@ func (s *Server) handleEditorClassificators(w http.ResponseWriter, r *http.Reque
 		)
 
 		if err := rows.Scan(&id, &title); err != nil {
-			log.Printf("scan editor classificator failed: %v", err)
-			http.Error(w, "failed to load classificators", http.StatusInternalServerError)
+			log.Printf("scan editor manufacturer failed: %v", err)
+			http.Error(w, "failed to load manufacturers", http.StatusInternalServerError)
 			return
 		}
 
-		response = append(response, editorClassificatorResponse{
+		response = append(response, editorLookupResponse{
 			ID:    uuidToString(id),
 			Title: title,
 		})
 	}
 
 	if err := rows.Err(); err != nil {
-		log.Printf("iterate editor classificators failed: %v", err)
-		http.Error(w, "failed to load classificators", http.StatusInternalServerError)
+		log.Printf("iterate editor manufacturers failed: %v", err)
+		http.Error(w, "failed to load manufacturers", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (s *Server) handleEditorResearchTypes(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/api/editor/research-types" {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if _, ok := s.requireEditorAccess(w, r); !ok {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	rows, err := s.db.Query(ctx, `
+		SELECT id, COALESCE(title, '')
+		FROM research_type
+		ORDER BY
+			CASE WHEN COALESCE(title, '') = '' THEN 1 ELSE 0 END ASC,
+			COALESCE(title, '') ASC,
+			id ASC
+	`)
+	if err != nil {
+		log.Printf("query editor research types failed: %v", err)
+		http.Error(w, "failed to load research types", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	response := make([]editorLookupResponse, 0)
+	for rows.Next() {
+		var (
+			id    pgtype.UUID
+			title string
+		)
+
+		if err := rows.Scan(&id, &title); err != nil {
+			log.Printf("scan editor research type failed: %v", err)
+			http.Error(w, "failed to load research types", http.StatusInternalServerError)
+			return
+		}
+
+		response = append(response, editorLookupResponse{
+			ID:    uuidToString(id),
+			Title: title,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("iterate editor research types failed: %v", err)
+		http.Error(w, "failed to load research types", http.StatusInternalServerError)
 		return
 	}
 
@@ -809,6 +1016,33 @@ func (s *Server) handleEditorDeviceByID(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+func (s *Server) handleEditorClassificatorByID(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireEditorAccess(w, r); !ok {
+		return
+	}
+
+	classificatorPath := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/editor/classificators/"), "/")
+	if classificatorPath == "" || strings.Contains(classificatorPath, "/") {
+		http.NotFound(w, r)
+		return
+	}
+
+	var classificatorID pgtype.UUID
+	if err := classificatorID.Scan(classificatorPath); err != nil {
+		http.Error(w, "invalid classificator id", http.StatusBadRequest)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		s.handleEditorClassificatorDetail(w, r, classificatorID)
+	case http.MethodPatch:
+		s.handleEditorClassificatorPatch(w, r, classificatorID)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
 func (s *Server) handleEditorAgreementByID(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.requireEditorAccess(w, r); !ok {
 		return
@@ -866,6 +1100,158 @@ func (s *Server) handleEditorAgreementDetail(w http.ResponseWriter, r *http.Requ
 	}
 	if !found {
 		http.Error(w, "agreement not found", http.StatusNotFound)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (s *Server) handleEditorClassificatorDetail(w http.ResponseWriter, r *http.Request, classificatorID pgtype.UUID) {
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	response, found, err := s.loadEditorClassificatorDetail(ctx, classificatorID)
+	if err != nil {
+		log.Printf("load editor classificator detail failed: %v", err)
+		http.Error(w, "failed to load classificator", http.StatusInternalServerError)
+		return
+	}
+	if !found {
+		http.Error(w, "classificator not found", http.StatusNotFound)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (s *Server) handleEditorClassificatorPatch(w http.ResponseWriter, r *http.Request, classificatorID pgtype.UUID) {
+	type patchEditorClassificatorRequest struct {
+		Attachments             []string `json:"attachments"`
+		Images                  []string `json:"images"`
+		MaintenanceRegulations  string   `json:"maintenanceRegulations"`
+		Manufacturer            string   `json:"manufacturer"`
+		RegistrationCertificate string   `json:"registrationCertificate"`
+		ResearchType            string   `json:"researchType"`
+		Title                   string   `json:"title"`
+	}
+
+	defer r.Body.Close()
+
+	var input patchEditorClassificatorRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	input.Title = strings.TrimSpace(input.Title)
+	input.Manufacturer = strings.TrimSpace(input.Manufacturer)
+	input.ResearchType = strings.TrimSpace(input.ResearchType)
+	input.RegistrationCertificate = strings.TrimSpace(input.RegistrationCertificate)
+	input.MaintenanceRegulations = strings.TrimSpace(input.MaintenanceRegulations)
+
+	if input.Title == "" {
+		http.Error(w, "title is required", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	var manufacturerValue any = nil
+	if input.Manufacturer != "" {
+		var manufacturerID pgtype.UUID
+		if err := manufacturerID.Scan(input.Manufacturer); err != nil {
+			http.Error(w, "manufacturer must be a valid UUID", http.StatusBadRequest)
+			return
+		}
+
+		manufacturerExists, err := s.editorManufacturerExistsByID(ctx, manufacturerID)
+		if err != nil {
+			log.Printf("validate editor classificator manufacturer failed: %v", err)
+			http.Error(w, "failed to update classificator", http.StatusInternalServerError)
+			return
+		}
+		if !manufacturerExists {
+			http.Error(w, "manufacturer not found", http.StatusBadRequest)
+			return
+		}
+
+		manufacturerValue = manufacturerID
+	}
+
+	var researchTypeValue any = nil
+	if input.ResearchType != "" {
+		var researchTypeID pgtype.UUID
+		if err := researchTypeID.Scan(input.ResearchType); err != nil {
+			http.Error(w, "researchType must be a valid UUID", http.StatusBadRequest)
+			return
+		}
+
+		researchTypeExists, err := s.editorResearchTypeExistsByID(ctx, researchTypeID)
+		if err != nil {
+			log.Printf("validate editor classificator research type failed: %v", err)
+			http.Error(w, "failed to update classificator", http.StatusInternalServerError)
+			return
+		}
+		if !researchTypeExists {
+			http.Error(w, "research type not found", http.StatusBadRequest)
+			return
+		}
+
+		researchTypeValue = researchTypeID
+	}
+
+	registrationCertificateValue := input.RegistrationCertificate
+	if registrationCertificateValue == "" {
+		registrationCertificateValue = "{}"
+	}
+	rawRegistrationCertificate := json.RawMessage(registrationCertificateValue)
+	if !json.Valid(rawRegistrationCertificate) {
+		http.Error(w, "registrationCertificate must be valid JSON", http.StatusBadRequest)
+		return
+	}
+
+	maintenanceRegulationsValue := input.MaintenanceRegulations
+	if maintenanceRegulationsValue == "" {
+		maintenanceRegulationsValue = "{}"
+	}
+	rawMaintenanceRegulations := json.RawMessage(maintenanceRegulationsValue)
+	if !json.Valid(rawMaintenanceRegulations) {
+		http.Error(w, "maintenanceRegulations must be valid JSON", http.StatusBadRequest)
+		return
+	}
+
+	rowsAffected, err := s.updateEditorClassificatorRecord(
+		ctx,
+		classificatorID,
+		input.Title,
+		manufacturerValue,
+		researchTypeValue,
+		rawRegistrationCertificate,
+		rawMaintenanceRegulations,
+		normalizeEditorStringList(input.Attachments),
+		normalizeEditorStringList(input.Images),
+	)
+	if err != nil {
+		log.Printf("update editor classificator failed: %v", err)
+		http.Error(w, "failed to update classificator", http.StatusInternalServerError)
+		return
+	}
+	if rowsAffected == 0 {
+		http.Error(w, "classificator not found", http.StatusNotFound)
+		return
+	}
+
+	response, found, err := s.loadEditorClassificatorDetail(ctx, classificatorID)
+	if err != nil {
+		log.Printf("reload editor classificator failed: %v", err)
+		http.Error(w, "failed to update classificator", http.StatusInternalServerError)
+		return
+	}
+	if !found {
+		http.Error(w, "classificator not found", http.StatusNotFound)
 		return
 	}
 
@@ -1396,6 +1782,84 @@ func (s *Server) loadEditorAgreementDetail(ctx context.Context, agreementID pgty
 	}, true, nil
 }
 
+func (s *Server) loadEditorClassificatorDetail(ctx context.Context, classificatorID pgtype.UUID) (editorClassificatorDetailResponse, bool, error) {
+	if s.editorClassificatorDetailLoader != nil {
+		return s.editorClassificatorDetailLoader(ctx, classificatorID)
+	}
+
+	row := s.db.QueryRow(ctx, `
+		SELECT
+			cls.id,
+			COALESCE(cls.title, ''),
+			cls.manufacturer,
+			COALESCE(m.title, ''),
+			cls.research_type,
+			COALESCE(rt.title, ''),
+			COALESCE(cls.registration_certificate, '{}'::jsonb),
+			COALESCE(cls.maintenance_regulations, '{}'::jsonb),
+			COALESCE(cls.attachments, '{}'::text[]),
+			COALESCE(cls.images, '{}'::text[]),
+			(
+				SELECT COUNT(*)
+				FROM devices d
+				WHERE d.classificator = cls.id
+			) AS device_count
+		FROM classificators cls
+		LEFT JOIN manufacturers m ON m.id = cls.manufacturer
+		LEFT JOIN research_type rt ON rt.id = cls.research_type
+		WHERE cls.id = $1
+		LIMIT 1
+	`, classificatorID)
+
+	var (
+		id                      pgtype.UUID
+		title                   string
+		manufacturerID          pgtype.UUID
+		manufacturerTitle       string
+		researchTypeID          pgtype.UUID
+		researchTypeTitle       string
+		registrationCertificate []byte
+		maintenanceRegulations  []byte
+		attachments             []string
+		images                  []string
+		deviceCount             int
+	)
+
+	if err := row.Scan(
+		&id,
+		&title,
+		&manufacturerID,
+		&manufacturerTitle,
+		&researchTypeID,
+		&researchTypeTitle,
+		&registrationCertificate,
+		&maintenanceRegulations,
+		&attachments,
+		&images,
+		&deviceCount,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return editorClassificatorDetailResponse{}, false, nil
+		}
+
+		return editorClassificatorDetailResponse{}, false, err
+	}
+
+	return editorClassificatorDetailResponse{
+		Attachments:             attachments,
+		DeviceCount:             deviceCount,
+		ID:                      uuidToString(id),
+		Images:                  images,
+		MaintenanceRegulations:  json.RawMessage(maintenanceRegulations),
+		Manufacturer:            nullableUUIDToString(manufacturerID),
+		ManufacturerTitle:       manufacturerTitle,
+		RegistrationCertificate: json.RawMessage(registrationCertificate),
+		ResearchType:            nullableUUIDToString(researchTypeID),
+		ResearchTypeTitle:       researchTypeTitle,
+		Title:                   title,
+	}, true, nil
+}
+
 func (s *Server) loadEditorClientDetail(ctx context.Context, clientID pgtype.UUID) (editorClientDetailResponse, bool, error) {
 	if s.editorClientDetailLoader != nil {
 		return s.editorClientDetailLoader(ctx, clientID)
@@ -1660,6 +2124,32 @@ func (s *Server) editorDeviceExistsByID(ctx context.Context, deviceID pgtype.UUI
 	return deviceExists, nil
 }
 
+func (s *Server) editorManufacturerExistsByID(ctx context.Context, manufacturerID pgtype.UUID) (bool, error) {
+	if s.editorManufacturerExists != nil {
+		return s.editorManufacturerExists(ctx, manufacturerID)
+	}
+
+	var manufacturerExists bool
+	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM manufacturers WHERE id = $1)`, manufacturerID).Scan(&manufacturerExists); err != nil {
+		return false, err
+	}
+
+	return manufacturerExists, nil
+}
+
+func (s *Server) editorResearchTypeExistsByID(ctx context.Context, researchTypeID pgtype.UUID) (bool, error) {
+	if s.editorResearchTypeExists != nil {
+		return s.editorResearchTypeExists(ctx, researchTypeID)
+	}
+
+	var researchTypeExists bool
+	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM research_type WHERE id = $1)`, researchTypeID).Scan(&researchTypeExists); err != nil {
+		return false, err
+	}
+
+	return researchTypeExists, nil
+}
+
 func (s *Server) editorClassificatorExistsByID(ctx context.Context, classificatorID pgtype.UUID) (bool, error) {
 	if s.editorClassificatorExists != nil {
 		return s.editorClassificatorExists(ctx, classificatorID)
@@ -1671,6 +2161,49 @@ func (s *Server) editorClassificatorExistsByID(ctx context.Context, classificato
 	}
 
 	return classificatorExists, nil
+}
+
+func (s *Server) updateEditorClassificatorRecord(
+	ctx context.Context,
+	classificatorID pgtype.UUID,
+	title string,
+	manufacturer any,
+	researchType any,
+	registrationCertificate json.RawMessage,
+	maintenanceRegulations json.RawMessage,
+	attachments []string,
+	images []string,
+) (int64, error) {
+	if s.editorClassificatorUpdater != nil {
+		return s.editorClassificatorUpdater(
+			ctx,
+			classificatorID,
+			title,
+			manufacturer,
+			researchType,
+			registrationCertificate,
+			maintenanceRegulations,
+			attachments,
+			images,
+		)
+	}
+
+	tag, err := s.db.Exec(ctx, `
+		UPDATE classificators
+		SET title = $1,
+			manufacturer = $2,
+			research_type = $3,
+			registration_certificate = $4,
+			maintenance_regulations = $5,
+			attachments = $6,
+			images = $7
+		WHERE id = $8
+	`, title, manufacturer, researchType, registrationCertificate, maintenanceRegulations, attachments, images, classificatorID)
+	if err != nil {
+		return 0, err
+	}
+
+	return tag.RowsAffected(), nil
 }
 
 func (s *Server) updateEditorAgreementRecord(
@@ -1704,6 +2237,23 @@ func (s *Server) updateEditorAgreementRecord(
 	}
 
 	return tag.RowsAffected(), nil
+}
+
+func normalizeEditorStringList(values []string) []string {
+	if len(values) == 0 {
+		return []string{}
+	}
+
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		result = append(result, trimmed)
+	}
+
+	return result
 }
 
 func (s *Server) updateEditorClientRecord(ctx context.Context, clientID pgtype.UUID, title string, address string, region any, location any) (int64, error) {
