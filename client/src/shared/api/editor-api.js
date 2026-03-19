@@ -4,8 +4,30 @@ import { baseQueryWithAuth } from "./authenticated-fetch";
 export const editorApi = createApi({
   reducerPath: "editorApi",
   baseQuery: baseQueryWithAuth,
-  tagTypes: ["EditorClassificator", "EditorClient", "EditorContact", "EditorDevice", "EditorRegion"],
+  tagTypes: ["EditorAgreement", "EditorClassificator", "EditorClient", "EditorContact", "EditorDevice", "EditorRegion"],
   endpoints: (builder) => ({
+    getEditorAgreements: builder.query({
+      query: ({ limit = 50, q = "" } = {}) => ({
+        params: {
+          ...(limit ? { limit } : {}),
+          ...(q ? { q } : {}),
+        },
+        url: "api/editor/agreements",
+      }),
+      providesTags: (result) => [
+        { type: "EditorAgreement", id: "LIST" },
+        ...(Array.isArray(result)
+          ? result.map((agreement) => ({
+              type: "EditorAgreement",
+              id: agreement.id,
+            }))
+          : []),
+      ],
+    }),
+    getEditorAgreementById: builder.query({
+      query: (agreementId) => `api/editor/agreements/${agreementId}`,
+      providesTags: (_, __, agreementId) => [{ type: "EditorAgreement", id: agreementId }],
+    }),
     getEditorClassificators: builder.query({
       query: () => "api/editor/classificators",
       providesTags: (result) => [
@@ -88,6 +110,20 @@ export const editorApi = createApi({
       query: () => "api/editor/regions",
       providesTags: ["EditorRegion"],
     }),
+    patchEditorAgreement: builder.mutation({
+      query: ({ agreementId, patch }) => ({
+        body: patch,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "PATCH",
+        url: `api/editor/agreements/${agreementId}`,
+      }),
+      invalidatesTags: (_, __, { agreementId }) => [
+        { type: "EditorAgreement", id: agreementId },
+        { type: "EditorAgreement", id: "LIST" },
+      ],
+    }),
     patchEditorClient: builder.mutation({
       query: ({ clientId, patch }) => ({
         body: patch,
@@ -134,6 +170,8 @@ export const editorApi = createApi({
 });
 
 export const {
+  useGetEditorAgreementByIdQuery,
+  useGetEditorAgreementsQuery,
   useGetEditorClassificatorsQuery,
   useGetEditorClientByIdQuery,
   useGetEditorClientsQuery,
@@ -142,6 +180,7 @@ export const {
   useGetEditorDeviceByIdQuery,
   useGetEditorDevicesQuery,
   useGetEditorRegionsQuery,
+  usePatchEditorAgreementMutation,
   usePatchEditorContactMutation,
   usePatchEditorClientMutation,
   usePatchEditorDeviceMutation,

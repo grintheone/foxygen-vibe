@@ -10,6 +10,11 @@ const EditorClientsPage = lazy(() =>
     default: module.EditorClientsPage,
   })),
 );
+const EditorAgreementsPage = lazy(() =>
+  import("./editor-agreements-page").then((module) => ({
+    default: module.EditorAgreementsPage,
+  })),
+);
 const EditorContactsPage = lazy(() =>
   import("./editor-contacts-page").then((module) => ({
     default: module.EditorContactsPage,
@@ -56,6 +61,14 @@ export function EditorPage() {
     );
   }
 
+  if (entity === "agreements") {
+    return (
+      <Suspense fallback={<EditorPageLoader message="Загружаем редактор договоров..." />}>
+        <EditorAgreementsPage />
+      </Suspense>
+    );
+  }
+
   if (entity === "contacts") {
     return (
       <Suspense fallback={<EditorPageLoader message="Загружаем редактор контактов..." />}>
@@ -77,7 +90,7 @@ export function EditorPage() {
       <section className="w-full space-y-6">
         <EditorPageHeader
           title="Выбор сущности"
-          description="Выберите, что именно хотите редактировать. Сейчас доступны рабочие срезы для клиентов, контактов и устройств."
+          description="Выберите, что именно хотите редактировать. Сейчас доступны рабочие срезы для клиентов, договоров, контактов и устройств."
           action={<DashboardButton onClick={handleOpenDashboard} />}
         />
 
@@ -87,6 +100,12 @@ export function EditorPage() {
             badge="Готово"
             description="Редактирование названия, адреса, региона и JSON-поля location."
             onClick={() => navigate(routePaths.editorClients())}
+          />
+          <EditorEntityCard
+            title="Договоры"
+            badge="Готово"
+            description="Редактирование клиента, дистрибьютора, устройства, статуса, гарантии и дат договора."
+            onClick={() => navigate(routePaths.editorAgreements())}
           />
           <EditorEntityCard
             title="Контакты"

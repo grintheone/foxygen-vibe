@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -1188,6 +1189,269 @@ func TestEditorDeviceByIDRejectsUnsupportedMethod(t *testing.T) {
 
 	srv := &Server{editorAccessCheck: allowEditorAccess}
 	req := httptest.NewRequest(http.MethodDelete, "/api/editor/devices/11111111-1111-1111-1111-111111111111", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	}
+}
+
+func TestEditorAgreementPatchRejectsInvalidBody(t *testing.T) {
+	t.Parallel()
+
+	srv := &Server{}
+	req := httptest.NewRequest(http.MethodPatch, "/api/editor/agreements/11111111-1111-1111-1111-111111111111", strings.NewReader(`{"actualClient":"11111111-1111-1111-1111-111111111111","extra":true}`))
+	rec := httptest.NewRecorder()
+
+	srv.handleEditorAgreementPatch(rec, req, pgtype.UUID{})
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestEditorAgreementPatchRequiresActualClient(t *testing.T) {
+	t.Parallel()
+
+	srv := &Server{}
+	req := httptest.NewRequest(http.MethodPatch, "/api/editor/agreements/11111111-1111-1111-1111-111111111111", strings.NewReader(`{"actualClient":" "}`))
+	rec := httptest.NewRecorder()
+
+	srv.handleEditorAgreementPatch(rec, req, pgtype.UUID{})
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "actualClient is required") {
+		t.Fatalf("expected missing actual client error, got %q", body)
+	}
+}
+
+func TestEditorAgreementPatchRejectsInvalidAssignedAt(t *testing.T) {
+	t.Parallel()
+
+	actualClientID := mustUUID(t, "11111111-1111-1111-1111-111111111111")
+	srv := &Server{
+		editorClientExists: func(_ context.Context, id pgtype.UUID) (bool, error) {
+			if id != actualClientID {
+				t.Fatalf("expected actual client lookup id %s, got %s", actualClientID.String(), id.String())
+			}
+			return true, nil
+		},
+	}
+	req := httptest.NewRequest(http.MethodPatch, "/api/editor/agreements/11111111-1111-1111-1111-111111111111", strings.NewReader(`{"actualClient":"11111111-1111-1111-1111-111111111111","assignedAt":"nope"}`))
+	rec := httptest.NewRecorder()
+
+	srv.handleEditorAgreementPatch(rec, req, pgtype.UUID{})
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "assignedAt must be a valid date or ISO timestamp") {
+		t.Fatalf("expected invalid assignedAt error, got %q", body)
+	}
+}
+
+func TestEditorAgreementPatchReturnsUpdatedAgreement(t *testing.T) {
+	t.Parallel()
+
+	agreementID := mustUUID(t, "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	actualClientID := mustUUID(t, "11111111-1111-1111-1111-111111111111")
+	distributorID := mustUUID(t, "22222222-2222-2222-2222-222222222222")
+	deviceID := mustUUID(t, "33333333-3333-3333-3333-333333333333")
+	assignedAt := time.Date(2026, time.March, 19, 4, 30, 0, 0, time.UTC)
+	finishedAt := time.Date(2027, time.March, 19, 6, 45, 0, 0, time.UTC)
+
+	var (
+		gotAgreementID  pgtype.UUID
+		gotActualClient pgtype.UUID
+		gotDistributor  any
+		gotDevice       any
+		gotAssignedAt   any
+		gotFinishedAt   any
+		gotIsActive     bool
+		gotOnWarranty   bool
+	)
+
+	srv := &Server{
+		editorClientExists: func(_ context.Context, id pgtype.UUID) (bool, error) {
+			if id != actualClientID && id != distributorID {
+				t.Fatalf("unexpected client lookup id %s", id.String())
+			}
+			return true, nil
+		},
+		editorDeviceExists: func(_ context.Context, id pgtype.UUID) (bool, error) {
+			if id != deviceID {
+				t.Fatalf("expected device lookup id %s, got %s", deviceID.String(), id.String())
+			}
+			return true, nil
+		},
+		editorAgreementUpdater: func(_ context.Context, id pgtype.UUID, actualClient pgtype.UUID, distributor any, device any, assignedAtValue any, finishedAtValue any, isActive bool, onWarranty bool) (int64, error) {
+			gotAgreementID = id
+			gotActualClient = actualClient
+			gotDistributor = distributor
+			gotDevice = device
+			gotAssignedAt = assignedAtValue
+			gotFinishedAt = finishedAtValue
+			gotIsActive = isActive
+			gotOnWarranty = onWarranty
+			return 1, nil
+		},
+		editorAgreementDetailLoader: func(_ context.Context, id pgtype.UUID) (editorAgreementDetailResponse, bool, error) {
+			if id != agreementID {
+				t.Fatalf("expected reloaded agreement id %s, got %s", agreementID.String(), id.String())
+			}
+			return editorAgreementDetailResponse{
+				ID:                 agreementID.String(),
+				Number:             42,
+				ActualClient:       stringPointer(actualClientID.String()),
+				ActualClientName:   "Acme Labs",
+				Distributor:        stringPointer(distributorID.String()),
+				DistributorName:    "Vendor Co",
+				Device:             stringPointer(deviceID.String()),
+				DeviceTitle:        "Analyzer X",
+				DeviceSerialNumber: "SN-42",
+				AssignedAt:         stringPointer("2026-03-19T04:30:00Z"),
+				FinishedAt:         stringPointer("2027-03-19T06:45:00Z"),
+				IsActive:           true,
+				OnWarranty:         false,
+			}, true, nil
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodPatch, "/api/editor/agreements/"+agreementID.String(), strings.NewReader(`{"actualClient":"11111111-1111-1111-1111-111111111111","distributor":"22222222-2222-2222-2222-222222222222","device":"33333333-3333-3333-3333-333333333333","assignedAt":"2026-03-19T04:30:00Z","finishedAt":"2027-03-19T06:45:00Z","isActive":true,"onWarranty":false}`))
+	rec := httptest.NewRecorder()
+
+	srv.handleEditorAgreementPatch(rec, req, agreementID)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if gotAgreementID != agreementID || gotActualClient != actualClientID {
+		t.Fatal("expected updater to receive agreement and actual client ids")
+	}
+
+	gotDistributorID, ok := gotDistributor.(pgtype.UUID)
+	if !ok || gotDistributorID != distributorID {
+		t.Fatalf("expected distributor uuid, got %#v", gotDistributor)
+	}
+	gotDeviceID, ok := gotDevice.(pgtype.UUID)
+	if !ok || gotDeviceID != deviceID {
+		t.Fatalf("expected device uuid, got %#v", gotDevice)
+	}
+	gotAssignedTime, ok := gotAssignedAt.(time.Time)
+	if !ok || !gotAssignedTime.Equal(assignedAt) {
+		t.Fatalf("expected assignedAt %v, got %#v", assignedAt, gotAssignedAt)
+	}
+	gotFinishedTime, ok := gotFinishedAt.(time.Time)
+	if !ok || !gotFinishedTime.Equal(finishedAt) {
+		t.Fatalf("expected finishedAt %v, got %#v", finishedAt, gotFinishedAt)
+	}
+	if !gotIsActive || gotOnWarranty {
+		t.Fatalf("unexpected agreement flags: isActive=%v onWarranty=%v", gotIsActive, gotOnWarranty)
+	}
+
+	body := rec.Body.String()
+	for _, want := range []string{`"number":42`, `"actualClientName":"Acme Labs"`, `"deviceTitle":"Analyzer X"`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("expected response body to contain %q, got %s", want, body)
+		}
+	}
+}
+
+func TestEditorAgreementDetailReturnsAgreement(t *testing.T) {
+	t.Parallel()
+
+	agreementID := mustUUID(t, "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+	srv := &Server{
+		editorAgreementDetailLoader: func(_ context.Context, id pgtype.UUID) (editorAgreementDetailResponse, bool, error) {
+			if id != agreementID {
+				t.Fatalf("expected agreement detail id %s, got %s", agreementID.String(), id.String())
+			}
+			return editorAgreementDetailResponse{
+				ID:               agreementID.String(),
+				Number:           17,
+				ActualClientName: "North Lab",
+				DeviceTitle:      "Analyzer Q",
+			}, true, nil
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/editor/agreements/"+agreementID.String(), nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleEditorAgreementDetail(rec, req, agreementID)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, `"number":17`) {
+		t.Fatalf("expected response body to contain agreement number, got %s", body)
+	}
+}
+
+func TestEditorAgreementPatchReturnsNotFoundWhenUpdaterAffectsNoRows(t *testing.T) {
+	t.Parallel()
+
+	agreementID := mustUUID(t, "cccccccc-cccc-cccc-cccc-cccccccccccc")
+	actualClientID := mustUUID(t, "11111111-1111-1111-1111-111111111111")
+	srv := &Server{
+		editorClientExists: func(_ context.Context, _ pgtype.UUID) (bool, error) {
+			return true, nil
+		},
+		editorAgreementUpdater: func(_ context.Context, _ pgtype.UUID, _ pgtype.UUID, _ any, _ any, _ any, _ any, _ bool, _ bool) (int64, error) {
+			return 0, nil
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodPatch, "/api/editor/agreements/"+agreementID.String(), strings.NewReader(`{"actualClient":"`+actualClientID.String()+`"}`))
+	rec := httptest.NewRecorder()
+
+	srv.handleEditorAgreementPatch(rec, req, agreementID)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected status %d, got %d", http.StatusNotFound, rec.Code)
+	}
+}
+
+func TestEditorAgreementByIDRejectsNestedPath(t *testing.T) {
+	t.Parallel()
+
+	srv := &Server{editorAccessCheck: allowEditorAccess}
+	req := httptest.NewRequest(http.MethodGet, "/api/editor/agreements/11111111-1111-1111-1111-111111111111/extra", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected status %d, got %d", http.StatusNotFound, rec.Code)
+	}
+}
+
+func TestEditorAgreementByIDRejectsInvalidID(t *testing.T) {
+	t.Parallel()
+
+	srv := &Server{editorAccessCheck: allowEditorAccess}
+	req := httptest.NewRequest(http.MethodGet, "/api/editor/agreements/not-a-uuid", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "invalid agreement id") {
+		t.Fatalf("expected invalid agreement id error, got %q", body)
+	}
+}
+
+func TestEditorAgreementByIDRejectsUnsupportedMethod(t *testing.T) {
+	t.Parallel()
+
+	srv := &Server{editorAccessCheck: allowEditorAccess}
+	req := httptest.NewRequest(http.MethodDelete, "/api/editor/agreements/11111111-1111-1111-1111-111111111111", nil)
 	rec := httptest.NewRecorder()
 
 	srv.Handler().ServeHTTP(rec, req)

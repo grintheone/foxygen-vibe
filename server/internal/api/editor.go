@@ -19,6 +19,38 @@ const (
 	maxEditorClientListLimit     = 100
 )
 
+type editorAgreementListItemResponse struct {
+	ActualClient       *string `json:"actualClient"`
+	ActualClientName   string  `json:"actualClientName"`
+	AssignedAt         *string `json:"assignedAt"`
+	Device             *string `json:"device"`
+	DeviceSerialNumber string  `json:"deviceSerialNumber"`
+	DeviceTitle        string  `json:"deviceTitle"`
+	Distributor        *string `json:"distributor"`
+	DistributorName    string  `json:"distributorName"`
+	FinishedAt         *string `json:"finishedAt"`
+	ID                 string  `json:"id"`
+	IsActive           bool    `json:"isActive"`
+	Number             int32   `json:"number"`
+	OnWarranty         bool    `json:"onWarranty"`
+}
+
+type editorAgreementDetailResponse struct {
+	ActualClient       *string `json:"actualClient"`
+	ActualClientName   string  `json:"actualClientName"`
+	AssignedAt         *string `json:"assignedAt"`
+	Device             *string `json:"device"`
+	DeviceSerialNumber string  `json:"deviceSerialNumber"`
+	DeviceTitle        string  `json:"deviceTitle"`
+	Distributor        *string `json:"distributor"`
+	DistributorName    string  `json:"distributorName"`
+	FinishedAt         *string `json:"finishedAt"`
+	ID                 string  `json:"id"`
+	IsActive           bool    `json:"isActive"`
+	Number             int32   `json:"number"`
+	OnWarranty         bool    `json:"onWarranty"`
+}
+
 type editorClientListItemResponse struct {
 	ActiveAgreementCount int    `json:"activeAgreementCount"`
 	Address              string `json:"address"`
@@ -99,6 +131,143 @@ type editorDeviceDetailResponse struct {
 type editorClassificatorResponse struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
+}
+
+func (s *Server) handleEditorAgreements(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/api/editor/agreements" {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if _, ok := s.requireEditorAccess(w, r); !ok {
+		return
+	}
+
+	limit := defaultEditorClientListLimit
+	if rawLimit := strings.TrimSpace(r.URL.Query().Get("limit")); rawLimit != "" {
+		parsedLimit, err := strconv.Atoi(rawLimit)
+		if err != nil || parsedLimit <= 0 {
+			http.Error(w, "limit must be a positive integer", http.StatusBadRequest)
+			return
+		}
+		if parsedLimit > maxEditorClientListLimit {
+			parsedLimit = maxEditorClientListLimit
+		}
+		limit = parsedLimit
+	}
+
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	rows, err := s.db.Query(ctx, `
+		SELECT
+			a.id,
+			a.number,
+			a.actual_client,
+			COALESCE(actual_client.title, ''),
+			a.distributor,
+			COALESCE(distributor.title, ''),
+			a.device,
+			COALESCE(cls.title, ''),
+			COALESCE(d.serial_number, ''),
+			a.assigned_at,
+			a.finished_at,
+			COALESCE(a.is_active, FALSE),
+			COALESCE(a.on_warranty, FALSE)
+		FROM agreements a
+		LEFT JOIN clients actual_client ON actual_client.id = a.actual_client
+		LEFT JOIN clients distributor ON distributor.id = a.distributor
+		LEFT JOIN devices d ON d.id = a.device
+		LEFT JOIN classificators cls ON cls.id = d.classificator
+		WHERE (
+			$1 = ''
+			OR a.number::text ILIKE '%' || $1 || '%'
+			OR COALESCE(actual_client.title, '') ILIKE '%' || $1 || '%'
+			OR COALESCE(distributor.title, '') ILIKE '%' || $1 || '%'
+			OR COALESCE(cls.title, '') ILIKE '%' || $1 || '%'
+			OR COALESCE(d.serial_number, '') ILIKE '%' || $1 || '%'
+		)
+		ORDER BY
+			COALESCE(a.is_active, FALSE) DESC,
+			a.number DESC,
+			a.id ASC
+		LIMIT $2
+	`, query, limit)
+	if err != nil {
+		log.Printf("query editor agreements failed: %v", err)
+		http.Error(w, "failed to load editor agreements", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	response := make([]editorAgreementListItemResponse, 0)
+	for rows.Next() {
+		var (
+			id                 pgtype.UUID
+			number             pgtype.Int4
+			actualClientID     pgtype.UUID
+			actualClientName   string
+			distributorID      pgtype.UUID
+			distributorName    string
+			deviceID           pgtype.UUID
+			deviceTitle        string
+			deviceSerialNumber string
+			assignedAt         pgtype.Timestamp
+			finishedAt         pgtype.Timestamp
+			isActive           bool
+			onWarranty         bool
+		)
+
+		if err := rows.Scan(
+			&id,
+			&number,
+			&actualClientID,
+			&actualClientName,
+			&distributorID,
+			&distributorName,
+			&deviceID,
+			&deviceTitle,
+			&deviceSerialNumber,
+			&assignedAt,
+			&finishedAt,
+			&isActive,
+			&onWarranty,
+		); err != nil {
+			log.Printf("scan editor agreement failed: %v", err)
+			http.Error(w, "failed to load editor agreements", http.StatusInternalServerError)
+			return
+		}
+
+		response = append(response, editorAgreementListItemResponse{
+			ActualClient:       nullableUUIDToString(actualClientID),
+			ActualClientName:   actualClientName,
+			AssignedAt:         timestampToRFC3339(assignedAt),
+			Device:             nullableUUIDToString(deviceID),
+			DeviceSerialNumber: deviceSerialNumber,
+			DeviceTitle:        deviceTitle,
+			Distributor:        nullableUUIDToString(distributorID),
+			DistributorName:    distributorName,
+			FinishedAt:         timestampToRFC3339(finishedAt),
+			ID:                 uuidToString(id),
+			IsActive:           isActive,
+			Number:             number.Int32,
+			OnWarranty:         onWarranty,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("iterate editor agreements failed: %v", err)
+		http.Error(w, "failed to load editor agreements", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (s *Server) handleEditorClients(w http.ResponseWriter, r *http.Request) {
@@ -640,6 +809,33 @@ func (s *Server) handleEditorDeviceByID(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+func (s *Server) handleEditorAgreementByID(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireEditorAccess(w, r); !ok {
+		return
+	}
+
+	agreementPath := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/editor/agreements/"), "/")
+	if agreementPath == "" || strings.Contains(agreementPath, "/") {
+		http.NotFound(w, r)
+		return
+	}
+
+	var agreementID pgtype.UUID
+	if err := agreementID.Scan(agreementPath); err != nil {
+		http.Error(w, "invalid agreement id", http.StatusBadRequest)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		s.handleEditorAgreementDetail(w, r, agreementID)
+	case http.MethodPatch:
+		s.handleEditorAgreementPatch(w, r, agreementID)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
 func (s *Server) handleEditorClientDetail(w http.ResponseWriter, r *http.Request, clientID pgtype.UUID) {
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
@@ -652,6 +848,177 @@ func (s *Server) handleEditorClientDetail(w http.ResponseWriter, r *http.Request
 	}
 	if !found {
 		http.Error(w, "client not found", http.StatusNotFound)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (s *Server) handleEditorAgreementDetail(w http.ResponseWriter, r *http.Request, agreementID pgtype.UUID) {
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	response, found, err := s.loadEditorAgreementDetail(ctx, agreementID)
+	if err != nil {
+		log.Printf("load editor agreement detail failed: %v", err)
+		http.Error(w, "failed to load agreement", http.StatusInternalServerError)
+		return
+	}
+	if !found {
+		http.Error(w, "agreement not found", http.StatusNotFound)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (s *Server) handleEditorAgreementPatch(w http.ResponseWriter, r *http.Request, agreementID pgtype.UUID) {
+	type patchEditorAgreementRequest struct {
+		ActualClient string `json:"actualClient"`
+		AssignedAt   string `json:"assignedAt"`
+		Device       string `json:"device"`
+		Distributor  string `json:"distributor"`
+		FinishedAt   string `json:"finishedAt"`
+		IsActive     bool   `json:"isActive"`
+		OnWarranty   bool   `json:"onWarranty"`
+	}
+
+	defer r.Body.Close()
+
+	var input patchEditorAgreementRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	input.ActualClient = strings.TrimSpace(input.ActualClient)
+	input.AssignedAt = strings.TrimSpace(input.AssignedAt)
+	input.Device = strings.TrimSpace(input.Device)
+	input.Distributor = strings.TrimSpace(input.Distributor)
+	input.FinishedAt = strings.TrimSpace(input.FinishedAt)
+
+	if input.ActualClient == "" {
+		http.Error(w, "actualClient is required", http.StatusBadRequest)
+		return
+	}
+
+	var actualClientID pgtype.UUID
+	if err := actualClientID.Scan(input.ActualClient); err != nil {
+		http.Error(w, "actualClient must be a valid UUID", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	actualClientExists, err := s.editorClientExistsByID(ctx, actualClientID)
+	if err != nil {
+		log.Printf("validate editor agreement actual client failed: %v", err)
+		http.Error(w, "failed to update agreement", http.StatusInternalServerError)
+		return
+	}
+	if !actualClientExists {
+		http.Error(w, "actual client not found", http.StatusBadRequest)
+		return
+	}
+
+	var distributorValue any = nil
+	if input.Distributor != "" {
+		var distributorID pgtype.UUID
+		if err := distributorID.Scan(input.Distributor); err != nil {
+			http.Error(w, "distributor must be a valid UUID", http.StatusBadRequest)
+			return
+		}
+
+		distributorExists, err := s.editorClientExistsByID(ctx, distributorID)
+		if err != nil {
+			log.Printf("validate editor agreement distributor failed: %v", err)
+			http.Error(w, "failed to update agreement", http.StatusInternalServerError)
+			return
+		}
+		if !distributorExists {
+			http.Error(w, "distributor not found", http.StatusBadRequest)
+			return
+		}
+
+		distributorValue = distributorID
+	}
+
+	var deviceValue any = nil
+	if input.Device != "" {
+		var deviceID pgtype.UUID
+		if err := deviceID.Scan(input.Device); err != nil {
+			http.Error(w, "device must be a valid UUID", http.StatusBadRequest)
+			return
+		}
+
+		deviceExists, err := s.editorDeviceExistsByID(ctx, deviceID)
+		if err != nil {
+			log.Printf("validate editor agreement device failed: %v", err)
+			http.Error(w, "failed to update agreement", http.StatusInternalServerError)
+			return
+		}
+		if !deviceExists {
+			http.Error(w, "device not found", http.StatusBadRequest)
+			return
+		}
+
+		deviceValue = deviceID
+	}
+
+	var assignedAtValue any = nil
+	if input.AssignedAt != "" {
+		parsedAssignedAt, err := parseTicketDateInput(input.AssignedAt)
+		if err != nil {
+			http.Error(w, "assignedAt must be a valid date or ISO timestamp", http.StatusBadRequest)
+			return
+		}
+
+		assignedAtValue = parsedAssignedAt
+	}
+
+	var finishedAtValue any = nil
+	if input.FinishedAt != "" {
+		parsedFinishedAt, err := parseTicketDateInput(input.FinishedAt)
+		if err != nil {
+			http.Error(w, "finishedAt must be a valid date or ISO timestamp", http.StatusBadRequest)
+			return
+		}
+
+		finishedAtValue = parsedFinishedAt
+	}
+
+	rowsAffected, err := s.updateEditorAgreementRecord(
+		ctx,
+		agreementID,
+		actualClientID,
+		distributorValue,
+		deviceValue,
+		assignedAtValue,
+		finishedAtValue,
+		input.IsActive,
+		input.OnWarranty,
+	)
+	if err != nil {
+		log.Printf("update editor agreement failed: %v", err)
+		http.Error(w, "failed to update agreement", http.StatusInternalServerError)
+		return
+	}
+	if rowsAffected == 0 {
+		http.Error(w, "agreement not found", http.StatusNotFound)
+		return
+	}
+
+	response, found, err := s.loadEditorAgreementDetail(ctx, agreementID)
+	if err != nil {
+		log.Printf("reload editor agreement failed: %v", err)
+		http.Error(w, "failed to update agreement", http.StatusInternalServerError)
+		return
+	}
+	if !found {
+		http.Error(w, "agreement not found", http.StatusNotFound)
 		return
 	}
 
@@ -945,6 +1312,90 @@ func (s *Server) handleEditorDevicePatch(w http.ResponseWriter, r *http.Request,
 	writeJSON(w, http.StatusOK, response)
 }
 
+func (s *Server) loadEditorAgreementDetail(ctx context.Context, agreementID pgtype.UUID) (editorAgreementDetailResponse, bool, error) {
+	if s.editorAgreementDetailLoader != nil {
+		return s.editorAgreementDetailLoader(ctx, agreementID)
+	}
+
+	row := s.db.QueryRow(ctx, `
+		SELECT
+			a.id,
+			a.number,
+			a.actual_client,
+			COALESCE(actual_client.title, ''),
+			a.distributor,
+			COALESCE(distributor.title, ''),
+			a.device,
+			COALESCE(cls.title, ''),
+			COALESCE(d.serial_number, ''),
+			a.assigned_at,
+			a.finished_at,
+			COALESCE(a.is_active, FALSE),
+			COALESCE(a.on_warranty, FALSE)
+		FROM agreements a
+		LEFT JOIN clients actual_client ON actual_client.id = a.actual_client
+		LEFT JOIN clients distributor ON distributor.id = a.distributor
+		LEFT JOIN devices d ON d.id = a.device
+		LEFT JOIN classificators cls ON cls.id = d.classificator
+		WHERE a.id = $1
+		LIMIT 1
+	`, agreementID)
+
+	var (
+		id                 pgtype.UUID
+		number             pgtype.Int4
+		actualClientID     pgtype.UUID
+		actualClientName   string
+		distributorID      pgtype.UUID
+		distributorName    string
+		deviceID           pgtype.UUID
+		deviceTitle        string
+		deviceSerialNumber string
+		assignedAt         pgtype.Timestamp
+		finishedAt         pgtype.Timestamp
+		isActive           bool
+		onWarranty         bool
+	)
+
+	if err := row.Scan(
+		&id,
+		&number,
+		&actualClientID,
+		&actualClientName,
+		&distributorID,
+		&distributorName,
+		&deviceID,
+		&deviceTitle,
+		&deviceSerialNumber,
+		&assignedAt,
+		&finishedAt,
+		&isActive,
+		&onWarranty,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return editorAgreementDetailResponse{}, false, nil
+		}
+
+		return editorAgreementDetailResponse{}, false, err
+	}
+
+	return editorAgreementDetailResponse{
+		ActualClient:       nullableUUIDToString(actualClientID),
+		ActualClientName:   actualClientName,
+		AssignedAt:         timestampToRFC3339(assignedAt),
+		Device:             nullableUUIDToString(deviceID),
+		DeviceSerialNumber: deviceSerialNumber,
+		DeviceTitle:        deviceTitle,
+		Distributor:        nullableUUIDToString(distributorID),
+		DistributorName:    distributorName,
+		FinishedAt:         timestampToRFC3339(finishedAt),
+		ID:                 uuidToString(id),
+		IsActive:           isActive,
+		Number:             number.Int32,
+		OnWarranty:         onWarranty,
+	}, true, nil
+}
+
 func (s *Server) loadEditorClientDetail(ctx context.Context, clientID pgtype.UUID) (editorClientDetailResponse, bool, error) {
 	if s.editorClientDetailLoader != nil {
 		return s.editorClientDetailLoader(ctx, clientID)
@@ -1196,6 +1647,19 @@ func (s *Server) editorClientExistsByID(ctx context.Context, clientID pgtype.UUI
 	return clientExists, nil
 }
 
+func (s *Server) editorDeviceExistsByID(ctx context.Context, deviceID pgtype.UUID) (bool, error) {
+	if s.editorDeviceExists != nil {
+		return s.editorDeviceExists(ctx, deviceID)
+	}
+
+	var deviceExists bool
+	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM devices WHERE id = $1)`, deviceID).Scan(&deviceExists); err != nil {
+		return false, err
+	}
+
+	return deviceExists, nil
+}
+
 func (s *Server) editorClassificatorExistsByID(ctx context.Context, classificatorID pgtype.UUID) (bool, error) {
 	if s.editorClassificatorExists != nil {
 		return s.editorClassificatorExists(ctx, classificatorID)
@@ -1207,6 +1671,39 @@ func (s *Server) editorClassificatorExistsByID(ctx context.Context, classificato
 	}
 
 	return classificatorExists, nil
+}
+
+func (s *Server) updateEditorAgreementRecord(
+	ctx context.Context,
+	agreementID pgtype.UUID,
+	actualClient pgtype.UUID,
+	distributor any,
+	device any,
+	assignedAt any,
+	finishedAt any,
+	isActive bool,
+	onWarranty bool,
+) (int64, error) {
+	if s.editorAgreementUpdater != nil {
+		return s.editorAgreementUpdater(ctx, agreementID, actualClient, distributor, device, assignedAt, finishedAt, isActive, onWarranty)
+	}
+
+	tag, err := s.db.Exec(ctx, `
+		UPDATE agreements
+		SET actual_client = $1,
+			distributor = $2,
+			device = $3,
+			assigned_at = $4,
+			finished_at = $5,
+			is_active = $6,
+			on_warranty = $7
+		WHERE id = $8
+	`, actualClient, distributor, device, assignedAt, finishedAt, isActive, onWarranty, agreementID)
+	if err != nil {
+		return 0, err
+	}
+
+	return tag.RowsAffected(), nil
 }
 
 func (s *Server) updateEditorClientRecord(ctx context.Context, clientID pgtype.UUID, title string, address string, region any, location any) (int64, error) {

@@ -18,24 +18,27 @@ import (
 var newMinIOClient = storage.NewMinIO
 
 type Server struct {
-	databaseConfigured        bool
-	storageConfigured         bool
-	db                        *pgxpool.Pool
-	queries                   accountStore
-	auth                      authConfig
-	sync                      syncConfig
-	storage                   *storage.Client
-	editorAccessCheck         func(http.ResponseWriter, *http.Request) (pgtype.UUID, bool)
-	editorRoleLookup          func(context.Context, pgtype.UUID) (string, error)
-	editorClientDetailLoader  func(context.Context, pgtype.UUID) (editorClientDetailResponse, bool, error)
-	editorContactDetailLoader func(context.Context, pgtype.UUID) (editorContactDetailResponse, bool, error)
-	editorDeviceDetailLoader  func(context.Context, pgtype.UUID) (editorDeviceDetailResponse, bool, error)
-	editorRegionExists        func(context.Context, pgtype.UUID) (bool, error)
-	editorClientExists        func(context.Context, pgtype.UUID) (bool, error)
-	editorClassificatorExists func(context.Context, pgtype.UUID) (bool, error)
-	editorClientUpdater       func(context.Context, pgtype.UUID, string, string, any, any) (int64, error)
-	editorContactUpdater      func(context.Context, pgtype.UUID, string, string, string, string, pgtype.UUID) (int64, error)
-	editorDeviceUpdater       func(context.Context, pgtype.UUID, any, string, json.RawMessage, bool, bool) (int64, error)
+	databaseConfigured          bool
+	storageConfigured           bool
+	db                          *pgxpool.Pool
+	queries                     accountStore
+	auth                        authConfig
+	sync                        syncConfig
+	storage                     *storage.Client
+	editorAccessCheck           func(http.ResponseWriter, *http.Request) (pgtype.UUID, bool)
+	editorRoleLookup            func(context.Context, pgtype.UUID) (string, error)
+	editorAgreementDetailLoader func(context.Context, pgtype.UUID) (editorAgreementDetailResponse, bool, error)
+	editorClientDetailLoader    func(context.Context, pgtype.UUID) (editorClientDetailResponse, bool, error)
+	editorContactDetailLoader   func(context.Context, pgtype.UUID) (editorContactDetailResponse, bool, error)
+	editorDeviceDetailLoader    func(context.Context, pgtype.UUID) (editorDeviceDetailResponse, bool, error)
+	editorRegionExists          func(context.Context, pgtype.UUID) (bool, error)
+	editorClientExists          func(context.Context, pgtype.UUID) (bool, error)
+	editorDeviceExists          func(context.Context, pgtype.UUID) (bool, error)
+	editorClassificatorExists   func(context.Context, pgtype.UUID) (bool, error)
+	editorAgreementUpdater      func(context.Context, pgtype.UUID, pgtype.UUID, any, any, any, any, bool, bool) (int64, error)
+	editorClientUpdater         func(context.Context, pgtype.UUID, string, string, any, any) (int64, error)
+	editorContactUpdater        func(context.Context, pgtype.UUID, string, string, string, string, pgtype.UUID) (int64, error)
+	editorDeviceUpdater         func(context.Context, pgtype.UUID, any, string, json.RawMessage, bool, bool) (int64, error)
 }
 
 type accountStore interface {
@@ -134,6 +137,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/auth/login", s.handleLogin)
 	mux.HandleFunc("/api/auth/refresh", s.handleRefresh)
 	mux.HandleFunc("/api/auth/session", s.handleSession)
+	mux.HandleFunc("/api/editor/agreements", s.handleEditorAgreements)
+	mux.HandleFunc("/api/editor/agreements/", s.handleEditorAgreementByID)
 	mux.HandleFunc("/api/editor/clients", s.handleEditorClients)
 	mux.HandleFunc("/api/editor/clients/", s.handleEditorClientByID)
 	mux.HandleFunc("/api/editor/classificators", s.handleEditorClassificators)
