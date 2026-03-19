@@ -156,10 +156,6 @@ export function EditorClientsPage() {
   const locationPreview = buildLocationJson(formState.latitude, formState.longitude) || "Некорректные координаты";
 
   function handleBack() {
-    navigate(-1);
-  }
-
-  function handleOpenChooser() {
     navigate(routePaths.editor);
   }
 
@@ -299,16 +295,7 @@ export function EditorClientsPage() {
                 Здесь можно редактировать клиентскую карточку, регион и JSON-поля без прямого доступа к базе.
               </p>
             </div>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={handleOpenChooser}
-                className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:border-white/20 hover:bg-white/10"
-              >
-                Сущности
-              </button>
-              <BackButton onClick={handleBack} />
-            </div>
+            <BackButton onClick={handleBack} />
           </div>
         </header>
 
