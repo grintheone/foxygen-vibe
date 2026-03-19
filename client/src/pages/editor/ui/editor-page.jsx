@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router";
 import { useAuth } from "../../../features/auth";
 import { routePaths } from "../../../shared/config/routes";
 import { PageShell } from "../../../shared/ui/page-shell";
-import { BackButton, EditorEntityCard, EditorNoAccess } from "./editor-shared";
+import { DashboardButton, EditorEntityCard, EditorNoAccess } from "./editor-shared";
 
 const EditorClientsPage = lazy(() =>
   import("./editor-clients-page").then((module) => ({
@@ -40,6 +40,10 @@ export function EditorPage() {
 
   function handleBack() {
     navigate(-1);
+  }
+
+  function handleOpenDashboard() {
+    navigate(routePaths.dashboard);
   }
 
   if (!canOpenEditor) {
@@ -83,7 +87,7 @@ export function EditorPage() {
                 устройств.
               </p>
             </div>
-            <BackButton onClick={handleBack} />
+            <DashboardButton onClick={handleOpenDashboard} />
           </div>
         </header>
 

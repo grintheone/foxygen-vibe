@@ -73,6 +73,34 @@ export function BackButton({ onClick }) {
   );
 }
 
+export function DashboardButton({ onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Перейти в дэшборд"
+      className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[#6A3BF2] text-white shadow-lg shadow-[#6A3BF2]/35 transition hover:bg-[#7C52F5]"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="h-5 w-5"
+        aria-hidden="true"
+      >
+        <rect x="3.5" y="3.5" width="7" height="7" rx="1.5" />
+        <rect x="13.5" y="3.5" width="7" height="5" rx="1.5" />
+        <rect x="13.5" y="11.5" width="7" height="9" rx="1.5" />
+        <rect x="3.5" y="13.5" width="7" height="7" rx="1.5" />
+      </svg>
+    </button>
+  );
+}
+
 export function SummaryCard({ label, value }) {
   return (
     <div className="rounded-3xl border border-white/10 bg-slate-950/35 p-4 shadow-lg shadow-black/15">
