@@ -1634,7 +1634,6 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 		FinishedAt         *string `json:"finished_at"`
 		IsActive           bool    `json:"isActive"`
 		OnWarranty         bool    `json:"onWarranty"`
-		Type               *string `json:"type"`
 	}
 
 	if _, err := parseAuthorizationHeader(s.auth.jwtSecret, r.Header.Get("Authorization")); err != nil {
@@ -2016,8 +2015,7 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 				a.assigned_at,
 				a.finished_at,
 				a.is_active,
-				a.on_warranty,
-				a.type
+				a.on_warranty
 			FROM agreements a
 			LEFT JOIN devices d ON d.id = a.device
 			LEFT JOIN classificators cls ON cls.id = d.classificator
@@ -2035,16 +2033,15 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 		agreements := make([]clientAgreementResponse, 0)
 		for rows.Next() {
 			var (
-				id            pgtype.UUID
-				number        pgtype.Int4
-				device        pgtype.UUID
-				deviceName    string
-				deviceSerial  string
-				assignedAt    pgtype.Timestamp
-				finishedAt    pgtype.Timestamp
-				isActive      bool
-				onWarranty    bool
-				agreementType pgtype.Text
+				id           pgtype.UUID
+				number       pgtype.Int4
+				device       pgtype.UUID
+				deviceName   string
+				deviceSerial string
+				assignedAt   pgtype.Timestamp
+				finishedAt   pgtype.Timestamp
+				isActive     bool
+				onWarranty   bool
 			)
 
 			if err := rows.Scan(
@@ -2057,7 +2054,6 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 				&finishedAt,
 				&isActive,
 				&onWarranty,
-				&agreementType,
 			); err != nil {
 				log.Printf("scan client agreement failed: %v", err)
 				http.Error(w, "failed to load client agreements", http.StatusInternalServerError)
@@ -2074,7 +2070,6 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 				FinishedAt:         timestampToRFC3339(finishedAt),
 				IsActive:           isActive,
 				OnWarranty:         onWarranty,
-				Type:               nullableTextToString(agreementType),
 			})
 		}
 
@@ -2161,7 +2156,6 @@ func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 		ClientAddress     string          `json:"clientAddress"`
 		Agreement         *string         `json:"agreement"`
 		AgreementNumber   *int32          `json:"agreementNumber"`
-		AgreementType     *string         `json:"agreementType"`
 		IsActiveAgreement bool            `json:"isActiveAgreement"`
 		OnWarranty        bool            `json:"onWarranty"`
 	}
@@ -2199,7 +2193,6 @@ func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 		FinishedAt    *string `json:"finished_at"`
 		IsActive      bool    `json:"isActive"`
 		OnWarranty    bool    `json:"onWarranty"`
-		Type          *string `json:"type"`
 	}
 
 	claims, err := parseAuthorizationHeader(s.auth.jwtSecret, r.Header.Get("Authorization"))
@@ -2494,8 +2487,7 @@ func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 				a.assigned_at,
 				a.finished_at,
 				a.is_active,
-				a.on_warranty,
-				a.type
+				a.on_warranty
 			FROM agreements a
 			LEFT JOIN clients c ON c.id = a.actual_client
 			WHERE a.device = $1
@@ -2536,7 +2528,6 @@ func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 				finishedAt    pgtype.Timestamp
 				isActive      bool
 				onWarranty    bool
-				agreementType pgtype.Text
 			)
 
 			if err := rows.Scan(
@@ -2549,7 +2540,6 @@ func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 				&finishedAt,
 				&isActive,
 				&onWarranty,
-				&agreementType,
 			); err != nil {
 				log.Printf("scan device agreement failed: %v", err)
 				http.Error(w, "failed to load device agreements", http.StatusInternalServerError)
@@ -2566,7 +2556,6 @@ func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 				FinishedAt:    timestampToRFC3339(finishedAt),
 				IsActive:      isActive,
 				OnWarranty:    onWarranty,
-				Type:          nullableTextToString(agreementType),
 			})
 		}
 
@@ -2598,7 +2587,6 @@ func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 			a.number,
 			COALESCE(a.is_active, FALSE),
 			COALESCE(a.on_warranty, FALSE),
-			a.type,
 			c.id,
 			COALESCE(c.title, ''),
 			COALESCE(c.address, '')
@@ -2610,7 +2598,6 @@ func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 				a.number,
 				a.is_active,
 				a.on_warranty,
-				a.type,
 				a.actual_client
 			FROM agreements a
 			WHERE a.device = d.id
@@ -2633,7 +2620,6 @@ func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 		agreementNumber   pgtype.Int4
 		isActiveAgreement bool
 		onWarranty        bool
-		agreementType     pgtype.Text
 		clientID          pgtype.UUID
 		clientName        string
 		clientAddress     string
@@ -2650,7 +2636,6 @@ func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 		&agreementNumber,
 		&isActiveAgreement,
 		&onWarranty,
-		&agreementType,
 		&clientID,
 		&clientName,
 		&clientAddress,
@@ -2677,7 +2662,6 @@ func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 		ClientAddress:     clientAddress,
 		Agreement:         nullableUUIDToString(agreementID),
 		AgreementNumber:   nullableInt4ToInt32(agreementNumber),
-		AgreementType:     nullableTextToString(agreementType),
 		IsActiveAgreement: isActiveAgreement,
 		OnWarranty:        onWarranty,
 	})

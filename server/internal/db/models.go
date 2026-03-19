@@ -30,7 +30,6 @@ type Agreement struct {
 	FinishedAt   pgtype.Timestamp
 	IsActive     bool
 	OnWarranty   bool
-	Type         pgtype.Text
 }
 
 type Attachment struct {

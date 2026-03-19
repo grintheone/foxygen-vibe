@@ -366,7 +366,7 @@ Notes:
 
 - Each device binding produces one agreement with a deterministic synthetic UUID based on `device_id + client_id`, so reruns remain idempotent.
 - `actual_client` is set from the binding client, `device` is set from the device, `distributor` is left `NULL`.
-- Because bindings do not include dates or warranty flags, the importer defaults `assigned_at`/`finished_at` to `NULL`, `is_active` to `TRUE`, `on_warranty` to `TRUE`, and `type` to `binding`.
+- Because bindings do not include dates or warranty flags, the importer defaults `assigned_at`/`finished_at` to `NULL`, `is_active` to `TRUE`, and `on_warranty` to `TRUE`.
 
 ## Run the client
 

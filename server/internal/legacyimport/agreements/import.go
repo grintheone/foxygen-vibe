@@ -219,10 +219,9 @@ func importAgreements(ctx context.Context, db *pgxpool.Pool, items []legacyAgree
 				assigned_at,
 				finished_at,
 				is_active,
-				on_warranty,
-				type
+				on_warranty
 			)
-			 VALUES ($1, $2, NULL, $3, NULL, NULL, TRUE, TRUE, $4)
+			 VALUES ($1, $2, NULL, $3, NULL, NULL, TRUE, TRUE)
 			 ON CONFLICT (id) DO UPDATE
 			 SET actual_client = EXCLUDED.actual_client,
 			     distributor = EXCLUDED.distributor,
@@ -230,12 +229,10 @@ func importAgreements(ctx context.Context, db *pgxpool.Pool, items []legacyAgree
 			     assigned_at = EXCLUDED.assigned_at,
 			     finished_at = EXCLUDED.finished_at,
 			     is_active = EXCLUDED.is_active,
-			     on_warranty = EXCLUDED.on_warranty,
-			     type = EXCLUDED.type`,
+			     on_warranty = EXCLUDED.on_warranty`,
 			item.ID,
 			clientID,
 			deviceID,
-			"binding",
 		); err != nil {
 			return stats, fmt.Errorf("import agreement %s: %w", item.ID, err)
 		}
@@ -258,8 +255,7 @@ func ensureAgreementsSchema(ctx context.Context, db *pgxpool.Pool) error {
 			assigned_at TIMESTAMP DEFAULT NULL,
 			finished_at TIMESTAMP DEFAULT NULL,
 			is_active BOOLEAN NOT NULL DEFAULT TRUE,
-			on_warranty BOOLEAN NOT NULL DEFAULT TRUE,
-			type VARCHAR(128)
+			on_warranty BOOLEAN NOT NULL DEFAULT TRUE
 		)`,
 	); err != nil {
 		return fmt.Errorf("ensure agreements table: %w", err)
@@ -277,7 +273,7 @@ func ensureAgreementsSchema(ctx context.Context, db *pgxpool.Pool) error {
 		{`ALTER TABLE agreements ADD COLUMN IF NOT EXISTS finished_at TIMESTAMP DEFAULT NULL`, "finished_at"},
 		{`ALTER TABLE agreements ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE`, "is_active"},
 		{`ALTER TABLE agreements ADD COLUMN IF NOT EXISTS on_warranty BOOLEAN NOT NULL DEFAULT TRUE`, "on_warranty"},
-		{`ALTER TABLE agreements ADD COLUMN IF NOT EXISTS type VARCHAR(128)`, "type"},
+		{`ALTER TABLE agreements DROP COLUMN IF EXISTS type`, "drop_type"},
 	}
 
 	for _, stmt := range statements {

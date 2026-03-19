@@ -82,7 +82,6 @@ type editorDeviceListItemResponse struct {
 type editorDeviceDetailResponse struct {
 	Agreement         *string         `json:"agreement"`
 	AgreementNumber   *int32          `json:"agreementNumber"`
-	AgreementType     *string         `json:"agreementType"`
 	Classificator     *string         `json:"classificator"`
 	Client            *string         `json:"client"`
 	ClientAddress     string          `json:"clientAddress"`
@@ -1102,7 +1101,6 @@ func (s *Server) loadEditorDeviceDetail(ctx context.Context, deviceID pgtype.UUI
 			a.number,
 			COALESCE(a.is_active, FALSE),
 			COALESCE(a.on_warranty, FALSE),
-			a.type,
 			c.id,
 			COALESCE(c.title, ''),
 			COALESCE(c.address, '')
@@ -1114,7 +1112,6 @@ func (s *Server) loadEditorDeviceDetail(ctx context.Context, deviceID pgtype.UUI
 				a.number,
 				a.is_active,
 				a.on_warranty,
-				a.type,
 				a.actual_client
 			FROM agreements a
 			WHERE a.device = d.id
@@ -1138,7 +1135,6 @@ func (s *Server) loadEditorDeviceDetail(ctx context.Context, deviceID pgtype.UUI
 		agreementNumber   pgtype.Int4
 		isActiveAgreement bool
 		onWarranty        bool
-		agreementType     pgtype.Text
 		clientID          pgtype.UUID
 		clientName        string
 		clientAddress     string
@@ -1156,7 +1152,6 @@ func (s *Server) loadEditorDeviceDetail(ctx context.Context, deviceID pgtype.UUI
 		&agreementNumber,
 		&isActiveAgreement,
 		&onWarranty,
-		&agreementType,
 		&clientID,
 		&clientName,
 		&clientAddress,
@@ -1171,7 +1166,6 @@ func (s *Server) loadEditorDeviceDetail(ctx context.Context, deviceID pgtype.UUI
 	return editorDeviceDetailResponse{
 		Agreement:         nullableUUIDToString(agreementID),
 		AgreementNumber:   nullableInt32ToPointer(agreementNumber),
-		AgreementType:     nullableTextToPointer(agreementType),
 		Classificator:     nullableUUIDToString(classificatorID),
 		Client:            nullableUUIDToString(clientID),
 		ClientAddress:     clientAddress,

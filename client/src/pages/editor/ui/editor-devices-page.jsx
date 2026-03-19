@@ -500,10 +500,6 @@ export function EditorDevicesPage() {
                           <span className="text-slate-500">Договор:</span> {selectedAgreementTitle}
                         </p>
                         <p>
-                          <span className="text-slate-500">Тип договора:</span>{" "}
-                          {selectedDevice.agreementType?.trim() || "Не указан"}
-                        </p>
-                        <p>
                           <span className="text-slate-500">Статус договора:</span>{" "}
                           {selectedDevice.agreement
                             ? selectedDevice.isActiveAgreement

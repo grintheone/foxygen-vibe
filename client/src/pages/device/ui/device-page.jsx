@@ -171,7 +171,6 @@ function DeviceStatCard({ label, value }) {
 function DeviceOverviewSection({ device, propertyEntries }) {
     const agreementLabel = device?.agreementNumber ? `Договор #${device.agreementNumber}` : "Договор не найден";
     const agreementMeta = [
-        device?.agreementType?.trim() || "",
         device?.agreement ? (device.isActiveAgreement ? "Активный" : "Неактивный") : "",
         device?.agreement ? (device.onWarranty ? "Гарантия" : "Без гарантии") : "",
     ]
