@@ -186,7 +186,7 @@ func TestOptionsRequestReturnsNoContent(t *testing.T) {
 	if got := rec.Header().Get("Access-Control-Allow-Methods"); got != "GET, POST, PATCH, OPTIONS" {
 		t.Fatalf("unexpected allow methods header %q", got)
 	}
-	if got := rec.Header().Get("Access-Control-Allow-Headers"); got != "Authorization, Content-Type" {
+	if got := rec.Header().Get("Access-Control-Allow-Headers"); got != "Authorization, Content-Type, X-Sync-Secret" {
 		t.Fatalf("unexpected allow headers %q", got)
 	}
 }
@@ -202,6 +202,110 @@ func TestMessageEndpointIsRemoved(t *testing.T) {
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected status %d, got %d", http.StatusNotFound, rec.Code)
+	}
+}
+
+func TestSyncEndpointRejectsNonPost(t *testing.T) {
+	t.Parallel()
+
+	srv := &Server{}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/sync", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	}
+}
+
+func TestSyncEndpointRequiresConfiguration(t *testing.T) {
+	t.Parallel()
+
+	srv := &Server{}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/sync", strings.NewReader(`{}`))
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
+	}
+}
+
+func TestSyncEndpointRequiresSecret(t *testing.T) {
+	t.Parallel()
+
+	srv := &Server{sync: syncConfig{sharedSecret: "shared-ticket-secret"}}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/sync", strings.NewReader(`{}`))
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status %d, got %d", http.StatusUnauthorized, rec.Code)
+	}
+}
+
+func TestSyncSecretMatches(t *testing.T) {
+	t.Parallel()
+
+	if !syncSecretMatches("shared-ticket-secret", "shared-ticket-secret") {
+		t.Fatal("expected matching secrets to compare true")
+	}
+	if syncSecretMatches("shared-ticket-secret", "wrong-secret") {
+		t.Fatal("expected different secrets to compare false")
+	}
+	if syncSecretMatches("", "shared-ticket-secret") {
+		t.Fatal("expected empty configured secret to compare false")
+	}
+}
+
+func TestNormalizeTicketSyncMetadataDefaultsSourceWhenKeyIsPresent(t *testing.T) {
+	t.Parallel()
+
+	source, key := normalizeTicketSyncMetadata(" ", " abc-123 ")
+	if source != defaultTicketSyncSource {
+		t.Fatalf("expected default source %q, got %q", defaultTicketSyncSource, source)
+	}
+	if key != "abc-123" {
+		t.Fatalf("expected trimmed key, got %q", key)
+	}
+}
+
+func TestNormalizeTicketSyncMetadataPreservesExplicitSource(t *testing.T) {
+	t.Parallel()
+
+	source, key := normalizeTicketSyncMetadata("lab-dispatcher", "abc-123")
+	if source != "lab-dispatcher" {
+		t.Fatalf("expected explicit source to be preserved, got %q", source)
+	}
+	if key != "abc-123" {
+		t.Fatalf("expected key to be preserved, got %q", key)
+	}
+}
+
+func TestNormalizeTicketSyncAuthorPrefersAuthorFields(t *testing.T) {
+	t.Parallel()
+
+	author, title := normalizeTicketSyncAuthor(" author-id ", " Dispatcher ", "legacy-id", "Legacy Dispatcher")
+	if author != "author-id" {
+		t.Fatalf("expected author field to win, got %q", author)
+	}
+	if title != "Dispatcher" {
+		t.Fatalf("expected author_title to be trimmed, got %q", title)
+	}
+}
+
+func TestNormalizeTicketSyncAuthorFallsBackToLegacyFields(t *testing.T) {
+	t.Parallel()
+
+	author, title := normalizeTicketSyncAuthor("", "", " legacy-id ", " Legacy Dispatcher ")
+	if author != "legacy-id" {
+		t.Fatalf("expected legacy author id to be used, got %q", author)
+	}
+	if title != "Legacy Dispatcher" {
+		t.Fatalf("expected legacy author title to be used, got %q", title)
 	}
 }
 

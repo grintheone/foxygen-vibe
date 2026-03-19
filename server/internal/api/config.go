@@ -17,6 +17,14 @@ type authConfig struct {
 	refreshTokenTTL time.Duration
 }
 
+type syncConfig struct {
+	sharedSecret string
+}
+
+func (c syncConfig) Enabled() bool {
+	return strings.TrimSpace(c.sharedSecret) != ""
+}
+
 func resolveDatabaseURL() (string, error) {
 	fileEnv, err := loadDotEnv(".env")
 	if err != nil {
@@ -150,6 +158,17 @@ func resolveStorageConfig() (storage.Config, error) {
 	}
 
 	return config, nil
+}
+
+func resolveSyncConfig() (syncConfig, error) {
+	fileEnv, err := loadDotEnv(".env")
+	if err != nil {
+		return syncConfig{}, err
+	}
+
+	return syncConfig{
+		sharedSecret: getConfigValue(fileEnv, "TICKET_SYNC_SECRET"),
+	}, nil
 }
 
 func resolveDuration(fileEnv map[string]string, key string, fallback time.Duration) (time.Duration, error) {

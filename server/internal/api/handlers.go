@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"io"
@@ -25,6 +26,7 @@ import (
 
 const (
 	defaultTicketListLimit     = 50
+	defaultTicketSyncSource    = "external-sync"
 	maxTicketListLimit         = 100
 	maxProfileAvatarUploadSize = 10 << 20
 )
@@ -2936,6 +2938,491 @@ func parseTicketDateInput(value string) (time.Time, error) {
 	return parsedTimestamp.UTC(), nil
 }
 
+func syncSecretMatches(expected string, provided string) bool {
+	expected = strings.TrimSpace(expected)
+	provided = strings.TrimSpace(provided)
+	if expected == "" || len(expected) != len(provided) {
+		return false
+	}
+
+	return subtle.ConstantTimeCompare([]byte(expected), []byte(provided)) == 1
+}
+
+func normalizeTicketSyncMetadata(source string, key string) (string, string) {
+	source = strings.TrimSpace(source)
+	key = strings.TrimSpace(key)
+	if key != "" && source == "" {
+		source = defaultTicketSyncSource
+	}
+
+	return source, key
+}
+
+func normalizeTicketSyncAuthor(author string, authorTitle string, legacyAuthor string, legacyAuthorTitle string) (string, string) {
+	author = strings.TrimSpace(author)
+	authorTitle = strings.TrimSpace(authorTitle)
+	if author != "" || authorTitle != "" {
+		return author, authorTitle
+	}
+
+	return strings.TrimSpace(legacyAuthor), strings.TrimSpace(legacyAuthorTitle)
+}
+
+func (s *Server) handleTicketSync(w http.ResponseWriter, r *http.Request) {
+	type syncTicketRequest struct {
+		Author              string `json:"author"`
+		AuthorTitle         string `json:"author_title"`
+		Client              string `json:"client"`
+		ContactPerson       string `json:"contact_person"`
+		Department          string `json:"department"`
+		Description         string `json:"description"`
+		Device              string `json:"device"`
+		ExternalAuthorID    string `json:"external_author_id"`
+		ExternalAuthorTitle string `json:"external_author_title"`
+		Reason              string `json:"reason"`
+		Source              string `json:"source"`
+		SyncKey             string `json:"sync_key"`
+		TicketType          string `json:"ticket_type"`
+		Urgent              bool   `json:"urgent"`
+	}
+
+	type syncTicketResponse struct {
+		Author     *string `json:"author,omitempty"`
+		Department string  `json:"department"`
+		Duplicate  bool    `json:"duplicate"`
+		ID         string  `json:"id"`
+		Number     int32   `json:"number"`
+		Source     string  `json:"source,omitempty"`
+		Status     string  `json:"status"`
+		SyncKey    string  `json:"sync_key,omitempty"`
+	}
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if !s.sync.Enabled() {
+		http.Error(w, "ticket sync is not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	if !syncSecretMatches(s.sync.sharedSecret, r.Header.Get("X-Sync-Secret")) {
+		log.Printf("ticket sync rejected: invalid secret remote=%q", r.RemoteAddr)
+		http.Error(w, "invalid sync secret", http.StatusUnauthorized)
+		return
+	}
+
+	if s.db == nil {
+		http.Error(w, "database not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	defer r.Body.Close()
+
+	var input syncTicketRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	input.Author, input.AuthorTitle = normalizeTicketSyncAuthor(input.Author, input.AuthorTitle, input.ExternalAuthorID, input.ExternalAuthorTitle)
+	input.Client = strings.TrimSpace(input.Client)
+	input.ContactPerson = strings.TrimSpace(input.ContactPerson)
+	input.Department = strings.TrimSpace(input.Department)
+	input.Description = strings.TrimSpace(input.Description)
+	input.Device = strings.TrimSpace(input.Device)
+	input.Reason = strings.TrimSpace(input.Reason)
+	input.Source, input.SyncKey = normalizeTicketSyncMetadata(input.Source, input.SyncKey)
+	input.TicketType = strings.TrimSpace(input.TicketType)
+
+	log.Printf(
+		"ticket sync received remote=%q source=%q sync_key=%q client=%q device=%q department=%q author=%q urgent=%t",
+		r.RemoteAddr,
+		input.Source,
+		input.SyncKey,
+		input.Client,
+		input.Device,
+		input.Department,
+		input.Author,
+		input.Urgent,
+	)
+
+	switch {
+	case input.Device == "":
+		http.Error(w, "device is required", http.StatusBadRequest)
+		return
+	case input.Client == "":
+		http.Error(w, "client is required", http.StatusBadRequest)
+		return
+	case input.Reason == "":
+		http.Error(w, "reason is required", http.StatusBadRequest)
+		return
+	case input.Description == "":
+		http.Error(w, "description is required", http.StatusBadRequest)
+		return
+	case input.ContactPerson == "":
+		http.Error(w, "contact_person is required", http.StatusBadRequest)
+		return
+	case input.Department == "":
+		http.Error(w, "department is required", http.StatusBadRequest)
+		return
+	case input.AuthorTitle != "" && input.Author == "":
+		http.Error(w, "author is required when author_title is provided", http.StatusBadRequest)
+		return
+	}
+
+	var (
+		clientID         pgtype.UUID
+		contactID        pgtype.UUID
+		departmentID     pgtype.UUID
+		deviceID         pgtype.UUID
+		externalAuthorID pgtype.UUID
+	)
+
+	if err := clientID.Scan(input.Client); err != nil {
+		http.Error(w, "client must be a valid UUID", http.StatusBadRequest)
+		return
+	}
+	if err := contactID.Scan(input.ContactPerson); err != nil {
+		http.Error(w, "contact_person must be a valid UUID", http.StatusBadRequest)
+		return
+	}
+	if err := deviceID.Scan(input.Device); err != nil {
+		http.Error(w, "device must be a valid UUID", http.StatusBadRequest)
+		return
+	}
+	if input.Author != "" {
+		if err := externalAuthorID.Scan(input.Author); err != nil {
+			http.Error(w, "author must be a valid UUID", http.StatusBadRequest)
+			return
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	if input.Source != "" && input.SyncKey != "" {
+		var (
+			existingTicketID       pgtype.UUID
+			existingTicketNo       int32
+			existingStatus         string
+			existingDepartmentID   pgtype.UUID
+			existingExternalAuthor pgtype.UUID
+		)
+		err := s.db.QueryRow(ctx, `
+			SELECT
+				id,
+				number,
+				COALESCE(status, ''),
+				department,
+				external_author
+			FROM tickets
+			WHERE sync_source = $1
+			  AND sync_key = $2
+		`, input.Source, input.SyncKey).Scan(
+			&existingTicketID,
+			&existingTicketNo,
+			&existingStatus,
+			&existingDepartmentID,
+			&existingExternalAuthor,
+		)
+		if err == nil {
+			log.Printf(
+				"ticket sync duplicate remote=%q source=%q sync_key=%q ticket_id=%s ticket_number=%d",
+				r.RemoteAddr,
+				input.Source,
+				input.SyncKey,
+				uuidToString(existingTicketID),
+				existingTicketNo,
+			)
+			writeJSON(w, http.StatusOK, syncTicketResponse{
+				Author:     nullableUUIDToString(existingExternalAuthor),
+				Department: uuidToString(existingDepartmentID),
+				Duplicate:  true,
+				ID:         uuidToString(existingTicketID),
+				Number:     existingTicketNo,
+				Source:     input.Source,
+				Status:     existingStatus,
+				SyncKey:    input.SyncKey,
+			})
+			return
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			log.Printf("load existing synced ticket failed: %v", err)
+			http.Error(w, "failed to create ticket", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if err := departmentID.Scan(input.Department); err != nil {
+		if queryErr := s.db.QueryRow(ctx, `
+			SELECT id
+			FROM departments
+			WHERE LOWER(title) = LOWER($1)
+		`, input.Department).Scan(&departmentID); queryErr != nil {
+			if errors.Is(queryErr, pgx.ErrNoRows) {
+				http.Error(w, "department not found", http.StatusBadRequest)
+				return
+			}
+
+			log.Printf("resolve ticket sync department failed: %v", queryErr)
+			http.Error(w, "failed to create ticket", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	var departmentExists bool
+	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM departments WHERE id = $1)`, departmentID).Scan(&departmentExists); err != nil {
+		log.Printf("validate ticket sync department failed: %v", err)
+		http.Error(w, "failed to create ticket", http.StatusInternalServerError)
+		return
+	}
+	if !departmentExists {
+		http.Error(w, "department not found", http.StatusBadRequest)
+		return
+	}
+
+	var reasonExists bool
+	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM ticket_reasons WHERE id = $1)`, input.Reason).Scan(&reasonExists); err != nil {
+		log.Printf("validate ticket sync reason failed: %v", err)
+		http.Error(w, "failed to create ticket", http.StatusInternalServerError)
+		return
+	}
+	if !reasonExists {
+		http.Error(w, "reason not found", http.StatusBadRequest)
+		return
+	}
+
+	if input.TicketType != "" {
+		var ticketTypeExists bool
+		if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM ticket_types WHERE type = $1)`, input.TicketType).Scan(&ticketTypeExists); err != nil {
+			log.Printf("validate ticket sync ticket type failed: %v", err)
+			http.Error(w, "failed to create ticket", http.StatusInternalServerError)
+			return
+		}
+		if !ticketTypeExists {
+			http.Error(w, "ticket_type not found", http.StatusBadRequest)
+			return
+		}
+	}
+
+	var resolvedClientID pgtype.UUID
+	if err := s.db.QueryRow(ctx, `
+		SELECT a.actual_client
+		FROM devices d
+		LEFT JOIN LATERAL (
+			SELECT a.actual_client
+			FROM agreements a
+			WHERE a.device = d.id
+			ORDER BY a.is_active DESC, a.assigned_at DESC NULLS LAST, a.number DESC
+			LIMIT 1
+		) a ON TRUE
+		WHERE d.id = $1
+	`, deviceID).Scan(&resolvedClientID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			http.Error(w, "device not found", http.StatusNotFound)
+			return
+		}
+
+		log.Printf("load ticket sync device client failed: %v", err)
+		http.Error(w, "failed to create ticket", http.StatusInternalServerError)
+		return
+	}
+	if !resolvedClientID.Valid {
+		http.Error(w, "device has no client", http.StatusBadRequest)
+		return
+	}
+	if resolvedClientID != clientID {
+		http.Error(w, "client does not match device", http.StatusBadRequest)
+		return
+	}
+
+	var contactExists bool
+	if err := s.db.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1
+			FROM contacts
+			WHERE id = $1
+			  AND client_id = $2
+		)
+	`, contactID, clientID).Scan(&contactExists); err != nil {
+		log.Printf("validate ticket sync contact failed: %v", err)
+		http.Error(w, "failed to create ticket", http.StatusInternalServerError)
+		return
+	}
+	if !contactExists {
+		http.Error(w, "contact_person not found", http.StatusBadRequest)
+		return
+	}
+
+	if input.Author != "" && input.AuthorTitle == "" {
+		var externalAuthorExists bool
+		if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM external_users WHERE id = $1)`, externalAuthorID).Scan(&externalAuthorExists); err != nil {
+			log.Printf("validate ticket sync external author failed: %v", err)
+			http.Error(w, "failed to create ticket", http.StatusInternalServerError)
+			return
+		}
+		if !externalAuthorExists {
+			log.Printf(
+				"ticket sync rejected: unknown author source=%q sync_key=%q author=%q",
+				input.Source,
+				input.SyncKey,
+				input.Author,
+			)
+			http.Error(w, "author not found; provide author_title to create it", http.StatusBadRequest)
+			return
+		}
+	}
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		log.Printf("begin ticket sync transaction failed: %v", err)
+		http.Error(w, "failed to create ticket", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	if input.Author != "" && input.AuthorTitle != "" {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO external_users (id, title)
+			VALUES ($1, $2)
+			ON CONFLICT (id) DO UPDATE
+			SET title = EXCLUDED.title
+		`, externalAuthorID, input.AuthorTitle); err != nil {
+			log.Printf("upsert ticket sync external author failed: %v", err)
+			http.Error(w, "failed to create ticket", http.StatusInternalServerError)
+			return
+		}
+
+		log.Printf(
+			"ticket sync author upserted source=%q sync_key=%q author=%q title=%q",
+			input.Source,
+			input.SyncKey,
+			input.Author,
+			input.AuthorTitle,
+		)
+	}
+
+	var (
+		createdTicketID pgtype.UUID
+		createdTicketNo int32
+		createdStatus   string
+	)
+	if err := tx.QueryRow(ctx, `
+		INSERT INTO tickets (
+			client,
+			device,
+			ticket_type,
+			external_author,
+			department,
+			reason,
+			description,
+			contact_person,
+			status,
+			urgent,
+			sync_source,
+			sync_key
+		)
+		VALUES (
+			$1,
+			$2,
+			NULLIF($3, ''),
+			$4,
+			$5,
+			$6,
+			$7,
+			$8,
+			'created',
+			$9,
+			NULLIF($10, ''),
+			NULLIF($11, '')
+		)
+		ON CONFLICT (sync_source, sync_key)
+		WHERE sync_source IS NOT NULL AND sync_key IS NOT NULL
+		DO NOTHING
+		RETURNING id, number, COALESCE(status, '')
+	`, clientID, deviceID, input.TicketType, nullableUUID(externalAuthorID), departmentID, input.Reason, input.Description, contactID, input.Urgent, input.Source, input.SyncKey).Scan(
+		&createdTicketID,
+		&createdTicketNo,
+		&createdStatus,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) && input.Source != "" && input.SyncKey != "" {
+			var existingDepartmentID pgtype.UUID
+			var existingExternalAuthor pgtype.UUID
+			if err := tx.QueryRow(ctx, `
+				SELECT id, number, COALESCE(status, ''), department, external_author
+				FROM tickets
+				WHERE sync_source = $1
+				  AND sync_key = $2
+			`, input.Source, input.SyncKey).Scan(&createdTicketID, &createdTicketNo, &createdStatus, &existingDepartmentID, &existingExternalAuthor); err != nil {
+				log.Printf("load duplicate synced ticket failed: %v", err)
+				http.Error(w, "failed to create ticket", http.StatusInternalServerError)
+				return
+			}
+
+			if err := tx.Commit(ctx); err != nil {
+				log.Printf("commit duplicate ticket sync transaction failed: %v", err)
+				http.Error(w, "failed to create ticket", http.StatusInternalServerError)
+				return
+			}
+
+			log.Printf(
+				"ticket sync duplicate after insert race source=%q sync_key=%q ticket_id=%s ticket_number=%d",
+				input.Source,
+				input.SyncKey,
+				uuidToString(createdTicketID),
+				createdTicketNo,
+			)
+
+			writeJSON(w, http.StatusOK, syncTicketResponse{
+				Author:     nullableUUIDToString(existingExternalAuthor),
+				Department: uuidToString(existingDepartmentID),
+				Duplicate:  true,
+				ID:         uuidToString(createdTicketID),
+				Number:     createdTicketNo,
+				Source:     input.Source,
+				Status:     createdStatus,
+				SyncKey:    input.SyncKey,
+			})
+			return
+		}
+
+		log.Printf("create synced ticket failed: %v", err)
+		http.Error(w, "failed to create ticket", http.StatusInternalServerError)
+		return
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		log.Printf("commit ticket sync transaction failed: %v", err)
+		http.Error(w, "failed to create ticket", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf(
+		"ticket sync created source=%q sync_key=%q ticket_id=%s ticket_number=%d department=%s author=%q",
+		input.Source,
+		input.SyncKey,
+		uuidToString(createdTicketID),
+		createdTicketNo,
+		uuidToString(departmentID),
+		input.Author,
+	)
+
+	writeJSON(w, http.StatusCreated, syncTicketResponse{
+		Author:     nullableUUIDToString(externalAuthorID),
+		Department: uuidToString(departmentID),
+		Duplicate:  false,
+		ID:         uuidToString(createdTicketID),
+		Number:     createdTicketNo,
+		Source:     input.Source,
+		Status:     createdStatus,
+		SyncKey:    input.SyncKey,
+	})
+}
+
 func (s *Server) handleTickets(w http.ResponseWriter, r *http.Request) {
 	type ticketResponse struct {
 		ID                 string  `json:"id"`
@@ -4512,6 +4999,14 @@ func nullableUUIDToString(value pgtype.UUID) *string {
 
 	text := value.String()
 	return &text
+}
+
+func nullableUUID(value pgtype.UUID) any {
+	if !value.Valid {
+		return nil
+	}
+
+	return value
 }
 
 func nullableTextToString(value pgtype.Text) *string {

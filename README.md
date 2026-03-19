@@ -67,6 +67,43 @@ Useful notes:
 
 The server reads `server/.env` for `DB_*` settings and builds a PostgreSQL connection string from that file. Explicit shell environment variables still override values from `.env`, and `DATABASE_URL` still takes precedence over the split fields.
 
+## Receive synced tickets from an external system
+
+The backend now exposes a webhook-style endpoint at `/api/v1/sync` for server-to-server ticket creation.
+
+1. Set a shared secret in `server/.env`:
+   `TICKET_SYNC_SECRET=replace-with-a-long-random-secret`
+2. Start the API from `server/`:
+   `go run .`
+3. Send `POST` requests to your server with the `X-Sync-Secret` header and JSON like:
+   ```json
+   {
+     "author": "00000000-0000-0000-0000-000000000004",
+     "author_title": "External Dispatcher",
+     "client": "00000000-0000-0000-0000-000000000001",
+     "device": "00000000-0000-0000-0000-000000000002",
+     "contact_person": "00000000-0000-0000-0000-000000000003",
+     "department": "Service Department",
+     "reason": "maintenance",
+     "description": "Analyzer stopped sending results after reboot.",
+     "source": "lab-dispatcher",
+     "sync_key": "ticket-18452",
+     "urgent": true
+   }
+   ```
+
+Notes:
+
+- The webhook creates a new ticket in `created` status so a coordinator can triage and assign it later.
+- `department` accepts either the department UUID or the unique department title.
+- `reason` must match an existing `ticket_reasons.id`.
+- `client`, `device`, and `contact_person` must already exist in PostgreSQL and must be consistent with each other.
+- `author` should contain the external user UUID for the incoming ticket.
+- If you send `sync_key`, the API treats repeated deliveries from the same `source` as the same ticket and returns the existing ticket instead of creating a duplicate.
+- If `sync_key` is present and `source` is omitted, the API uses `external-sync` automatically.
+- If that external user does not exist yet, include `author_title` so the API can create or update the external user record.
+- For backward compatibility, the webhook still accepts `external_author_id` and `external_author_title`, but `author` and `author_title` are now the preferred fields.
+
 ## Enable MinIO object storage
 
 The backend now supports the MinIO Go SDK for S3-compatible object storage. Storage stays disabled unless `MINIO_*` variables are configured.

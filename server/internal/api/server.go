@@ -22,6 +22,7 @@ type Server struct {
 	db                 *pgxpool.Pool
 	queries            accountStore
 	auth               authConfig
+	sync               syncConfig
 	storage            *storage.Client
 }
 
@@ -52,10 +53,16 @@ func New() (*Server, error) {
 		return nil, err
 	}
 
+	sync, err := resolveSyncConfig()
+	if err != nil {
+		return nil, err
+	}
+
 	api := &Server{
 		databaseConfigured: databaseURL != "",
 		storageConfigured:  storageConfig.Enabled(),
 		auth:               auth,
+		sync:               sync,
 	}
 
 	if storageConfig.Enabled() {
@@ -131,6 +138,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/departments", s.handleDepartments)
 	mux.HandleFunc("/api/departments/members", s.handleDepartmentMembers)
 	mux.HandleFunc("/api/ticket-reasons", s.handleTicketReasons)
+	mux.HandleFunc("/api/v1/sync", s.handleTicketSync)
 	mux.HandleFunc("/api/tickets", s.handleTickets)
 	mux.HandleFunc("/api/tickets/", s.handleTicketByID)
 	mux.HandleFunc("/api/tickets/department", s.handleDepartmentTickets)

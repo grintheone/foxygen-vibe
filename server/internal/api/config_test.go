@@ -67,6 +67,43 @@ func TestResolveStorageConfigParsesMinIOSettings(t *testing.T) {
 	}
 }
 
+func TestResolveSyncConfigReturnsDisabledWhenUnset(t *testing.T) {
+	dir := t.TempDir()
+	writeConfigTestEnv(t, dir, "")
+
+	restore := changeWorkingDirectory(t, dir)
+	defer restore()
+
+	cfg, err := resolveSyncConfig()
+	if err != nil {
+		t.Fatalf("resolve sync config: %v", err)
+	}
+
+	if cfg.Enabled() {
+		t.Fatalf("expected sync to be disabled, got %+v", cfg)
+	}
+}
+
+func TestResolveSyncConfigParsesSecret(t *testing.T) {
+	dir := t.TempDir()
+	writeConfigTestEnv(t, dir, "TICKET_SYNC_SECRET=shared-ticket-secret\n")
+
+	restore := changeWorkingDirectory(t, dir)
+	defer restore()
+
+	cfg, err := resolveSyncConfig()
+	if err != nil {
+		t.Fatalf("resolve sync config: %v", err)
+	}
+
+	if !cfg.Enabled() {
+		t.Fatal("expected sync to be enabled")
+	}
+	if cfg.sharedSecret != "shared-ticket-secret" {
+		t.Fatalf("expected sync secret to be preserved, got %q", cfg.sharedSecret)
+	}
+}
+
 func changeWorkingDirectory(t *testing.T, dir string) func() {
 	t.Helper()
 
