@@ -697,8 +697,8 @@ func (s *Server) handleEditorClientPatch(w http.ResponseWriter, r *http.Request,
 			return
 		}
 
-		var regionExists bool
-		if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM regions WHERE id = $1)`, regionID).Scan(&regionExists); err != nil {
+		regionExists, err := s.editorRegionExistsByID(ctx, regionID)
+		if err != nil {
 			log.Printf("validate editor client region failed: %v", err)
 			http.Error(w, "failed to update client", http.StatusInternalServerError)
 			return
@@ -722,20 +722,13 @@ func (s *Server) handleEditorClientPatch(w http.ResponseWriter, r *http.Request,
 		locationValue = rawLocation
 	}
 
-	tag, err := s.db.Exec(ctx, `
-		UPDATE clients
-		SET title = $1,
-			address = $2,
-			region = $3,
-			location = $4
-		WHERE id = $5
-	`, input.Title, input.Address, regionValue, locationValue, clientID)
+	rowsAffected, err := s.updateEditorClientRecord(ctx, clientID, input.Title, input.Address, regionValue, locationValue)
 	if err != nil {
 		log.Printf("update editor client failed: %v", err)
 		http.Error(w, "failed to update client", http.StatusInternalServerError)
 		return
 	}
-	if tag.RowsAffected() == 0 {
+	if rowsAffected == 0 {
 		http.Error(w, "client not found", http.StatusNotFound)
 		return
 	}
@@ -815,8 +808,8 @@ func (s *Server) handleEditorContactPatch(w http.ResponseWriter, r *http.Request
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
 
-	var clientExists bool
-	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM clients WHERE id = $1)`, clientID).Scan(&clientExists); err != nil {
+	clientExists, err := s.editorClientExistsByID(ctx, clientID)
+	if err != nil {
 		log.Printf("validate editor contact client failed: %v", err)
 		http.Error(w, "failed to update contact", http.StatusInternalServerError)
 		return
@@ -826,21 +819,13 @@ func (s *Server) handleEditorContactPatch(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	tag, err := s.db.Exec(ctx, `
-		UPDATE contacts
-		SET name = $1,
-			position = $2,
-			phone = $3,
-			email = $4,
-			client_id = $5
-		WHERE id = $6
-	`, input.Name, input.Position, input.Phone, input.Email, clientID, contactID)
+	rowsAffected, err := s.updateEditorContactRecord(ctx, contactID, input.Name, input.Position, input.Phone, input.Email, clientID)
 	if err != nil {
 		log.Printf("update editor contact failed: %v", err)
 		http.Error(w, "failed to update contact", http.StatusInternalServerError)
 		return
 	}
-	if tag.RowsAffected() == 0 {
+	if rowsAffected == 0 {
 		http.Error(w, "contact not found", http.StatusNotFound)
 		return
 	}
@@ -911,8 +896,8 @@ func (s *Server) handleEditorDevicePatch(w http.ResponseWriter, r *http.Request,
 			return
 		}
 
-		var classificatorExists bool
-		if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM classificators WHERE id = $1)`, classificatorID).Scan(&classificatorExists); err != nil {
+		classificatorExists, err := s.editorClassificatorExistsByID(ctx, classificatorID)
+		if err != nil {
 			log.Printf("validate editor device classificator failed: %v", err)
 			http.Error(w, "failed to update device", http.StatusInternalServerError)
 			return
@@ -935,21 +920,13 @@ func (s *Server) handleEditorDevicePatch(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	tag, err := s.db.Exec(ctx, `
-		UPDATE devices
-		SET classificator = $1,
-			serial_number = $2,
-			properties = $3,
-			connected_to_lis = $4,
-			is_used = $5
-		WHERE id = $6
-	`, classificatorValue, input.SerialNumber, rawProperties, input.ConnectedToLis, input.IsUsed, deviceID)
+	rowsAffected, err := s.updateEditorDeviceRecord(ctx, deviceID, classificatorValue, input.SerialNumber, rawProperties, input.ConnectedToLis, input.IsUsed)
 	if err != nil {
 		log.Printf("update editor device failed: %v", err)
 		http.Error(w, "failed to update device", http.StatusInternalServerError)
 		return
 	}
-	if tag.RowsAffected() == 0 {
+	if rowsAffected == 0 {
 		http.Error(w, "device not found", http.StatusNotFound)
 		return
 	}
@@ -969,6 +946,10 @@ func (s *Server) handleEditorDevicePatch(w http.ResponseWriter, r *http.Request,
 }
 
 func (s *Server) loadEditorClientDetail(ctx context.Context, clientID pgtype.UUID) (editorClientDetailResponse, bool, error) {
+	if s.editorClientDetailLoader != nil {
+		return s.editorClientDetailLoader(ctx, clientID)
+	}
+
 	row := s.db.QueryRow(ctx, `
 		SELECT
 			c.id,
@@ -1043,6 +1024,10 @@ func (s *Server) loadEditorClientDetail(ctx context.Context, clientID pgtype.UUI
 }
 
 func (s *Server) loadEditorContactDetail(ctx context.Context, contactID pgtype.UUID) (editorContactDetailResponse, bool, error) {
+	if s.editorContactDetailLoader != nil {
+		return s.editorContactDetailLoader(ctx, contactID)
+	}
+
 	row := s.db.QueryRow(ctx, `
 		SELECT
 			ct.id,
@@ -1088,6 +1073,10 @@ func (s *Server) loadEditorContactDetail(ctx context.Context, contactID pgtype.U
 }
 
 func (s *Server) loadEditorDeviceDetail(ctx context.Context, deviceID pgtype.UUID) (editorDeviceDetailResponse, bool, error) {
+	if s.editorDeviceDetailLoader != nil {
+		return s.editorDeviceDetailLoader(ctx, deviceID)
+	}
+
 	row := s.db.QueryRow(ctx, `
 		SELECT
 			d.id,
@@ -1181,6 +1170,107 @@ func (s *Server) loadEditorDeviceDetail(ctx context.Context, deviceID pgtype.UUI
 	}, true, nil
 }
 
+func (s *Server) editorRegionExistsByID(ctx context.Context, regionID pgtype.UUID) (bool, error) {
+	if s.editorRegionExists != nil {
+		return s.editorRegionExists(ctx, regionID)
+	}
+
+	var regionExists bool
+	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM regions WHERE id = $1)`, regionID).Scan(&regionExists); err != nil {
+		return false, err
+	}
+
+	return regionExists, nil
+}
+
+func (s *Server) editorClientExistsByID(ctx context.Context, clientID pgtype.UUID) (bool, error) {
+	if s.editorClientExists != nil {
+		return s.editorClientExists(ctx, clientID)
+	}
+
+	var clientExists bool
+	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM clients WHERE id = $1)`, clientID).Scan(&clientExists); err != nil {
+		return false, err
+	}
+
+	return clientExists, nil
+}
+
+func (s *Server) editorClassificatorExistsByID(ctx context.Context, classificatorID pgtype.UUID) (bool, error) {
+	if s.editorClassificatorExists != nil {
+		return s.editorClassificatorExists(ctx, classificatorID)
+	}
+
+	var classificatorExists bool
+	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM classificators WHERE id = $1)`, classificatorID).Scan(&classificatorExists); err != nil {
+		return false, err
+	}
+
+	return classificatorExists, nil
+}
+
+func (s *Server) updateEditorClientRecord(ctx context.Context, clientID pgtype.UUID, title string, address string, region any, location any) (int64, error) {
+	if s.editorClientUpdater != nil {
+		return s.editorClientUpdater(ctx, clientID, title, address, region, location)
+	}
+
+	tag, err := s.db.Exec(ctx, `
+		UPDATE clients
+		SET title = $1,
+			address = $2,
+			region = $3,
+			location = $4
+		WHERE id = $5
+	`, title, address, region, location, clientID)
+	if err != nil {
+		return 0, err
+	}
+
+	return tag.RowsAffected(), nil
+}
+
+func (s *Server) updateEditorContactRecord(ctx context.Context, contactID pgtype.UUID, name string, position string, phone string, email string, clientID pgtype.UUID) (int64, error) {
+	if s.editorContactUpdater != nil {
+		return s.editorContactUpdater(ctx, contactID, name, position, phone, email, clientID)
+	}
+
+	tag, err := s.db.Exec(ctx, `
+		UPDATE contacts
+		SET name = $1,
+			position = $2,
+			phone = $3,
+			email = $4,
+			client_id = $5
+		WHERE id = $6
+	`, name, position, phone, email, clientID, contactID)
+	if err != nil {
+		return 0, err
+	}
+
+	return tag.RowsAffected(), nil
+}
+
+func (s *Server) updateEditorDeviceRecord(ctx context.Context, deviceID pgtype.UUID, classificator any, serialNumber string, properties json.RawMessage, connectedToLis bool, isUsed bool) (int64, error) {
+	if s.editorDeviceUpdater != nil {
+		return s.editorDeviceUpdater(ctx, deviceID, classificator, serialNumber, properties, connectedToLis, isUsed)
+	}
+
+	tag, err := s.db.Exec(ctx, `
+		UPDATE devices
+		SET classificator = $1,
+			serial_number = $2,
+			properties = $3,
+			connected_to_lis = $4,
+			is_used = $5
+		WHERE id = $6
+	`, classificator, serialNumber, properties, connectedToLis, isUsed, deviceID)
+	if err != nil {
+		return 0, err
+	}
+
+	return tag.RowsAffected(), nil
+}
+
 func nullableInt32ToPointer(value pgtype.Int4) *int32 {
 	if !value.Valid {
 		return nil
@@ -1200,14 +1290,13 @@ func nullableTextToPointer(value pgtype.Text) *string {
 }
 
 func (s *Server) requireEditorAccess(w http.ResponseWriter, r *http.Request) (pgtype.UUID, bool) {
+	if s.editorAccessCheck != nil {
+		return s.editorAccessCheck(w, r)
+	}
+
 	claims, err := parseAuthorizationHeader(s.auth.jwtSecret, r.Header.Get("Authorization"))
 	if err != nil {
 		http.Error(w, "invalid access token", http.StatusUnauthorized)
-		return pgtype.UUID{}, false
-	}
-
-	if s.db == nil {
-		http.Error(w, "database not configured", http.StatusServiceUnavailable)
 		return pgtype.UUID{}, false
 	}
 
@@ -1217,26 +1306,46 @@ func (s *Server) requireEditorAccess(w http.ResponseWriter, r *http.Request) (pg
 		return pgtype.UUID{}, false
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
-	defer cancel()
-
 	var role string
-	if err := s.db.QueryRow(ctx, `
-		SELECT COALESCE(r.name, 'user')
-		FROM accounts a
-		LEFT JOIN account_roles ar ON ar.user_id = a.user_id
-		LEFT JOIN roles r ON r.id = ar.role_id
-		WHERE a.user_id = $1
-		LIMIT 1
-	`, requesterID).Scan(&role); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			http.Error(w, "profile not found", http.StatusNotFound)
+	if s.editorRoleLookup != nil {
+		var err error
+		role, err = s.editorRoleLookup(r.Context(), requesterID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				http.Error(w, "profile not found", http.StatusNotFound)
+				return pgtype.UUID{}, false
+			}
+
+			log.Printf("load editor requester role failed: %v", err)
+			http.Error(w, "failed to verify editor access", http.StatusInternalServerError)
+			return pgtype.UUID{}, false
+		}
+	} else {
+		if s.db == nil {
+			http.Error(w, "database not configured", http.StatusServiceUnavailable)
 			return pgtype.UUID{}, false
 		}
 
-		log.Printf("load editor requester role failed: %v", err)
-		http.Error(w, "failed to verify editor access", http.StatusInternalServerError)
-		return pgtype.UUID{}, false
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+
+		if err := s.db.QueryRow(ctx, `
+			SELECT COALESCE(r.name, 'user')
+			FROM accounts a
+			LEFT JOIN account_roles ar ON ar.user_id = a.user_id
+			LEFT JOIN roles r ON r.id = ar.role_id
+			WHERE a.user_id = $1
+			LIMIT 1
+		`, requesterID).Scan(&role); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				http.Error(w, "profile not found", http.StatusNotFound)
+				return pgtype.UUID{}, false
+			}
+
+			log.Printf("load editor requester role failed: %v", err)
+			http.Error(w, "failed to verify editor access", http.StatusInternalServerError)
+			return pgtype.UUID{}, false
+		}
 	}
 
 	if role != "admin" && role != "coordinator" {

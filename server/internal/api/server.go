@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"net/http"
 	"time"
@@ -17,13 +18,24 @@ import (
 var newMinIOClient = storage.NewMinIO
 
 type Server struct {
-	databaseConfigured bool
-	storageConfigured  bool
-	db                 *pgxpool.Pool
-	queries            accountStore
-	auth               authConfig
-	sync               syncConfig
-	storage            *storage.Client
+	databaseConfigured        bool
+	storageConfigured         bool
+	db                        *pgxpool.Pool
+	queries                   accountStore
+	auth                      authConfig
+	sync                      syncConfig
+	storage                   *storage.Client
+	editorAccessCheck         func(http.ResponseWriter, *http.Request) (pgtype.UUID, bool)
+	editorRoleLookup          func(context.Context, pgtype.UUID) (string, error)
+	editorClientDetailLoader  func(context.Context, pgtype.UUID) (editorClientDetailResponse, bool, error)
+	editorContactDetailLoader func(context.Context, pgtype.UUID) (editorContactDetailResponse, bool, error)
+	editorDeviceDetailLoader  func(context.Context, pgtype.UUID) (editorDeviceDetailResponse, bool, error)
+	editorRegionExists        func(context.Context, pgtype.UUID) (bool, error)
+	editorClientExists        func(context.Context, pgtype.UUID) (bool, error)
+	editorClassificatorExists func(context.Context, pgtype.UUID) (bool, error)
+	editorClientUpdater       func(context.Context, pgtype.UUID, string, string, any, any) (int64, error)
+	editorContactUpdater      func(context.Context, pgtype.UUID, string, string, string, string, pgtype.UUID) (int64, error)
+	editorDeviceUpdater       func(context.Context, pgtype.UUID, any, string, json.RawMessage, bool, bool) (int64, error)
 }
 
 type accountStore interface {
