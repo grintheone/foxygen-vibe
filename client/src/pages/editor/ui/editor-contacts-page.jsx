@@ -1,16 +1,33 @@
-import { useDeferredValue, useEffect, useRef, useState } from "react";
+import { useDeferredValue, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import {
+  useGetEditorClientsQuery,
   useGetEditorContactByIdQuery,
   useGetEditorContactsQuery,
-  useGetEditorClientsQuery,
   usePatchEditorContactMutation,
 } from "../../../shared/api/editor-api";
 import { routePaths } from "../../../shared/config/routes";
 import { PageShell } from "../../../shared/ui/page-shell";
 import { SelectField } from "../../../shared/ui/select-field";
 import { StatusMessage } from "../../../shared/ui/status-message";
-import { BackButton, EditorFormField, SummaryCard, useSyncedSidebarHeight } from "./editor-shared";
+import {
+  BackButton,
+  editorFieldClassName,
+  EditorFormField,
+  EditorListError,
+  EditorListHeader,
+  EditorNoticeCard,
+  EditorPageHeader,
+  EditorPane,
+  EditorRecordHeader,
+  EditorSearchField,
+  editorSelectClassName,
+  EditorSidebar,
+  EditorWorkspace,
+  SummaryCard,
+  useSyncedSidebarHeight,
+} from "./editor-shared";
+import { useEditorSearchParamSelection, useLoadedEditorRecord, useUnsavedChangesWarning } from "./editor-hooks";
 
 function ContactListItem({ contact, isActive, onClick }) {
   const title = contact.name?.trim() || "Без имени";
@@ -33,6 +50,16 @@ function ContactListItem({ contact, isActive, onClick }) {
       </div>
     </button>
   );
+}
+
+function getContactFormState(contact) {
+  return {
+    client: contact.client || "",
+    email: contact.email || "",
+    name: contact.name || "",
+    phone: contact.phone || "",
+    position: contact.position || "",
+  };
 }
 
 export function EditorContactsPage() {
@@ -92,73 +119,31 @@ export function EditorContactsPage() {
   const selectedClientTitle =
     clientOptions.find((client) => client.id === formState.client)?.title || selectedContact?.clientName?.trim() || "Не выбран";
   const sidebarHeight = useSyncedSidebarHeight(editorPaneRef);
+  const handleSelectContact = useEditorSearchParamSelection({
+    isDirty,
+    items: contacts,
+    paramKey: "contactId",
+    selectedId: selectedContactId,
+    setSearchParams,
+  });
+
+  useLoadedEditorRecord({
+    loadedRecordId: loadedContactId,
+    onRecordLoad: () =>
+      setFeedback({
+        message: "",
+        tone: "idle",
+      }),
+    record: selectedContact,
+    setFormState,
+    setLoadedRecordId: setLoadedContactId,
+    toFormState: getContactFormState,
+  });
+
+  useUnsavedChangesWarning(isDirty);
 
   function handleBack() {
     navigate(routePaths.editor);
-  }
-
-  useEffect(() => {
-    if (contacts.length === 0 || selectedContactId) {
-      return;
-    }
-
-    setSearchParams((currentParams) => {
-      const nextParams = new URLSearchParams(currentParams);
-      nextParams.set("contactId", contacts[0].id);
-      return nextParams;
-    }, { replace: true });
-  }, [contacts, selectedContactId, setSearchParams]);
-
-  useEffect(() => {
-    if (!selectedContact || selectedContact.id === loadedContactId) {
-      return;
-    }
-
-    setFormState({
-      client: selectedContact.client || "",
-      email: selectedContact.email || "",
-      name: selectedContact.name || "",
-      phone: selectedContact.phone || "",
-      position: selectedContact.position || "",
-    });
-    setLoadedContactId(selectedContact.id);
-    setFeedback({
-      message: "",
-      tone: "idle",
-    });
-  }, [loadedContactId, selectedContact]);
-
-  useEffect(() => {
-    function handleBeforeUnload(event) {
-      if (!isDirty) {
-        return;
-      }
-
-      event.preventDefault();
-      event.returnValue = "";
-    }
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-    };
-  }, [isDirty]);
-
-  function handleSelectContact(nextContactId) {
-    if (!nextContactId || nextContactId === selectedContactId) {
-      return;
-    }
-
-    if (isDirty && !window.confirm("У вас есть несохраненные изменения. Перейти к другой записи?")) {
-      return;
-    }
-
-    setSearchParams((currentParams) => {
-      const nextParams = new URLSearchParams(currentParams);
-      nextParams.set("contactId", nextContactId);
-      return nextParams;
-    });
   }
 
   function handleFormChange(event) {
@@ -197,13 +182,7 @@ export function EditorContactsPage() {
         patch: formState,
       }).unwrap();
 
-      setFormState({
-        client: updatedContact.client || "",
-        email: updatedContact.email || "",
-        name: updatedContact.name || "",
-        phone: updatedContact.phone || "",
-        position: updatedContact.position || "",
-      });
+      setFormState(getContactFormState(updatedContact));
       setLoadedContactId(updatedContact.id);
       setFeedback({
         message: "Изменения сохранены.",
@@ -220,145 +199,67 @@ export function EditorContactsPage() {
   return (
     <PageShell>
       <section className="w-full space-y-6">
-        <header className="rounded-3xl border border-white/10 bg-slate-950/35 p-6 shadow-xl shadow-black/20 backdrop-blur">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Редактор</p>
-              <h1 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl">Контакты</h1>
-              <p className="mt-3 max-w-2xl text-base text-slate-300">
-                Здесь можно редактировать контактные лица и быстро перепривязывать их к клиентам.
-              </p>
-            </div>
-            <BackButton onClick={handleBack} />
-          </div>
-        </header>
+        <EditorPageHeader
+          title="Контакты"
+          description="Здесь можно редактировать контактные лица и быстро перепривязывать их к клиентам."
+          action={<BackButton onClick={handleBack} />}
+        />
 
-        <section className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-          <aside
-            style={sidebarHeight ? { height: `${sidebarHeight}px` } : undefined}
-            className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-4 overflow-hidden rounded-[2rem] border border-white/10 bg-white/10 p-5 shadow-2xl shadow-[#6A3BF2]/15 backdrop-blur-xl"
-          >
-            <div className="space-y-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.32em] text-cyan-200">Список</p>
-                <h2 className="mt-3 text-2xl font-bold tracking-tight text-white">Контактные лица</h2>
-              </div>
-
-              <label className="block">
-                <span className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Поиск</span>
-                <input
-                  type="search"
+        <EditorWorkspace
+          sidebar={
+            <EditorSidebar
+              height={sidebarHeight}
+              footer={isContactsFetching ? "Обновляем список..." : `Показано ${contacts.length} записей.`}
+            >
+              <div className="space-y-4">
+                <EditorListHeader title="Контактные лица" />
+                <EditorSearchField
                   value={searchValue}
                   onChange={(event) => setSearchValue(event.target.value)}
                   placeholder="Имя, телефон, email, клиент"
-                  className="mt-3 w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-200/40 focus:bg-slate-950/60"
                 />
-              </label>
+                <EditorListError error={contactsError} fallbackMessage="Не удалось загрузить список контактов." />
+              </div>
 
-              {contactsError ? (
-                <StatusMessage
-                  feedback={{
-                    message:
-                      typeof contactsError?.data === "string"
-                        ? contactsError.data
-                        : "Не удалось загрузить список контактов.",
-                    tone: "error",
-                  }}
-                />
-              ) : null}
-            </div>
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+                {isContactsLoading ? <EditorNoticeCard message="Загружаем контакты..." /> : null}
+                {!isContactsLoading && contacts.length === 0 ? (
+                  <EditorNoticeCard message="По текущему запросу ничего не найдено." />
+                ) : null}
 
-            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
-              {isContactsLoading ? (
-                <div className="rounded-3xl border border-white/10 bg-slate-950/25 p-5 text-sm text-slate-300">
-                  Загружаем контакты...
-                </div>
-              ) : null}
-
-              {!isContactsLoading && contacts.length === 0 ? (
-                <div className="rounded-3xl border border-white/10 bg-slate-950/25 p-5 text-sm text-slate-300">
-                  По текущему запросу ничего не найдено.
-                </div>
-              ) : null}
-
-              {contacts.map((contact) => (
-                <ContactListItem
-                  key={contact.id}
-                  contact={contact}
-                  isActive={contact.id === selectedContactId}
-                  onClick={() => handleSelectContact(contact.id)}
-                />
-              ))}
-            </div>
-
-            <p className="self-end text-xs text-slate-500">
-              {isContactsFetching ? "Обновляем список..." : `Показано ${contacts.length} записей.`}
-            </p>
-          </aside>
-
-          <section
-            ref={editorPaneRef}
-            className="space-y-6 rounded-[2rem] border border-white/10 bg-slate-950/30 p-6 shadow-2xl shadow-black/20 backdrop-blur-xl"
-          >
+                {contacts.map((contact) => (
+                  <ContactListItem
+                    key={contact.id}
+                    contact={contact}
+                    isActive={contact.id === selectedContactId}
+                    onClick={() => handleSelectContact(contact.id)}
+                  />
+                ))}
+              </div>
+            </EditorSidebar>
+          }
+        >
+          <EditorPane editorPaneRef={editorPaneRef}>
             {!selectedContactId ? (
-              <div className="rounded-3xl border border-dashed border-white/15 bg-white/5 p-8 text-slate-300">
-                Выберите контакт слева, чтобы открыть карточку редактора.
-              </div>
+              <EditorNoticeCard dashed message="Выберите контакт слева, чтобы открыть карточку редактора." />
             ) : null}
 
-            {selectedContactId && isContactLoading ? (
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-8 text-slate-300">
-                Загружаем карточку контакта...
-              </div>
-            ) : null}
+            {selectedContactId && isContactLoading ? <EditorNoticeCard message="Загружаем карточку контакта..." /> : null}
 
             {selectedContactId && selectedContactError ? (
-              <StatusMessage
-                feedback={{
-                  message:
-                    typeof selectedContactError?.data === "string"
-                      ? selectedContactError.data
-                      : "Не удалось загрузить карточку контакта.",
-                  tone: "error",
-                }}
-              />
+              <EditorListError error={selectedContactError} fallbackMessage="Не удалось загрузить карточку контакта." />
             ) : null}
 
             {selectedContact ? (
               <>
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.32em] text-cyan-200">Карточка контакта</p>
-                    <h2 className="mt-3 text-3xl font-bold tracking-tight text-white">
-                      {selectedContact.name?.trim() || "Без имени"}
-                    </h2>
-                    <p className="mt-3 text-sm text-slate-400">ID: {selectedContact.id}</p>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-3">
-                    {isDirty ? (
-                      <span className="rounded-full border border-amber-300/25 bg-amber-400/10 px-4 py-2 text-sm font-semibold text-amber-100">
-                        Есть несохраненные изменения
-                      </span>
-                    ) : (
-                      <span className="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-4 py-2 text-sm font-semibold text-emerald-100">
-                        Все изменения сохранены
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={handleSave}
-                      disabled={isSaving || !isDirty}
-                      className={`rounded-2xl px-5 py-3 text-sm font-semibold transition ${
-                        isSaving || !isDirty
-                          ? "cursor-not-allowed border border-white/10 bg-white/5 text-slate-500"
-                          : "border border-cyan-200/30 bg-cyan-400/15 text-cyan-50 hover:border-cyan-100/45 hover:bg-cyan-400/20"
-                      }`}
-                    >
-                      {isSaving ? "Сохраняем..." : "Сохранить"}
-                    </button>
-                  </div>
-                </div>
+                <EditorRecordHeader
+                  id={selectedContact.id}
+                  isDirty={isDirty}
+                  isSaving={isSaving}
+                  onSave={handleSave}
+                  title={selectedContact.name?.trim() || "Без имени"}
+                  titleLabel="Карточка контакта"
+                />
 
                 {feedback.message ? <StatusMessage feedback={feedback} /> : null}
 
@@ -377,7 +278,7 @@ export function EditorContactsPage() {
                         value={formState.name}
                         onChange={handleFormChange}
                         placeholder="Введите имя контакта"
-                        className="mt-3 w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-200/40 focus:bg-slate-950/60"
+                        className={editorFieldClassName}
                       />
                     </EditorFormField>
 
@@ -388,7 +289,7 @@ export function EditorContactsPage() {
                         value={formState.position}
                         onChange={handleFormChange}
                         placeholder="Например, старшая медсестра"
-                        className="mt-3 w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-200/40 focus:bg-slate-950/60"
+                        className={editorFieldClassName}
                       />
                     </EditorFormField>
 
@@ -399,7 +300,7 @@ export function EditorContactsPage() {
                         value={formState.phone}
                         onChange={handleFormChange}
                         placeholder="Введите номер телефона"
-                        className="mt-3 w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-200/40 focus:bg-slate-950/60"
+                        className={editorFieldClassName}
                       />
                     </EditorFormField>
 
@@ -410,7 +311,7 @@ export function EditorContactsPage() {
                         value={formState.email}
                         onChange={handleFormChange}
                         placeholder="Введите email"
-                        className="mt-3 w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-200/40 focus:bg-slate-950/60"
+                        className={editorFieldClassName}
                       />
                     </EditorFormField>
 
@@ -421,7 +322,7 @@ export function EditorContactsPage() {
                           value={formState.client}
                           onChange={handleFormChange}
                           disabled={isClientOptionsLoading}
-                          className="min-h-[3.25rem] bg-slate-950/40 px-4 py-3 text-sm"
+                          className={editorSelectClassName}
                         >
                           <option value="">Выберите клиента</option>
                           {clientOptions.map((client) => (
@@ -472,8 +373,8 @@ export function EditorContactsPage() {
                 </p>
               </>
             ) : null}
-          </section>
-        </section>
+          </EditorPane>
+        </EditorWorkspace>
       </section>
     </PageShell>
   );

@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
 import { PageShell } from "../../../shared/ui/page-shell";
+import { StatusMessage } from "../../../shared/ui/status-message";
+
+export const editorFieldClassName =
+  "mt-3 w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-200/40 focus:bg-slate-950/60";
+
+export const editorTextareaClassName = `${editorFieldClassName} resize-y`;
+
+export const editorSelectClassName = "min-h-[3.25rem] bg-slate-950/40 px-4 py-3 text-sm";
 
 export function useSyncedSidebarHeight(targetRef) {
   const [height, setHeight] = useState(null);
@@ -120,19 +128,148 @@ export function EditorFormField({ label, children, hint }) {
   );
 }
 
+export function EditorPageHeader({ action, description, title }) {
+  return (
+    <header className="rounded-3xl border border-white/10 bg-slate-950/35 p-6 shadow-xl shadow-black/20 backdrop-blur">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Редактор</p>
+          <h1 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl">{title}</h1>
+          {description ? <p className="mt-3 max-w-2xl text-base text-slate-300">{description}</p> : null}
+        </div>
+        {action}
+      </div>
+    </header>
+  );
+}
+
+export function EditorWorkspace({ sidebar, children }) {
+  return <section className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">{sidebar}{children}</section>;
+}
+
+export function EditorSidebar({ footer, height, children }) {
+  return (
+    <aside
+      style={height ? { height: `${height}px` } : undefined}
+      className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-4 overflow-hidden rounded-[2rem] border border-white/10 bg-white/10 p-5 shadow-2xl shadow-[#6A3BF2]/15 backdrop-blur-xl"
+    >
+      {children}
+      <p className="self-end text-xs text-slate-500">{footer}</p>
+    </aside>
+  );
+}
+
+export function EditorListHeader({ title }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-[0.32em] text-cyan-200">Список</p>
+      <h2 className="mt-3 text-2xl font-bold tracking-tight text-white">{title}</h2>
+    </div>
+  );
+}
+
+export function EditorSearchField({ onChange, placeholder, value }) {
+  return (
+    <label className="block">
+      <span className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Поиск</span>
+      <input
+        type="search"
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        className={editorFieldClassName}
+      />
+    </label>
+  );
+}
+
+export function EditorPane({ editorPaneRef, children }) {
+  return (
+    <section
+      ref={editorPaneRef}
+      className="space-y-6 rounded-[2rem] border border-white/10 bg-slate-950/30 p-6 shadow-2xl shadow-black/20 backdrop-blur-xl"
+    >
+      {children}
+    </section>
+  );
+}
+
+export function EditorNoticeCard({ dashed = false, message }) {
+  return (
+    <div
+      className={`rounded-3xl p-8 text-slate-300 ${
+        dashed ? "border border-dashed border-white/15 bg-white/5" : "border border-white/10 bg-white/5"
+      }`}
+    >
+      {message}
+    </div>
+  );
+}
+
+export function EditorListError({ error, fallbackMessage }) {
+  if (!error) {
+    return null;
+  }
+
+  return (
+    <StatusMessage
+      feedback={{
+        message: typeof error?.data === "string" ? error.data : fallbackMessage,
+        tone: "error",
+      }}
+    />
+  );
+}
+
+export function EditorRecordHeader({ id, isDirty, isSaving, onSave, title, titleLabel }) {
+  return (
+    <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[0.32em] text-cyan-200">{titleLabel}</p>
+        <h2 className="mt-3 text-3xl font-bold tracking-tight text-white">{title}</h2>
+        <p className="mt-3 text-sm text-slate-400">ID: {id}</p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <EditorSaveStateBadge isDirty={isDirty} />
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={isSaving || !isDirty}
+          className={`rounded-2xl px-5 py-3 text-sm font-semibold transition ${
+            isSaving || !isDirty
+              ? "cursor-not-allowed border border-white/10 bg-white/5 text-slate-500"
+              : "border border-cyan-200/30 bg-cyan-400/15 text-cyan-50 hover:border-cyan-100/45 hover:bg-cyan-400/20"
+          }`}
+        >
+          {isSaving ? "Сохраняем..." : "Сохранить"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function EditorSaveStateBadge({ isDirty }) {
+  if (isDirty) {
+    return (
+      <span className="rounded-full border border-amber-300/25 bg-amber-400/10 px-4 py-2 text-sm font-semibold text-amber-100">
+        Есть несохраненные изменения
+      </span>
+    );
+  }
+
+  return (
+    <span className="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-4 py-2 text-sm font-semibold text-emerald-100">
+      Все изменения сохранены
+    </span>
+  );
+}
+
 export function EditorNoAccess({ onBack }) {
   return (
     <PageShell>
       <section className="w-full space-y-6">
-        <header className="rounded-3xl border border-white/10 bg-slate-950/35 p-6 shadow-xl shadow-black/20 backdrop-blur">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Редактор</p>
-              <h1 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl">Нет доступа</h1>
-            </div>
-            <BackButton onClick={onBack} />
-          </div>
-        </header>
+        <EditorPageHeader title="Нет доступа" action={<BackButton onClick={onBack} />} />
 
         <section className="rounded-3xl border border-rose-300/20 bg-rose-500/10 p-6 shadow-xl shadow-black/20 backdrop-blur">
           <p className="text-base text-rose-50">

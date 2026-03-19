@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useRef, useState } from "react";
+import { useDeferredValue, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import {
   useGetEditorClassificatorsQuery,
@@ -10,7 +10,25 @@ import { routePaths } from "../../../shared/config/routes";
 import { PageShell } from "../../../shared/ui/page-shell";
 import { SelectField } from "../../../shared/ui/select-field";
 import { StatusMessage } from "../../../shared/ui/status-message";
-import { BackButton, EditorFormField, SummaryCard, useSyncedSidebarHeight } from "./editor-shared";
+import {
+  BackButton,
+  editorFieldClassName,
+  EditorFormField,
+  EditorListError,
+  EditorListHeader,
+  EditorNoticeCard,
+  EditorPageHeader,
+  EditorPane,
+  EditorRecordHeader,
+  EditorSearchField,
+  editorSelectClassName,
+  EditorSidebar,
+  editorTextareaClassName,
+  EditorWorkspace,
+  SummaryCard,
+  useSyncedSidebarHeight,
+} from "./editor-shared";
+import { useEditorSearchParamSelection, useLoadedEditorRecord, useUnsavedChangesWarning } from "./editor-hooks";
 
 function DeviceListItem({ device, isActive, onClick }) {
   const title = device.title?.trim() || "Классификатор не указан";
@@ -67,6 +85,16 @@ function formatEditorJson(value) {
   } catch {
     return "{}";
   }
+}
+
+function getDeviceFormState(device) {
+  return {
+    classificator: device.classificator || "",
+    connectedToLis: Boolean(device.connectedToLis),
+    isUsed: Boolean(device.isUsed),
+    properties: formatEditorJson(device.properties),
+    serialNumber: device.serialNumber || "",
+  };
 }
 
 export function EditorDevicesPage() {
@@ -130,73 +158,31 @@ export function EditorDevicesPage() {
     ? `Договор #${selectedDevice.agreementNumber}`
     : "Не найден";
   const sidebarHeight = useSyncedSidebarHeight(editorPaneRef);
+  const handleSelectDevice = useEditorSearchParamSelection({
+    isDirty,
+    items: devices,
+    paramKey: "deviceId",
+    selectedId: selectedDeviceId,
+    setSearchParams,
+  });
+
+  useLoadedEditorRecord({
+    loadedRecordId: loadedDeviceId,
+    onRecordLoad: () =>
+      setFeedback({
+        message: "",
+        tone: "idle",
+      }),
+    record: selectedDevice,
+    setFormState,
+    setLoadedRecordId: setLoadedDeviceId,
+    toFormState: getDeviceFormState,
+  });
+
+  useUnsavedChangesWarning(isDirty);
 
   function handleBack() {
     navigate(routePaths.editor);
-  }
-
-  useEffect(() => {
-    if (devices.length === 0 || selectedDeviceId) {
-      return;
-    }
-
-    setSearchParams((currentParams) => {
-      const nextParams = new URLSearchParams(currentParams);
-      nextParams.set("deviceId", devices[0].id);
-      return nextParams;
-    }, { replace: true });
-  }, [devices, selectedDeviceId, setSearchParams]);
-
-  useEffect(() => {
-    if (!selectedDevice || selectedDevice.id === loadedDeviceId) {
-      return;
-    }
-
-    setFormState({
-      classificator: selectedDevice.classificator || "",
-      connectedToLis: Boolean(selectedDevice.connectedToLis),
-      isUsed: Boolean(selectedDevice.isUsed),
-      properties: formatEditorJson(selectedDevice.properties),
-      serialNumber: selectedDevice.serialNumber || "",
-    });
-    setLoadedDeviceId(selectedDevice.id);
-    setFeedback({
-      message: "",
-      tone: "idle",
-    });
-  }, [loadedDeviceId, selectedDevice]);
-
-  useEffect(() => {
-    function handleBeforeUnload(event) {
-      if (!isDirty) {
-        return;
-      }
-
-      event.preventDefault();
-      event.returnValue = "";
-    }
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-    };
-  }, [isDirty]);
-
-  function handleSelectDevice(nextDeviceId) {
-    if (!nextDeviceId || nextDeviceId === selectedDeviceId) {
-      return;
-    }
-
-    if (isDirty && !window.confirm("У вас есть несохраненные изменения. Перейти к другой записи?")) {
-      return;
-    }
-
-    setSearchParams((currentParams) => {
-      const nextParams = new URLSearchParams(currentParams);
-      nextParams.set("deviceId", nextDeviceId);
-      return nextParams;
-    });
   }
 
   function handleFormChange(event) {
@@ -238,13 +224,7 @@ export function EditorDevicesPage() {
         patch: formState,
       }).unwrap();
 
-      setFormState({
-        classificator: updatedDevice.classificator || "",
-        connectedToLis: Boolean(updatedDevice.connectedToLis),
-        isUsed: Boolean(updatedDevice.isUsed),
-        properties: formatEditorJson(updatedDevice.properties),
-        serialNumber: updatedDevice.serialNumber || "",
-      });
+      setFormState(getDeviceFormState(updatedDevice));
       setLoadedDeviceId(updatedDevice.id);
       setFeedback({
         message: "Изменения сохранены.",
@@ -261,146 +241,67 @@ export function EditorDevicesPage() {
   return (
     <PageShell>
       <section className="w-full space-y-6">
-        <header className="rounded-3xl border border-white/10 bg-slate-950/35 p-6 shadow-xl shadow-black/20 backdrop-blur">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Редактор</p>
-              <h1 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl">Устройства</h1>
-              <p className="mt-3 max-w-2xl text-base text-slate-300">
-                Здесь можно редактировать устройство, его классификатор, серийный номер и JSON-параметры без прямого
-                доступа к базе.
-              </p>
-            </div>
-            <BackButton onClick={handleBack} />
-          </div>
-        </header>
+        <EditorPageHeader
+          title="Устройства"
+          description="Здесь можно редактировать устройство, его классификатор, серийный номер и JSON-параметры без прямого доступа к базе."
+          action={<BackButton onClick={handleBack} />}
+        />
 
-        <section className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-          <aside
-            style={sidebarHeight ? { height: `${sidebarHeight}px` } : undefined}
-            className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-4 overflow-hidden rounded-[2rem] border border-white/10 bg-white/10 p-5 shadow-2xl shadow-[#6A3BF2]/15 backdrop-blur-xl"
-          >
-            <div className="space-y-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.32em] text-cyan-200">Список</p>
-                <h2 className="mt-3 text-2xl font-bold tracking-tight text-white">Карточки устройств</h2>
-              </div>
-
-              <label className="block">
-                <span className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Поиск</span>
-                <input
-                  type="search"
+        <EditorWorkspace
+          sidebar={
+            <EditorSidebar
+              height={sidebarHeight}
+              footer={isDevicesFetching ? "Обновляем список..." : `Показано ${devices.length} записей.`}
+            >
+              <div className="space-y-4">
+                <EditorListHeader title="Карточки устройств" />
+                <EditorSearchField
                   value={searchValue}
                   onChange={(event) => setSearchValue(event.target.value)}
                   placeholder="Классификатор, серийный номер, клиент"
-                  className="mt-3 w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-200/40 focus:bg-slate-950/60"
                 />
-              </label>
+                <EditorListError error={devicesError} fallbackMessage="Не удалось загрузить список устройств." />
+              </div>
 
-              {devicesError ? (
-                <StatusMessage
-                  feedback={{
-                    message:
-                      typeof devicesError?.data === "string"
-                        ? devicesError.data
-                        : "Не удалось загрузить список устройств.",
-                    tone: "error",
-                  }}
-                />
-              ) : null}
-            </div>
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+                {isDevicesLoading ? <EditorNoticeCard message="Загружаем устройства..." /> : null}
+                {!isDevicesLoading && devices.length === 0 ? (
+                  <EditorNoticeCard message="По текущему запросу ничего не найдено." />
+                ) : null}
 
-            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
-              {isDevicesLoading ? (
-                <div className="rounded-3xl border border-white/10 bg-slate-950/25 p-5 text-sm text-slate-300">
-                  Загружаем устройства...
-                </div>
-              ) : null}
-
-              {!isDevicesLoading && devices.length === 0 ? (
-                <div className="rounded-3xl border border-white/10 bg-slate-950/25 p-5 text-sm text-slate-300">
-                  По текущему запросу ничего не найдено.
-                </div>
-              ) : null}
-
-              {devices.map((device) => (
-                <DeviceListItem
-                  key={device.id}
-                  device={device}
-                  isActive={device.id === selectedDeviceId}
-                  onClick={() => handleSelectDevice(device.id)}
-                />
-              ))}
-            </div>
-
-            <p className="self-end text-xs text-slate-500">
-              {isDevicesFetching ? "Обновляем список..." : `Показано ${devices.length} записей.`}
-            </p>
-          </aside>
-
-          <section
-            ref={editorPaneRef}
-            className="space-y-6 rounded-[2rem] border border-white/10 bg-slate-950/30 p-6 shadow-2xl shadow-black/20 backdrop-blur-xl"
-          >
+                {devices.map((device) => (
+                  <DeviceListItem
+                    key={device.id}
+                    device={device}
+                    isActive={device.id === selectedDeviceId}
+                    onClick={() => handleSelectDevice(device.id)}
+                  />
+                ))}
+              </div>
+            </EditorSidebar>
+          }
+        >
+          <EditorPane editorPaneRef={editorPaneRef}>
             {!selectedDeviceId ? (
-              <div className="rounded-3xl border border-dashed border-white/15 bg-white/5 p-8 text-slate-300">
-                Выберите устройство слева, чтобы открыть карточку редактора.
-              </div>
+              <EditorNoticeCard dashed message="Выберите устройство слева, чтобы открыть карточку редактора." />
             ) : null}
 
-            {selectedDeviceId && isDeviceLoading ? (
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-8 text-slate-300">
-                Загружаем карточку устройства...
-              </div>
-            ) : null}
+            {selectedDeviceId && isDeviceLoading ? <EditorNoticeCard message="Загружаем карточку устройства..." /> : null}
 
             {selectedDeviceId && selectedDeviceError ? (
-              <StatusMessage
-                feedback={{
-                  message:
-                    typeof selectedDeviceError?.data === "string"
-                      ? selectedDeviceError.data
-                      : "Не удалось загрузить карточку устройства.",
-                  tone: "error",
-                }}
-              />
+              <EditorListError error={selectedDeviceError} fallbackMessage="Не удалось загрузить карточку устройства." />
             ) : null}
 
             {selectedDevice ? (
               <>
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.32em] text-cyan-200">Карточка устройства</p>
-                    <h2 className="mt-3 text-3xl font-bold tracking-tight text-white">
-                      {selectedDevice.title?.trim() || "Классификатор не указан"}
-                    </h2>
-                    <p className="mt-3 text-sm text-slate-400">ID: {selectedDevice.id}</p>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-3">
-                    {isDirty ? (
-                      <span className="rounded-full border border-amber-300/25 bg-amber-400/10 px-4 py-2 text-sm font-semibold text-amber-100">
-                        Есть несохраненные изменения
-                      </span>
-                    ) : (
-                      <span className="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-4 py-2 text-sm font-semibold text-emerald-100">
-                        Все изменения сохранены
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={handleSave}
-                      disabled={isSaving || !isDirty}
-                      className={`rounded-2xl px-5 py-3 text-sm font-semibold transition ${
-                        isSaving || !isDirty
-                          ? "cursor-not-allowed border border-white/10 bg-white/5 text-slate-500"
-                          : "border border-cyan-200/30 bg-cyan-400/15 text-cyan-50 hover:border-cyan-100/45 hover:bg-cyan-400/20"
-                      }`}
-                    >
-                      {isSaving ? "Сохраняем..." : "Сохранить"}
-                    </button>
-                  </div>
-                </div>
+                <EditorRecordHeader
+                  id={selectedDevice.id}
+                  isDirty={isDirty}
+                  isSaving={isSaving}
+                  onSave={handleSave}
+                  title={selectedDevice.title?.trim() || "Классификатор не указан"}
+                  titleLabel="Карточка устройства"
+                />
 
                 {feedback.message ? <StatusMessage feedback={feedback} /> : null}
 
@@ -419,7 +320,7 @@ export function EditorDevicesPage() {
                           value={formState.classificator}
                           onChange={handleFormChange}
                           disabled={isClassificatorsLoading}
-                          className="min-h-[3.25rem] bg-slate-950/40 px-4 py-3 text-sm"
+                          className={editorSelectClassName}
                         >
                           <option value="">Не указан</option>
                           {classificators.map((classificator) => (
@@ -438,7 +339,7 @@ export function EditorDevicesPage() {
                         value={formState.serialNumber}
                         onChange={handleFormChange}
                         placeholder="Введите серийный номер"
-                        className="mt-3 w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-200/40 focus:bg-slate-950/60"
+                        className={editorFieldClassName}
                       />
                     </EditorFormField>
 
@@ -453,7 +354,7 @@ export function EditorDevicesPage() {
                         rows="12"
                         spellCheck={false}
                         placeholder='{\n  "model": "XP-1000"\n}'
-                        className="mt-3 w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 font-mono text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-200/40 focus:bg-slate-950/60"
+                        className={editorTextareaClassName}
                       />
                     </EditorFormField>
 
@@ -536,8 +437,8 @@ export function EditorDevicesPage() {
                 </p>
               </>
             ) : null}
-          </section>
-        </section>
+          </EditorPane>
+        </EditorWorkspace>
       </section>
     </PageShell>
   );
