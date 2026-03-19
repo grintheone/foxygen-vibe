@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import {
   useGetEditorContactByIdQuery,
@@ -10,7 +10,7 @@ import { routePaths } from "../../../shared/config/routes";
 import { PageShell } from "../../../shared/ui/page-shell";
 import { SelectField } from "../../../shared/ui/select-field";
 import { StatusMessage } from "../../../shared/ui/status-message";
-import { BackButton, EditorFormField, SummaryCard } from "./editor-shared";
+import { BackButton, EditorFormField, SummaryCard, useSyncedSidebarHeight } from "./editor-shared";
 
 function ContactListItem({ contact, isActive, onClick }) {
   const title = contact.name?.trim() || "Без имени";
@@ -38,6 +38,7 @@ function ContactListItem({ contact, isActive, onClick }) {
 export function EditorContactsPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const editorPaneRef = useRef(null);
   const selectedContactId = searchParams.get("contactId") || "";
   const [searchValue, setSearchValue] = useState("");
   const deferredSearchValue = useDeferredValue(searchValue.trim());
@@ -90,6 +91,7 @@ export function EditorContactsPage() {
       formState.position !== (selectedContact?.position || ""));
   const selectedClientTitle =
     clientOptions.find((client) => client.id === formState.client)?.title || selectedContact?.clientName?.trim() || "Не выбран";
+  const sidebarHeight = useSyncedSidebarHeight(editorPaneRef);
 
   function handleBack() {
     navigate(-1);
@@ -244,35 +246,40 @@ export function EditorContactsPage() {
           </div>
         </header>
 
-        <section className="grid gap-6 xl:h-[calc(100vh-18rem)] xl:grid-cols-[360px_minmax(0,1fr)]">
-          <aside className="flex h-full min-h-0 flex-col space-y-4 overflow-hidden rounded-[2rem] border border-white/10 bg-white/10 p-5 shadow-2xl shadow-[#6A3BF2]/15 backdrop-blur-xl">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.32em] text-cyan-200">Список</p>
-              <h2 className="mt-3 text-2xl font-bold tracking-tight text-white">Контактные лица</h2>
+        <section className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+          <aside
+            style={sidebarHeight ? { height: `${sidebarHeight}px` } : undefined}
+            className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-4 overflow-hidden rounded-[2rem] border border-white/10 bg-white/10 p-5 shadow-2xl shadow-[#6A3BF2]/15 backdrop-blur-xl"
+          >
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.32em] text-cyan-200">Список</p>
+                <h2 className="mt-3 text-2xl font-bold tracking-tight text-white">Контактные лица</h2>
+              </div>
+
+              <label className="block">
+                <span className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Поиск</span>
+                <input
+                  type="search"
+                  value={searchValue}
+                  onChange={(event) => setSearchValue(event.target.value)}
+                  placeholder="Имя, телефон, email, клиент"
+                  className="mt-3 w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-200/40 focus:bg-slate-950/60"
+                />
+              </label>
+
+              {contactsError ? (
+                <StatusMessage
+                  feedback={{
+                    message:
+                      typeof contactsError?.data === "string"
+                        ? contactsError.data
+                        : "Не удалось загрузить список контактов.",
+                    tone: "error",
+                  }}
+                />
+              ) : null}
             </div>
-
-            <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Поиск</span>
-              <input
-                type="search"
-                value={searchValue}
-                onChange={(event) => setSearchValue(event.target.value)}
-                placeholder="Имя, телефон, email, клиент"
-                className="mt-3 w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-200/40 focus:bg-slate-950/60"
-              />
-            </label>
-
-            {contactsError ? (
-              <StatusMessage
-                feedback={{
-                  message:
-                    typeof contactsError?.data === "string"
-                      ? contactsError.data
-                      : "Не удалось загрузить список контактов.",
-                  tone: "error",
-                }}
-              />
-            ) : null}
 
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
               {isContactsLoading ? (
@@ -297,12 +304,15 @@ export function EditorContactsPage() {
               ))}
             </div>
 
-            <p className="text-xs text-slate-500">
+            <p className="self-end text-xs text-slate-500">
               {isContactsFetching ? "Обновляем список..." : `Показано ${contacts.length} записей.`}
             </p>
           </aside>
 
-          <section className="flex h-full min-h-0 flex-col space-y-6 overflow-y-auto rounded-[2rem] border border-white/10 bg-slate-950/30 p-6 shadow-2xl shadow-black/20 backdrop-blur-xl">
+          <section
+            ref={editorPaneRef}
+            className="space-y-6 rounded-[2rem] border border-white/10 bg-slate-950/30 p-6 shadow-2xl shadow-black/20 backdrop-blur-xl"
+          >
             {!selectedContactId ? (
               <div className="rounded-3xl border border-dashed border-white/15 bg-white/5 p-8 text-slate-300">
                 Выберите контакт слева, чтобы открыть карточку редактора.

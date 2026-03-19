@@ -1,4 +1,52 @@
+import { useEffect, useState } from "react";
 import { PageShell } from "../../../shared/ui/page-shell";
+
+export function useSyncedSidebarHeight(targetRef) {
+  const [height, setHeight] = useState(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    const mediaQuery = window.matchMedia("(min-width: 1280px)");
+
+    function updateHeight() {
+      if (!mediaQuery.matches) {
+        setHeight(null);
+        return;
+      }
+
+      const nextHeight = targetRef.current?.offsetHeight;
+      setHeight(Number.isFinite(nextHeight) ? nextHeight : null);
+    }
+
+    updateHeight();
+
+    const observer = new ResizeObserver(() => {
+      updateHeight();
+    });
+
+    if (targetRef.current) {
+      observer.observe(targetRef.current);
+    }
+
+    function handleMediaChange() {
+      updateHeight();
+    }
+
+    mediaQuery.addEventListener("change", handleMediaChange);
+    window.addEventListener("resize", updateHeight);
+
+    return () => {
+      observer.disconnect();
+      mediaQuery.removeEventListener("change", handleMediaChange);
+      window.removeEventListener("resize", updateHeight);
+    };
+  }, [targetRef]);
+
+  return height;
+}
 
 export function BackButton({ onClick }) {
   return (
