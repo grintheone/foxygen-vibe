@@ -66,6 +66,42 @@ type editorContactDetailResponse struct {
 	Position   string  `json:"position"`
 }
 
+type editorDeviceListItemResponse struct {
+	Agreement         *string `json:"agreement"`
+	AgreementNumber   *int32  `json:"agreementNumber"`
+	Client            *string `json:"client"`
+	ClientName        string  `json:"clientName"`
+	ConnectedToLis    bool    `json:"connectedToLis"`
+	ID                string  `json:"id"`
+	IsActiveAgreement bool    `json:"isActiveAgreement"`
+	IsUsed            bool    `json:"isUsed"`
+	SerialNumber      string  `json:"serialNumber"`
+	Title             string  `json:"title"`
+}
+
+type editorDeviceDetailResponse struct {
+	Agreement         *string         `json:"agreement"`
+	AgreementNumber   *int32          `json:"agreementNumber"`
+	AgreementType     *string         `json:"agreementType"`
+	Classificator     *string         `json:"classificator"`
+	Client            *string         `json:"client"`
+	ClientAddress     string          `json:"clientAddress"`
+	ClientName        string          `json:"clientName"`
+	ConnectedToLis    bool            `json:"connectedToLis"`
+	ID                string          `json:"id"`
+	IsActiveAgreement bool            `json:"isActiveAgreement"`
+	IsUsed            bool            `json:"isUsed"`
+	OnWarranty        bool            `json:"onWarranty"`
+	Properties        json.RawMessage `json:"properties"`
+	SerialNumber      string          `json:"serialNumber"`
+	Title             string          `json:"title"`
+}
+
+type editorClassificatorResponse struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+}
+
 func (s *Server) handleEditorClients(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/api/editor/clients" {
 		http.NotFound(w, r)
@@ -330,6 +366,200 @@ func (s *Server) handleEditorContacts(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, response)
 }
 
+func (s *Server) handleEditorDevices(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/api/editor/devices" {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if _, ok := s.requireEditorAccess(w, r); !ok {
+		return
+	}
+
+	limit := defaultEditorClientListLimit
+	if rawLimit := strings.TrimSpace(r.URL.Query().Get("limit")); rawLimit != "" {
+		parsedLimit, err := strconv.Atoi(rawLimit)
+		if err != nil || parsedLimit <= 0 {
+			http.Error(w, "limit must be a positive integer", http.StatusBadRequest)
+			return
+		}
+		if parsedLimit > maxEditorClientListLimit {
+			parsedLimit = maxEditorClientListLimit
+		}
+		limit = parsedLimit
+	}
+
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	rows, err := s.db.Query(ctx, `
+		SELECT
+			d.id,
+			COALESCE(cls.title, ''),
+			COALESCE(d.serial_number, ''),
+			d.connected_to_lis,
+			d.is_used,
+			a.id,
+			a.number,
+			COALESCE(a.is_active, FALSE),
+			c.id,
+			COALESCE(c.title, '')
+		FROM devices d
+		LEFT JOIN classificators cls ON cls.id = d.classificator
+		LEFT JOIN LATERAL (
+			SELECT
+				a.id,
+				a.number,
+				a.is_active,
+				a.actual_client
+			FROM agreements a
+			WHERE a.device = d.id
+			ORDER BY a.is_active DESC, a.assigned_at DESC NULLS LAST, a.number DESC
+			LIMIT 1
+		) a ON TRUE
+		LEFT JOIN clients c ON c.id = a.actual_client
+		WHERE (
+			$1 = ''
+			OR COALESCE(cls.title, '') ILIKE '%' || $1 || '%'
+			OR COALESCE(d.serial_number, '') ILIKE '%' || $1 || '%'
+			OR COALESCE(c.title, '') ILIKE '%' || $1 || '%'
+		)
+		ORDER BY
+			CASE WHEN COALESCE(cls.title, '') = '' THEN 1 ELSE 0 END ASC,
+			COALESCE(cls.title, '') ASC,
+			CASE WHEN COALESCE(d.serial_number, '') = '' THEN 1 ELSE 0 END ASC,
+			COALESCE(d.serial_number, '') ASC,
+			d.id ASC
+		LIMIT $2
+	`, query, limit)
+	if err != nil {
+		log.Printf("query editor devices failed: %v", err)
+		http.Error(w, "failed to load editor devices", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	response := make([]editorDeviceListItemResponse, 0)
+	for rows.Next() {
+		var (
+			id                pgtype.UUID
+			title             string
+			serialNumber      string
+			connectedToLis    bool
+			isUsed            bool
+			agreementID       pgtype.UUID
+			agreementNumber   pgtype.Int4
+			isActiveAgreement bool
+			clientID          pgtype.UUID
+			clientName        string
+		)
+
+		if err := rows.Scan(
+			&id,
+			&title,
+			&serialNumber,
+			&connectedToLis,
+			&isUsed,
+			&agreementID,
+			&agreementNumber,
+			&isActiveAgreement,
+			&clientID,
+			&clientName,
+		); err != nil {
+			log.Printf("scan editor device failed: %v", err)
+			http.Error(w, "failed to load editor devices", http.StatusInternalServerError)
+			return
+		}
+
+		response = append(response, editorDeviceListItemResponse{
+			Agreement:         nullableUUIDToString(agreementID),
+			AgreementNumber:   nullableInt32ToPointer(agreementNumber),
+			Client:            nullableUUIDToString(clientID),
+			ClientName:        clientName,
+			ConnectedToLis:    connectedToLis,
+			ID:                uuidToString(id),
+			IsActiveAgreement: isActiveAgreement,
+			IsUsed:            isUsed,
+			SerialNumber:      serialNumber,
+			Title:             title,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("iterate editor devices failed: %v", err)
+		http.Error(w, "failed to load editor devices", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (s *Server) handleEditorClassificators(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/api/editor/classificators" {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if _, ok := s.requireEditorAccess(w, r); !ok {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	rows, err := s.db.Query(ctx, `
+		SELECT id, COALESCE(title, '')
+		FROM classificators
+		ORDER BY
+			CASE WHEN COALESCE(title, '') = '' THEN 1 ELSE 0 END ASC,
+			COALESCE(title, '') ASC,
+			id ASC
+	`)
+	if err != nil {
+		log.Printf("query editor classificators failed: %v", err)
+		http.Error(w, "failed to load classificators", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	response := make([]editorClassificatorResponse, 0)
+	for rows.Next() {
+		var (
+			id    pgtype.UUID
+			title string
+		)
+
+		if err := rows.Scan(&id, &title); err != nil {
+			log.Printf("scan editor classificator failed: %v", err)
+			http.Error(w, "failed to load classificators", http.StatusInternalServerError)
+			return
+		}
+
+		response = append(response, editorClassificatorResponse{
+			ID:    uuidToString(id),
+			Title: title,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("iterate editor classificators failed: %v", err)
+		http.Error(w, "failed to load classificators", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
 func (s *Server) handleEditorClientByID(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.requireEditorAccess(w, r); !ok {
 		return
@@ -379,6 +609,33 @@ func (s *Server) handleEditorContactByID(w http.ResponseWriter, r *http.Request)
 		s.handleEditorContactDetail(w, r, contactID)
 	case http.MethodPatch:
 		s.handleEditorContactPatch(w, r, contactID)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *Server) handleEditorDeviceByID(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireEditorAccess(w, r); !ok {
+		return
+	}
+
+	devicePath := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/editor/devices/"), "/")
+	if devicePath == "" || strings.Contains(devicePath, "/") {
+		http.NotFound(w, r)
+		return
+	}
+
+	var deviceID pgtype.UUID
+	if err := deviceID.Scan(devicePath); err != nil {
+		http.Error(w, "invalid device id", http.StatusBadRequest)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		s.handleEditorDeviceDetail(w, r, deviceID)
+	case http.MethodPatch:
+		s.handleEditorDevicePatch(w, r, deviceID)
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -603,6 +860,115 @@ func (s *Server) handleEditorContactPatch(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, response)
 }
 
+func (s *Server) handleEditorDeviceDetail(w http.ResponseWriter, r *http.Request, deviceID pgtype.UUID) {
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	response, found, err := s.loadEditorDeviceDetail(ctx, deviceID)
+	if err != nil {
+		log.Printf("load editor device detail failed: %v", err)
+		http.Error(w, "failed to load device", http.StatusInternalServerError)
+		return
+	}
+	if !found {
+		http.Error(w, "device not found", http.StatusNotFound)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (s *Server) handleEditorDevicePatch(w http.ResponseWriter, r *http.Request, deviceID pgtype.UUID) {
+	type patchEditorDeviceRequest struct {
+		Classificator  string `json:"classificator"`
+		ConnectedToLis bool   `json:"connectedToLis"`
+		IsUsed         bool   `json:"isUsed"`
+		Properties     string `json:"properties"`
+		SerialNumber   string `json:"serialNumber"`
+	}
+
+	defer r.Body.Close()
+
+	var input patchEditorDeviceRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	input.Classificator = strings.TrimSpace(input.Classificator)
+	input.Properties = strings.TrimSpace(input.Properties)
+	input.SerialNumber = strings.TrimSpace(input.SerialNumber)
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	var classificatorValue any = nil
+	if input.Classificator != "" {
+		var classificatorID pgtype.UUID
+		if err := classificatorID.Scan(input.Classificator); err != nil {
+			http.Error(w, "classificator must be a valid UUID", http.StatusBadRequest)
+			return
+		}
+
+		var classificatorExists bool
+		if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM classificators WHERE id = $1)`, classificatorID).Scan(&classificatorExists); err != nil {
+			log.Printf("validate editor device classificator failed: %v", err)
+			http.Error(w, "failed to update device", http.StatusInternalServerError)
+			return
+		}
+		if !classificatorExists {
+			http.Error(w, "classificator not found", http.StatusBadRequest)
+			return
+		}
+
+		classificatorValue = classificatorID
+	}
+
+	propertiesValue := input.Properties
+	if propertiesValue == "" {
+		propertiesValue = "{}"
+	}
+	rawProperties := json.RawMessage(propertiesValue)
+	if !json.Valid(rawProperties) {
+		http.Error(w, "properties must be valid JSON", http.StatusBadRequest)
+		return
+	}
+
+	tag, err := s.db.Exec(ctx, `
+		UPDATE devices
+		SET classificator = $1,
+			serial_number = $2,
+			properties = $3,
+			connected_to_lis = $4,
+			is_used = $5
+		WHERE id = $6
+	`, classificatorValue, input.SerialNumber, rawProperties, input.ConnectedToLis, input.IsUsed, deviceID)
+	if err != nil {
+		log.Printf("update editor device failed: %v", err)
+		http.Error(w, "failed to update device", http.StatusInternalServerError)
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		http.Error(w, "device not found", http.StatusNotFound)
+		return
+	}
+
+	response, found, err := s.loadEditorDeviceDetail(ctx, deviceID)
+	if err != nil {
+		log.Printf("reload editor device failed: %v", err)
+		http.Error(w, "failed to update device", http.StatusInternalServerError)
+		return
+	}
+	if !found {
+		http.Error(w, "device not found", http.StatusNotFound)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
 func (s *Server) loadEditorClientDetail(ctx context.Context, clientID pgtype.UUID) (editorClientDetailResponse, bool, error) {
 	row := s.db.QueryRow(ctx, `
 		SELECT
@@ -720,6 +1086,123 @@ func (s *Server) loadEditorContactDetail(ctx context.Context, contactID pgtype.U
 		Phone:      phone,
 		Position:   position,
 	}, true, nil
+}
+
+func (s *Server) loadEditorDeviceDetail(ctx context.Context, deviceID pgtype.UUID) (editorDeviceDetailResponse, bool, error) {
+	row := s.db.QueryRow(ctx, `
+		SELECT
+			d.id,
+			d.classificator,
+			COALESCE(cls.title, ''),
+			COALESCE(d.serial_number, ''),
+			d.properties,
+			d.connected_to_lis,
+			d.is_used,
+			a.id,
+			a.number,
+			COALESCE(a.is_active, FALSE),
+			COALESCE(a.on_warranty, FALSE),
+			a.type,
+			c.id,
+			COALESCE(c.title, ''),
+			COALESCE(c.address, '')
+		FROM devices d
+		LEFT JOIN classificators cls ON cls.id = d.classificator
+		LEFT JOIN LATERAL (
+			SELECT
+				a.id,
+				a.number,
+				a.is_active,
+				a.on_warranty,
+				a.type,
+				a.actual_client
+			FROM agreements a
+			WHERE a.device = d.id
+			ORDER BY a.is_active DESC, a.assigned_at DESC NULLS LAST, a.number DESC
+			LIMIT 1
+		) a ON TRUE
+		LEFT JOIN clients c ON c.id = a.actual_client
+		WHERE d.id = $1
+		LIMIT 1
+	`, deviceID)
+
+	var (
+		id                pgtype.UUID
+		classificatorID   pgtype.UUID
+		title             string
+		serialNumber      string
+		properties        []byte
+		connectedToLis    bool
+		isUsed            bool
+		agreementID       pgtype.UUID
+		agreementNumber   pgtype.Int4
+		isActiveAgreement bool
+		onWarranty        bool
+		agreementType     pgtype.Text
+		clientID          pgtype.UUID
+		clientName        string
+		clientAddress     string
+	)
+
+	if err := row.Scan(
+		&id,
+		&classificatorID,
+		&title,
+		&serialNumber,
+		&properties,
+		&connectedToLis,
+		&isUsed,
+		&agreementID,
+		&agreementNumber,
+		&isActiveAgreement,
+		&onWarranty,
+		&agreementType,
+		&clientID,
+		&clientName,
+		&clientAddress,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return editorDeviceDetailResponse{}, false, nil
+		}
+
+		return editorDeviceDetailResponse{}, false, err
+	}
+
+	return editorDeviceDetailResponse{
+		Agreement:         nullableUUIDToString(agreementID),
+		AgreementNumber:   nullableInt32ToPointer(agreementNumber),
+		AgreementType:     nullableTextToPointer(agreementType),
+		Classificator:     nullableUUIDToString(classificatorID),
+		Client:            nullableUUIDToString(clientID),
+		ClientAddress:     clientAddress,
+		ClientName:        clientName,
+		ConnectedToLis:    connectedToLis,
+		ID:                uuidToString(id),
+		IsActiveAgreement: isActiveAgreement,
+		IsUsed:            isUsed,
+		OnWarranty:        onWarranty,
+		Properties:        json.RawMessage(properties),
+		SerialNumber:      serialNumber,
+		Title:             title,
+	}, true, nil
+}
+
+func nullableInt32ToPointer(value pgtype.Int4) *int32 {
+	if !value.Valid {
+		return nil
+	}
+
+	result := value.Int32
+	return &result
+}
+
+func nullableTextToPointer(value pgtype.Text) *string {
+	if !value.Valid {
+		return nil
+	}
+
+	result := value.String
+	return &result
 }
 
 func (s *Server) requireEditorAccess(w http.ResponseWriter, r *http.Request) (pgtype.UUID, bool) {

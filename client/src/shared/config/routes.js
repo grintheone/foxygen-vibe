@@ -45,4 +45,7 @@ export const routePaths = {
   editorContacts() {
     return "/editor?entity=contacts";
   },
+  editorDevices() {
+    return "/editor?entity=devices";
+  },
 };

@@ -15,6 +15,11 @@ const EditorContactsPage = lazy(() =>
     default: module.EditorContactsPage,
   })),
 );
+const EditorDevicesPage = lazy(() =>
+  import("./editor-devices-page").then((module) => ({
+    default: module.EditorDevicesPage,
+  })),
+);
 
 function EditorPageLoader({ message }) {
   return (
@@ -57,6 +62,14 @@ export function EditorPage() {
     );
   }
 
+  if (entity === "devices") {
+    return (
+      <Suspense fallback={<EditorPageLoader message="Загружаем редактор устройств..." />}>
+        <EditorDevicesPage />
+      </Suspense>
+    );
+  }
+
   return (
     <PageShell>
       <section className="w-full space-y-6">
@@ -66,8 +79,8 @@ export function EditorPage() {
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Редактор</p>
               <h1 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl">Выбор сущности</h1>
               <p className="mt-3 max-w-2xl text-base text-slate-300">
-                Выберите, что именно хотите редактировать. Сейчас доступны отдельные рабочие срезы для клиентов и
-                контактных лиц.
+                Выберите, что именно хотите редактировать. Сейчас доступны рабочие срезы для клиентов, контактов и
+                устройств.
               </p>
             </div>
             <BackButton onClick={handleBack} />
@@ -89,9 +102,9 @@ export function EditorPage() {
           />
           <EditorEntityCard
             title="Устройства"
-            badge="Скоро"
-            description="Следующий шаг после клиентов и контактов. Здесь появится редактор карточек оборудования."
-            disabled
+            badge="Готово"
+            description="Редактирование классификатора, серийного номера, JSON-параметров и служебных флагов."
+            onClick={() => navigate(routePaths.editorDevices())}
           />
         </section>
       </section>
