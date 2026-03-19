@@ -168,7 +168,7 @@ export function EditorClientsPage() {
       const nextParams = new URLSearchParams(currentParams);
       nextParams.set("clientId", clients[0].id);
       return nextParams;
-    });
+    }, { replace: true });
   }, [clients, selectedClientId, setSearchParams]);
 
   useEffect(() => {

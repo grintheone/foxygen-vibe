@@ -144,7 +144,7 @@ export function EditorDevicesPage() {
       const nextParams = new URLSearchParams(currentParams);
       nextParams.set("deviceId", devices[0].id);
       return nextParams;
-    });
+    }, { replace: true });
   }, [devices, selectedDeviceId, setSearchParams]);
 
   useEffect(() => {

@@ -106,7 +106,7 @@ export function EditorContactsPage() {
       const nextParams = new URLSearchParams(currentParams);
       nextParams.set("contactId", contacts[0].id);
       return nextParams;
-    });
+    }, { replace: true });
   }, [contacts, selectedContactId, setSearchParams]);
 
   useEffect(() => {
