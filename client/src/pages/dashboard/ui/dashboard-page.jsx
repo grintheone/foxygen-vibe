@@ -1,10 +1,20 @@
+import { lazy, Suspense } from "react";
 import { useNavigate } from "react-router";
 import { useAuth } from "../../../features/auth";
 import { routePaths } from "../../../shared/config/routes";
 import { PageShell } from "../../../shared/ui/page-shell";
-import { CoordinatorDashboard } from "./coordinator-dashboard";
 import { DashboardHeader } from "./dashboard-header";
-import { EngineerDashboard } from "./engineer-dashboard";
+
+const CoordinatorDashboard = lazy(() =>
+  import("./coordinator-dashboard").then((module) => ({
+    default: module.CoordinatorDashboard,
+  })),
+);
+const EngineerDashboard = lazy(() =>
+  import("./engineer-dashboard").then((module) => ({
+    default: module.EngineerDashboard,
+  })),
+);
 
 const dashboardByRole = {
   admin: CoordinatorDashboard,
@@ -21,7 +31,15 @@ export function DashboardPage() {
     <PageShell>
       <section className="w-full space-y-6">
         <DashboardHeader onOpenProfile={() => navigate(routePaths.profile)} />
-        <DashboardView executorId={session?.user_id} department={session?.department} />
+        <Suspense
+          fallback={
+            <section className="rounded-3xl border border-white/10 bg-white/5 p-6">
+              <p className="text-sm text-slate-300">Загружаем панель...</p>
+            </section>
+          }
+        >
+          <DashboardView executorId={session?.user_id} department={session?.department} />
+        </Suspense>
       </section>
     </PageShell>
   );

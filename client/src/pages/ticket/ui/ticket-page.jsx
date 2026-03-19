@@ -1,5 +1,5 @@
+import { lazy, Suspense, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { useState } from "react";
 import { useAuth } from "../../../features/auth";
 import { routePaths } from "../../../shared/config/routes";
 import {
@@ -12,14 +12,23 @@ import { PageShell } from "../../../shared/ui/page-shell";
 import { useTicketViewModel } from "../lib/use-ticket-view-model";
 import { buildTicketPatchPayload, resolveTicketActionState } from "../model/ticket-action-widget-model";
 import { TicketContactCard } from "./components/ticket-contact-card";
-import { TicketAssignmentSheet } from "./components/ticket-assignment-sheet";
 import { TicketHeader } from "./components/ticket-header";
 import { TicketHistorySection } from "./components/ticket-history-section";
 import { TicketNavigationCard } from "./components/ticket-navigation-card";
-import { TicketReportSheet } from "./components/ticket-report-sheet";
 import { TicketStatusActionWidget } from "./components/ticket-status-action-widget";
 import { TicketSummaryCard } from "./components/ticket-summary-card";
 import { TicketWorkResultSection } from "./components/ticket-work-result-section";
+
+const TicketAssignmentSheet = lazy(() =>
+    import("./components/ticket-assignment-sheet").then((module) => ({
+        default: module.TicketAssignmentSheet,
+    })),
+);
+const TicketReportSheet = lazy(() =>
+    import("./components/ticket-report-sheet").then((module) => ({
+        default: module.TicketReportSheet,
+    })),
+);
 
 export function TicketPage() {
     const navigate = useNavigate();
@@ -294,34 +303,42 @@ export function TicketPage() {
                 onSubmit={handleTicketAction}
             />
 
-            <TicketAssignmentSheet
-                isOpen={isAssignmentSheetOpen}
-                isSubmitting={isPatching}
-                onClose={() => {
-                    setAssignmentSubmitError("");
-                    setIsAssignmentSheetOpen(false);
-                }}
-                onSubmitAssign={handleAssignEngineer}
-                submitError={assignmentSubmitError}
-                ticket={ticket}
-            />
+            {isAssignmentSheetOpen ? (
+                <Suspense fallback={null}>
+                    <TicketAssignmentSheet
+                        isOpen={isAssignmentSheetOpen}
+                        isSubmitting={isPatching}
+                        onClose={() => {
+                            setAssignmentSubmitError("");
+                            setIsAssignmentSheetOpen(false);
+                        }}
+                        onSubmitAssign={handleAssignEngineer}
+                        submitError={assignmentSubmitError}
+                        ticket={ticket}
+                    />
+                </Suspense>
+            ) : null}
 
-            <TicketReportSheet
-                isOpen={isReportSheetOpen}
-                isSubmitting={isReportSubmitting}
-                onClose={() => {
-                    setReportSubmitError("");
-                    setIsReportSheetOpen(false);
-                }}
-                onDownloadAttachment={handleDownloadAttachment}
-                onSubmitClose={handleCloseTicketReport}
-                onUploadAttachment={handleUploadAttachment}
-                resolvedReason={ticket?.resolvedReason}
-                deviceName={ticket?.deviceName}
-                clientName={ticket?.clientName}
-                submitError={reportSubmitError}
-                ticketNumber={ticketNumber}
-            />
+            {isReportSheetOpen ? (
+                <Suspense fallback={null}>
+                    <TicketReportSheet
+                        isOpen={isReportSheetOpen}
+                        isSubmitting={isReportSubmitting}
+                        onClose={() => {
+                            setReportSubmitError("");
+                            setIsReportSheetOpen(false);
+                        }}
+                        onDownloadAttachment={handleDownloadAttachment}
+                        onSubmitClose={handleCloseTicketReport}
+                        onUploadAttachment={handleUploadAttachment}
+                        resolvedReason={ticket?.resolvedReason}
+                        deviceName={ticket?.deviceName}
+                        clientName={ticket?.clientName}
+                        submitError={reportSubmitError}
+                        ticketNumber={ticketNumber}
+                    />
+                </Suspense>
+            ) : null}
         </PageShell>
     );
 }

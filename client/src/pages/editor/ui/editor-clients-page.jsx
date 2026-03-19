@@ -52,6 +52,52 @@ function formatEditorJson(value) {
   }
 }
 
+function resolveLocationFields(location) {
+  const items = Array.isArray(location) ? location : location ? [location] : [];
+
+  for (const item of items) {
+    const latitude = Number(item?.lat ?? item?.latitude);
+    const longitude = Number(item?.lng ?? item?.lon ?? item?.longitude);
+
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      return {
+        latitude: String(latitude),
+        longitude: String(longitude),
+      };
+    }
+  }
+
+  return {
+    latitude: "",
+    longitude: "",
+  };
+}
+
+function buildLocationJson(latitude, longitude) {
+  const normalizedLatitude = latitude.trim();
+  const normalizedLongitude = longitude.trim();
+
+  if (!normalizedLatitude && !normalizedLongitude) {
+    return "{}";
+  }
+
+  const parsedLatitude = Number(normalizedLatitude);
+  const parsedLongitude = Number(normalizedLongitude);
+
+  if (!Number.isFinite(parsedLatitude) || !Number.isFinite(parsedLongitude)) {
+    return null;
+  }
+
+  return JSON.stringify(
+    {
+      lat: parsedLatitude,
+      lng: parsedLongitude,
+    },
+    null,
+    2,
+  );
+}
+
 export function EditorClientsPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -61,7 +107,8 @@ export function EditorClientsPage() {
   const deferredSearchValue = useDeferredValue(searchValue.trim());
   const [formState, setFormState] = useState({
     address: "",
-    location: "{}",
+    latitude: "",
+    longitude: "",
     region: "",
     title: "",
   });
@@ -95,16 +142,18 @@ export function EditorClientsPage() {
     skip: !selectedClientId,
   });
 
-  const initialLocationValue = formatEditorJson(selectedClient?.location);
+  const initialLocationFields = resolveLocationFields(selectedClient?.location);
   const isDirty =
     Boolean(selectedClientId) &&
     (formState.title !== (selectedClient?.title || "") ||
       formState.address !== (selectedClient?.address || "") ||
-      formState.location !== initialLocationValue ||
+      formState.latitude !== initialLocationFields.latitude ||
+      formState.longitude !== initialLocationFields.longitude ||
       formState.region !== (selectedClient?.region || ""));
   const selectedRegionTitle =
     regions.find((region) => region.id === formState.region)?.title || selectedClient?.regionTitle?.trim() || "Не указан";
   const sidebarHeight = useSyncedSidebarHeight(editorPaneRef);
+  const locationPreview = buildLocationJson(formState.latitude, formState.longitude) || "Некорректные координаты";
 
   function handleBack() {
     navigate(-1);
@@ -133,7 +182,7 @@ export function EditorClientsPage() {
 
     setFormState({
       address: selectedClient.address || "",
-      location: formatEditorJson(selectedClient.location),
+      ...resolveLocationFields(selectedClient.location),
       region: selectedClient.region || "",
       title: selectedClient.title || "",
     });
@@ -199,11 +248,10 @@ export function EditorClientsPage() {
       return;
     }
 
-    try {
-      JSON.parse(formState.location);
-    } catch {
+    const locationJson = buildLocationJson(formState.latitude, formState.longitude);
+    if (locationJson === null) {
       setFeedback({
-        message: "Location должен быть валидным JSON.",
+        message: "Широта и долгота должны быть числами.",
         tone: "error",
       });
       return;
@@ -214,7 +262,7 @@ export function EditorClientsPage() {
         clientId: selectedClientId,
         patch: {
           address: formState.address,
-          location: formState.location,
+          location: locationJson,
           region: formState.region,
           title: formState.title,
         },
@@ -222,7 +270,7 @@ export function EditorClientsPage() {
 
       setFormState({
         address: updatedClient.address || "",
-        location: formatEditorJson(updatedClient.location),
+        ...resolveLocationFields(updatedClient.location),
         region: updatedClient.region || "",
         title: updatedClient.title || "",
       });
@@ -443,16 +491,34 @@ export function EditorClientsPage() {
                     </EditorFormField>
 
                     <EditorFormField
-                      label="Location JSON"
-                      hint="Поддерживается любой валидный JSON. Пустой объект можно хранить как `{}`."
+                      label="Широта"
+                      hint="Введите числовое значение latitude. Например: `55.7558`."
                     >
-                      <textarea
-                        name="location"
-                        value={formState.location}
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        step="any"
+                        name="latitude"
+                        value={formState.latitude}
                         onChange={handleFormChange}
-                        rows="10"
-                        spellCheck={false}
-                        className="mt-3 w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 font-mono text-sm text-white outline-none transition focus:border-cyan-200/40 focus:bg-slate-950/60"
+                        placeholder="Например, 55.7558"
+                        className="mt-3 w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-200/40 focus:bg-slate-950/60"
+                      />
+                    </EditorFormField>
+
+                    <EditorFormField
+                      label="Долгота"
+                      hint="Введите числовое значение longitude. Например: `37.6176`."
+                    >
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        step="any"
+                        name="longitude"
+                        value={formState.longitude}
+                        onChange={handleFormChange}
+                        placeholder="Например, 37.6176"
+                        className="mt-3 w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-200/40 focus:bg-slate-950/60"
                       />
                     </EditorFormField>
                   </div>
@@ -474,14 +540,27 @@ export function EditorClientsPage() {
                     </div>
 
                     <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Координаты</p>
+                      <div className="mt-4 space-y-3 text-sm text-slate-300">
+                        <p>
+                          <span className="text-slate-500">Широта:</span> {formState.latitude || "Не указана"}
+                        </p>
+                        <p>
+                          <span className="text-slate-500">Долгота:</span> {formState.longitude || "Не указана"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Location JSON</p>
                       <pre className="mt-4 overflow-x-auto rounded-2xl border border-white/10 bg-black/20 p-4 text-xs text-slate-300">
-                        {formState.location}
+                        {locationPreview}
                       </pre>
                     </div>
 
                     <p className="text-xs text-slate-500">
-                      ЛИС и менеджеры пока доступны только для просмотра. Region и location уже можно редактировать.
+                      ЛИС и менеджеры пока доступны только для просмотра. Location теперь редактируется через широту и
+                      долготу, а JSON собирается автоматически.
                     </p>
                     {regionsError ? (
                       <p className="text-xs text-rose-300">
@@ -496,7 +575,7 @@ export function EditorClientsPage() {
                     ? "Обновляем карточку..."
                     : isRegionsFetching
                       ? "Обновляем список регионов..."
-                      : "Изменения применяются к базовым полям клиента, региону и JSON-полю location."}
+                      : "Изменения применяются к базовым полям клиента, региону и координатам location."}
                 </p>
               </>
             ) : null}

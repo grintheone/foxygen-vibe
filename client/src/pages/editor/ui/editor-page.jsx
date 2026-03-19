@@ -1,10 +1,30 @@
+import { lazy, Suspense } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useAuth } from "../../../features/auth";
 import { routePaths } from "../../../shared/config/routes";
 import { PageShell } from "../../../shared/ui/page-shell";
-import { EditorClientsPage } from "./editor-clients-page";
-import { EditorContactsPage } from "./editor-contacts-page";
 import { BackButton, EditorEntityCard, EditorNoAccess } from "./editor-shared";
+
+const EditorClientsPage = lazy(() =>
+  import("./editor-clients-page").then((module) => ({
+    default: module.EditorClientsPage,
+  })),
+);
+const EditorContactsPage = lazy(() =>
+  import("./editor-contacts-page").then((module) => ({
+    default: module.EditorContactsPage,
+  })),
+);
+
+function EditorPageLoader({ message }) {
+  return (
+    <PageShell>
+      <section className="w-full rounded-3xl border border-white/10 bg-white/5 p-6">
+        <p className="text-sm text-slate-300">{message}</p>
+      </section>
+    </PageShell>
+  );
+}
 
 export function EditorPage() {
   const navigate = useNavigate();
@@ -22,11 +42,19 @@ export function EditorPage() {
   }
 
   if (entity === "clients") {
-    return <EditorClientsPage />;
+    return (
+      <Suspense fallback={<EditorPageLoader message="Загружаем редактор клиентов..." />}>
+        <EditorClientsPage />
+      </Suspense>
+    );
   }
 
   if (entity === "contacts") {
-    return <EditorContactsPage />;
+    return (
+      <Suspense fallback={<EditorPageLoader message="Загружаем редактор контактов..." />}>
+        <EditorContactsPage />
+      </Suspense>
+    );
   }
 
   return (
