@@ -127,6 +127,15 @@ export const editorApi = createApi({
       query: (deviceId) => `api/editor/devices/${deviceId}`,
       providesTags: (_, __, deviceId) => [{ type: "EditorDevice", id: deviceId }],
     }),
+    getEditorDeviceOptions: builder.query({
+      query: ({ q = "" } = {}) => ({
+        params: {
+          ...(q ? { q } : {}),
+        },
+        url: "api/editor/device-options",
+      }),
+      providesTags: ["EditorDevice"],
+    }),
     getEditorTickets: builder.query({
       query: ({ limit = 50, q = "" } = {}) => ({
         params: {
@@ -301,6 +310,7 @@ export const {
   useGetEditorContactByIdQuery,
   useGetEditorContactsQuery,
   useGetEditorDeviceByIdQuery,
+  useGetEditorDeviceOptionsQuery,
   useGetEditorDevicesQuery,
   useGetEditorManufacturersQuery,
   useGetEditorRegionsQuery,

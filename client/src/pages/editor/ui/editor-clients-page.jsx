@@ -12,6 +12,9 @@ import { SelectField } from "../../../shared/ui/select-field";
 import { StatusMessage } from "../../../shared/ui/status-message";
 import {
   BackButton,
+  EditorContextItem,
+  EditorContextPanel,
+  EditorContextSection,
   editorFieldClassName,
   EditorFormField,
   EditorListError,
@@ -25,7 +28,6 @@ import {
   EditorSidebar,
   editorTextareaClassName,
   EditorWorkspace,
-  SummaryCard,
   useSyncedSidebarHeight,
 } from "./editor-shared";
 import { useEditorSearchParamSelection, useLoadedEditorRecord, useUnsavedChangesWarning } from "./editor-hooks";
@@ -319,12 +321,6 @@ export function EditorClientsPage() {
 
                 {feedback.message ? <StatusMessage feedback={feedback} /> : null}
 
-                <div className="grid gap-4 md:grid-cols-3">
-                  <SummaryCard label="Контакты" value={selectedClient.contactCount} />
-                  <SummaryCard label="Активные договоры" value={selectedClient.activeAgreementCount} />
-                  <SummaryCard label="Регион" value={selectedRegionTitle} />
-                </div>
-
                 <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
                   <div className="space-y-5 rounded-3xl border border-white/10 bg-white/5 p-5">
                     <EditorFormField label="Название">
@@ -401,51 +397,43 @@ export function EditorClientsPage() {
                     </EditorFormField>
                   </div>
 
-                  <aside className="space-y-4 rounded-3xl border border-white/10 bg-slate-950/35 p-5">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Связанные поля</p>
-                      <div className="mt-4 space-y-3 text-sm text-slate-300">
-                        <p>
-                          <span className="text-slate-500">Регион:</span> {selectedRegionTitle}
+                  <EditorContextPanel
+                    title="Контекст клиента"
+                    footer={
+                      <>
+                        <p className="text-xs text-slate-500">
+                          ЛИС и менеджеры пока доступны только для просмотра. Location собирается автоматически из широты
+                          и долготы.
                         </p>
-                        <p>
-                          <span className="text-slate-500">ЛИС:</span> {selectedClient.laboratorySystem || "Не привязана"}
-                        </p>
-                        <p>
-                          <span className="text-slate-500">Менеджеров:</span> {selectedClient.manager?.length || 0}
-                        </p>
-                      </div>
-                    </div>
+                        {regionsError ? (
+                          <p className="text-xs text-rose-300">
+                            {typeof regionsError?.data === "string"
+                              ? regionsError.data
+                              : "Не удалось загрузить список регионов."}
+                          </p>
+                        ) : null}
+                      </>
+                    }
+                  >
+                    <EditorContextSection title="Основное">
+                      <EditorContextItem label="Контакты" value={selectedClient.contactCount} />
+                      <EditorContextItem label="Активные договоры" value={selectedClient.activeAgreementCount} />
+                      <EditorContextItem label="Регион" value={selectedRegionTitle} />
+                      <EditorContextItem label="ЛИС" value={selectedClient.laboratorySystem || "Не привязана"} />
+                      <EditorContextItem label="Менеджеров" value={selectedClient.manager?.length || 0} />
+                    </EditorContextSection>
 
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Координаты</p>
-                      <div className="mt-4 space-y-3 text-sm text-slate-300">
-                        <p>
-                          <span className="text-slate-500">Широта:</span> {formState.latitude || "Не указана"}
-                        </p>
-                        <p>
-                          <span className="text-slate-500">Долгота:</span> {formState.longitude || "Не указана"}
-                        </p>
-                      </div>
-                    </div>
+                    <EditorContextSection title="Координаты">
+                      <EditorContextItem label="Широта" value={formState.latitude || "Не указана"} />
+                      <EditorContextItem label="Долгота" value={formState.longitude || "Не указана"} />
+                    </EditorContextSection>
 
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Location JSON</p>
-                      <pre className="mt-4 overflow-x-auto rounded-2xl border border-white/10 bg-black/20 p-4 text-xs text-slate-300">
+                    <EditorContextSection title="Location JSON">
+                      <pre className="overflow-x-auto rounded-2xl border border-white/10 bg-black/20 p-4 text-xs text-slate-300">
                         {locationPreview}
                       </pre>
-                    </div>
-
-                    <p className="text-xs text-slate-500">
-                      ЛИС и менеджеры пока доступны только для просмотра. Location теперь редактируется через широту и
-                      долготу, а JSON собирается автоматически.
-                    </p>
-                    {regionsError ? (
-                      <p className="text-xs text-rose-300">
-                        {typeof regionsError?.data === "string" ? regionsError.data : "Не удалось загрузить список регионов."}
-                      </p>
-                    ) : null}
-                  </aside>
+                    </EditorContextSection>
+                  </EditorContextPanel>
                 </section>
 
                 <p className="text-xs text-slate-500">

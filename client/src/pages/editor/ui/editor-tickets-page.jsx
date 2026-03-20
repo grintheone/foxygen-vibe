@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router";
 import {
   useGetEditorAccountsQuery,
   useGetEditorClientsQuery,
-  useGetEditorDevicesQuery,
+  useGetEditorDeviceOptionsQuery,
   useGetEditorTicketByIdQuery,
   useGetEditorTicketsQuery,
   useGetEditorTicketStatusesQuery,
@@ -22,6 +22,9 @@ import { SelectField } from "../../../shared/ui/select-field";
 import { StatusMessage } from "../../../shared/ui/status-message";
 import {
   BackButton,
+  EditorContextItem,
+  EditorContextPanel,
+  EditorContextSection,
   editorFieldClassName,
   EditorFormField,
   EditorListError,
@@ -35,7 +38,6 @@ import {
   editorTextareaClassName,
   EditorSidebar,
   EditorWorkspace,
-  SummaryCard,
   useSyncedSidebarHeight,
 } from "./editor-shared";
 import { useEditorSearchParamSelection, useLoadedEditorRecord, useUnsavedChangesWarning } from "./editor-hooks";
@@ -89,6 +91,20 @@ function toDateTimeLocalValue(value) {
   const hours = String(date.getHours()).padStart(2, "0");
   const minutes = String(date.getMinutes()).padStart(2, "0");
   return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+function toIsoDateTimeValue(value) {
+  const normalizedValue = value.trim();
+  if (!normalizedValue) {
+    return "";
+  }
+
+  const date = new Date(normalizedValue);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date.toISOString();
 }
 
 function getDeviceOptionLabel(device) {
@@ -226,6 +242,7 @@ export function EditorTicketsPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const editorPaneRef = useRef(null);
+  const editableFieldsRef = useRef(null);
   const selectedTicketId = searchParams.get("ticketId") || "";
   const [searchValue, setSearchValue] = useState("");
   const deferredSearchValue = useDeferredValue(searchValue.trim());
@@ -284,9 +301,8 @@ export function EditorTicketsPage() {
       skip: !selectedTicketId,
     },
   );
-  const { data: deviceOptions = [], error: deviceOptionsError } = useGetEditorDevicesQuery(
+  const { data: deviceOptions = [], error: deviceOptionsError } = useGetEditorDeviceOptionsQuery(
     {
-      limit: 20,
       q: deferredDeviceSearchValue,
     },
     {
@@ -350,6 +366,7 @@ export function EditorTicketsPage() {
       : "") ||
     "Не выбран";
   const sidebarHeight = useSyncedSidebarHeight(editorPaneRef);
+  const infoPanelHeight = useSyncedSidebarHeight(editableFieldsRef);
   const handleSelectTicket = useEditorSearchParamSelection({
     isDirty,
     items: tickets,
@@ -409,9 +426,61 @@ export function EditorTicketsPage() {
       return;
     }
 
+    const assignedStart = toIsoDateTimeValue(formState.assignedStart);
+    if (assignedStart === null) {
+      setFeedback({
+        message: "Плановый старт должен быть корректной датой.",
+        tone: "error",
+      });
+      return;
+    }
+
+    const assignedEnd = toIsoDateTimeValue(formState.assignedEnd);
+    if (assignedEnd === null) {
+      setFeedback({
+        message: "Плановое завершение должно быть корректной датой.",
+        tone: "error",
+      });
+      return;
+    }
+
+    const workstartedAt = toIsoDateTimeValue(formState.workstartedAt);
+    if (workstartedAt === null) {
+      setFeedback({
+        message: "Начало работ должно быть корректной датой.",
+        tone: "error",
+      });
+      return;
+    }
+
+    const workfinishedAt = toIsoDateTimeValue(formState.workfinishedAt);
+    if (workfinishedAt === null) {
+      setFeedback({
+        message: "Завершение работ должно быть корректной датой.",
+        tone: "error",
+      });
+      return;
+    }
+
+    const closedAt = toIsoDateTimeValue(formState.closedAt);
+    if (closedAt === null) {
+      setFeedback({
+        message: "Дата закрытия должна быть корректной.",
+        tone: "error",
+      });
+      return;
+    }
+
     try {
       const updatedTicket = await patchEditorTicket({
-        patch: formState,
+        patch: {
+          ...formState,
+          assignedEnd,
+          assignedStart,
+          closedAt,
+          workfinishedAt,
+          workstartedAt,
+        },
         ticketId: selectedTicketId,
       }).unwrap();
 
@@ -501,15 +570,9 @@ export function EditorTicketsPage() {
                   <EditorNoticeCard message="Обновляем данные тикета..." />
                 ) : null}
 
-                <div className="grid gap-4 md:grid-cols-3">
-                  <SummaryCard label="Статус" value={selectedStatusTitle} />
-                  <SummaryCard label="Клиент" value={selectedClientTitle} />
-                  <SummaryCard label="Исполнитель" value={selectedExecutorTitle} />
-                </div>
-
                 <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-                  <div className="space-y-5 rounded-3xl border border-white/10 bg-white/5 p-5">
-                    <div className="grid gap-5 md:grid-cols-2">
+                  <div ref={editableFieldsRef} className="space-y-5 rounded-3xl border border-white/10 bg-white/5 p-5">
+                    <div className="space-y-5">
                       <EditorFormField label="Статус">
                         <div className="mt-3">
                           <SelectField
@@ -621,7 +684,6 @@ export function EditorTicketsPage() {
                               device: option?.id || "",
                             }));
                           }}
-                          getOptionDescription={(option) => option.clientName?.trim() || ""}
                           getOptionLabel={getDeviceOptionLabel}
                           errorMessage={deviceOptionsError ? "Не удалось загрузить устройства." : ""}
                           searchPlaceholder="Введите название или серийный номер"
@@ -630,7 +692,7 @@ export function EditorTicketsPage() {
                       </div>
                     </EditorFormField>
 
-                    <div className="grid gap-5 md:grid-cols-2">
+                    <div className="space-y-5">
                       <EditorFormField label="Контакт">
                         <div className="mt-3">
                           <AsyncSearchSelect
@@ -713,7 +775,7 @@ export function EditorTicketsPage() {
                       />
                     </EditorFormField>
 
-                    <div className="grid gap-5 md:grid-cols-2">
+                    <div className="space-y-5">
                       <EditorFormField label="Плановый старт">
                         <input
                           type="datetime-local"
@@ -781,16 +843,21 @@ export function EditorTicketsPage() {
                     </div>
                   </div>
 
-                  <aside className="space-y-4 rounded-3xl border border-white/10 bg-slate-950/25 p-5">
-                    <SummaryCard label="Причина" value={selectedReasonTitle} />
-                    <SummaryCard label="Устройство" value={selectedDeviceTitle} />
-                    <SummaryCard label="Отдел" value={selectedDepartmentTitle} />
-                    <SummaryCard label="Контакт" value={selectedContactTitle} />
-                    <SummaryCard
-                      label="Создан"
-                      value={selectedTicket.createdAt ? formatTicketDateTime(selectedTicket.createdAt) : "Не указано"}
-                    />
-                  </aside>
+                  <EditorContextPanel title="Контекст тикета" height={infoPanelHeight}>
+                    <EditorContextSection title="Основное">
+                      <EditorContextItem label="Статус" value={selectedStatusTitle} />
+                      <EditorContextItem label="Клиент" value={selectedClientTitle} />
+                      <EditorContextItem label="Исполнитель" value={selectedExecutorTitle} />
+                      <EditorContextItem label="Причина" value={selectedReasonTitle} />
+                      <EditorContextItem label="Устройство" value={selectedDeviceTitle} />
+                      <EditorContextItem label="Отдел" value={selectedDepartmentTitle} />
+                      <EditorContextItem label="Контакт" value={selectedContactTitle} />
+                      <EditorContextItem
+                        label="Создан"
+                        value={selectedTicket.createdAt ? formatTicketDateTime(selectedTicket.createdAt) : "Не указано"}
+                      />
+                    </EditorContextSection>
+                  </EditorContextPanel>
                 </section>
 
                 {ticketStatusesError || ticketTypesError || ticketReasonsError || departmentsError ? (

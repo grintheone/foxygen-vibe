@@ -13,6 +13,9 @@ import { PageShell } from "../../../shared/ui/page-shell";
 import { StatusMessage } from "../../../shared/ui/status-message";
 import {
   BackButton,
+  EditorContextItem,
+  EditorContextPanel,
+  EditorContextSection,
   editorFieldClassName,
   EditorFormField,
   EditorListError,
@@ -24,7 +27,6 @@ import {
   EditorSearchField,
   EditorSidebar,
   EditorWorkspace,
-  SummaryCard,
   useSyncedSidebarHeight,
 } from "./editor-shared";
 import { useEditorSearchParamSelection, useLoadedEditorRecord, useUnsavedChangesWarning } from "./editor-hooks";
@@ -493,12 +495,6 @@ export function EditorAgreementsPage() {
 
                 {feedback.message ? <StatusMessage feedback={feedback} /> : null}
 
-                <div className="grid gap-4 md:grid-cols-3">
-                  <SummaryCard label="Номер" value={selectedAgreement.number ? `#${selectedAgreement.number}` : "Не указан"} />
-                  <SummaryCard label="Клиент" value={selectedActualClientTitle} />
-                  <SummaryCard label="Устройство" value={selectedDeviceLabel} />
-                </div>
-
                 <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
                   <div className="space-y-5 rounded-3xl border border-white/10 bg-white/5 p-5">
                     <EditorFormField label="Фактический клиент" hint="Основная привязка договора. Поле обязательно.">
@@ -618,64 +614,50 @@ export function EditorAgreementsPage() {
                     </div>
                   </div>
 
-                  <aside className="space-y-4 rounded-3xl border border-white/10 bg-slate-950/35 p-5">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Контекст договора</p>
-                      <div className="mt-4 space-y-3 text-sm text-slate-300">
-                        <p>
-                          <span className="text-slate-500">Номер:</span> {selectedAgreement.number ? `#${selectedAgreement.number}` : "Не указан"}
+                  <EditorContextPanel
+                    title="Контекст договора"
+                    footer={
+                      <>
+                        <p className="text-xs text-slate-500">
+                          Номер договора здесь только для чтения. Карточка меняет связи и служебные поля, не создавая
+                          новый договор.
                         </p>
-                        <p>
-                          <span className="text-slate-500">Клиент:</span> {selectedActualClientTitle}
-                        </p>
-                        <p>
-                          <span className="text-slate-500">Дистрибьютор:</span> {selectedDistributorTitle}
-                        </p>
-                        <p>
-                          <span className="text-slate-500">Устройство:</span> {selectedDeviceLabel}
-                        </p>
-                      </div>
-                    </div>
+                        {actualClientOptionsError || distributorOptionsError ? (
+                          <p className="text-xs text-rose-300">
+                            {typeof actualClientOptionsError?.data === "string"
+                              ? actualClientOptionsError.data
+                              : typeof distributorOptionsError?.data === "string"
+                                ? distributorOptionsError.data
+                                : "Не удалось загрузить список клиентов."}
+                          </p>
+                        ) : null}
+                        {deviceOptionsError ? (
+                          <p className="text-xs text-rose-300">
+                            {typeof deviceOptionsError?.data === "string"
+                              ? deviceOptionsError.data
+                              : "Не удалось загрузить список устройств."}
+                          </p>
+                        ) : null}
+                      </>
+                    }
+                  >
+                    <EditorContextSection title="Основное">
+                      <EditorContextItem
+                        label="Номер"
+                        value={selectedAgreement.number ? `#${selectedAgreement.number}` : "Не указан"}
+                      />
+                      <EditorContextItem label="Клиент" value={selectedActualClientTitle} />
+                      <EditorContextItem label="Дистрибьютор" value={selectedDistributorTitle} />
+                      <EditorContextItem label="Устройство" value={selectedDeviceLabel} />
+                    </EditorContextSection>
 
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Статус</p>
-                      <div className="mt-4 space-y-3 text-sm text-slate-300">
-                        <p>
-                          <span className="text-slate-500">Активность:</span> {formState.isActive ? "Активный" : "Неактивный"}
-                        </p>
-                        <p>
-                          <span className="text-slate-500">Гарантия:</span> {formState.onWarranty ? "Да" : "Нет"}
-                        </p>
-                        <p>
-                          <span className="text-slate-500">Начало:</span> {formatAgreementDateTime(formState.assignedAt)}
-                        </p>
-                        <p>
-                          <span className="text-slate-500">Завершение:</span> {formatAgreementDateTime(formState.finishedAt)}
-                        </p>
-                      </div>
-                    </div>
-
-                    <p className="text-xs text-slate-500">
-                      Номер договора здесь только для чтения. Карточка меняет связи и служебные поля, не создавая новый
-                      договор.
-                    </p>
-                    {actualClientOptionsError || distributorOptionsError ? (
-                      <p className="text-xs text-rose-300">
-                        {typeof actualClientOptionsError?.data === "string"
-                          ? actualClientOptionsError.data
-                          : typeof distributorOptionsError?.data === "string"
-                            ? distributorOptionsError.data
-                          : "Не удалось загрузить список клиентов."}
-                      </p>
-                    ) : null}
-                    {deviceOptionsError ? (
-                      <p className="text-xs text-rose-300">
-                        {typeof deviceOptionsError?.data === "string"
-                          ? deviceOptionsError.data
-                          : "Не удалось загрузить список устройств."}
-                      </p>
-                    ) : null}
-                  </aside>
+                    <EditorContextSection title="Статус">
+                      <EditorContextItem label="Активность" value={formState.isActive ? "Активный" : "Неактивный"} />
+                      <EditorContextItem label="Гарантия" value={formState.onWarranty ? "Да" : "Нет"} />
+                      <EditorContextItem label="Начало" value={formatAgreementDateTime(formState.assignedAt)} />
+                      <EditorContextItem label="Завершение" value={formatAgreementDateTime(formState.finishedAt)} />
+                    </EditorContextSection>
+                  </EditorContextPanel>
                 </section>
 
                 <p className="text-xs text-slate-500">

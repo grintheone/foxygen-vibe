@@ -13,6 +13,9 @@ import { SelectField } from "../../../shared/ui/select-field";
 import { StatusMessage } from "../../../shared/ui/status-message";
 import {
   BackButton,
+  EditorContextItem,
+  EditorContextPanel,
+  EditorContextSection,
   editorFieldClassName,
   EditorFormField,
   EditorListError,
@@ -26,7 +29,6 @@ import {
   editorTextareaClassName,
   EditorSidebar,
   EditorWorkspace,
-  SummaryCard,
   useSyncedSidebarHeight,
 } from "./editor-shared";
 import { useEditorSearchParamSelection, useLoadedEditorRecord, useUnsavedChangesWarning } from "./editor-hooks";
@@ -338,12 +340,6 @@ export function EditorClassificatorsPage() {
 
                 {feedback.message ? <StatusMessage feedback={feedback} /> : null}
 
-                <div className="grid gap-4 md:grid-cols-3">
-                  <SummaryCard label="Устройств" value={selectedClassificator.deviceCount} />
-                  <SummaryCard label="Вложения" value={attachmentItems.length} />
-                  <SummaryCard label="Изображения" value={imageItems.length} />
-                </div>
-
                 <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
                   <div className="space-y-5 rounded-3xl border border-white/10 bg-white/5 p-5">
                     <EditorFormField label="Название">
@@ -454,56 +450,41 @@ export function EditorClassificatorsPage() {
                     </EditorFormField>
                   </div>
 
-                  <aside className="space-y-4 rounded-3xl border border-white/10 bg-slate-950/35 p-5">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Связанные поля</p>
-                      <div className="mt-4 space-y-3 text-sm text-slate-300">
-                        <p>
-                          <span className="text-slate-500">Производитель:</span> {selectedManufacturerTitle}
-                        </p>
-                        <p>
-                          <span className="text-slate-500">Тип исследования:</span> {selectedResearchTypeTitle}
-                        </p>
-                        <p>
-                          <span className="text-slate-500">Связанных устройств:</span> {selectedClassificator.deviceCount}
-                        </p>
-                      </div>
-                    </div>
+                  <EditorContextPanel
+                    title="Контекст классификатора"
+                    footer={
+                      <>
+                        {manufacturersError ? (
+                          <p className="text-xs text-rose-300">
+                            {typeof manufacturersError?.data === "string"
+                              ? manufacturersError.data
+                              : "Не удалось загрузить список производителей."}
+                          </p>
+                        ) : null}
+                        {researchTypesError ? (
+                          <p className="text-xs text-rose-300">
+                            {typeof researchTypesError?.data === "string"
+                              ? researchTypesError.data
+                              : "Не удалось загрузить список типов исследования."}
+                          </p>
+                        ) : null}
+                      </>
+                    }
+                  >
+                    <EditorContextSection title="Основное">
+                      <EditorContextItem label="Производитель" value={selectedManufacturerTitle} />
+                      <EditorContextItem label="Тип исследования" value={selectedResearchTypeTitle} />
+                      <EditorContextItem label="Связанных устройств" value={selectedClassificator.deviceCount} />
+                      <EditorContextItem label="Вложения" value={attachmentItems.length} />
+                      <EditorContextItem label="Изображения" value={imageItems.length} />
+                    </EditorContextSection>
 
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Текущее наполнение</p>
-                      <div className="mt-4 space-y-3 text-sm text-slate-300">
-                        <p>
-                          <span className="text-slate-500">Вложения:</span> {attachmentItems.length}
-                        </p>
-                        <p>
-                          <span className="text-slate-500">Изображения:</span> {imageItems.length}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">JSON превью</p>
-                      <pre className="mt-4 overflow-x-auto rounded-2xl border border-white/10 bg-black/20 p-4 text-xs text-slate-300">
+                    <EditorContextSection title="JSON превью">
+                      <pre className="overflow-x-auto rounded-2xl border border-white/10 bg-black/20 p-4 text-xs text-slate-300">
                         {formState.registrationCertificate}
                       </pre>
-                    </div>
-
-                    {manufacturersError ? (
-                      <p className="text-xs text-rose-300">
-                        {typeof manufacturersError?.data === "string"
-                          ? manufacturersError.data
-                          : "Не удалось загрузить список производителей."}
-                      </p>
-                    ) : null}
-                    {researchTypesError ? (
-                      <p className="text-xs text-rose-300">
-                        {typeof researchTypesError?.data === "string"
-                          ? researchTypesError.data
-                          : "Не удалось загрузить список типов исследования."}
-                      </p>
-                    ) : null}
-                  </aside>
+                    </EditorContextSection>
+                  </EditorContextPanel>
                 </section>
 
                 <p className="text-xs text-slate-500">

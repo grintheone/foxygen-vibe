@@ -133,6 +133,12 @@ type editorDeviceDetailResponse struct {
 	Title             string          `json:"title"`
 }
 
+type editorDeviceLookupResponse struct {
+	ID           string `json:"id"`
+	SerialNumber string `json:"serialNumber"`
+	Title        string `json:"title"`
+}
+
 type editorClassificatorListItemResponse struct {
 	AttachmentCount   int     `json:"attachmentCount"`
 	DeviceCount       int     `json:"deviceCount"`
@@ -740,6 +746,79 @@ func (s *Server) handleEditorDevices(w http.ResponseWriter, r *http.Request) {
 	if err := rows.Err(); err != nil {
 		log.Printf("iterate editor devices failed: %v", err)
 		http.Error(w, "failed to load editor devices", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (s *Server) handleEditorDeviceOptions(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/api/editor/device-options" {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if _, ok := s.requireEditorAccess(w, r); !ok {
+		return
+	}
+
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	rows, err := s.db.Query(ctx, `
+		SELECT
+			d.id,
+			COALESCE(cls.title, ''),
+			COALESCE(d.serial_number, '')
+		FROM devices d
+		LEFT JOIN classificators cls ON cls.id = d.classificator
+		WHERE (
+			$1 = ''
+			OR COALESCE(cls.title, '') ILIKE '%' || $1 || '%'
+			OR COALESCE(d.serial_number, '') ILIKE '%' || $1 || '%'
+		)
+		ORDER BY
+			CASE WHEN COALESCE(cls.title, '') = '' THEN 1 ELSE 0 END ASC,
+			COALESCE(cls.title, '') ASC,
+			CASE WHEN COALESCE(d.serial_number, '') = '' THEN 1 ELSE 0 END ASC,
+			COALESCE(d.serial_number, '') ASC,
+			d.id ASC
+	`, query)
+	if err != nil {
+		log.Printf("query editor device options failed: %v", err)
+		http.Error(w, "failed to load device options", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	response := make([]editorDeviceLookupResponse, 0)
+	for rows.Next() {
+		var id pgtype.UUID
+		var title string
+		var serialNumber string
+
+		if err := rows.Scan(&id, &title, &serialNumber); err != nil {
+			log.Printf("scan editor device option failed: %v", err)
+			http.Error(w, "failed to load device options", http.StatusInternalServerError)
+			return
+		}
+
+		response = append(response, editorDeviceLookupResponse{
+			ID:           uuidToString(id),
+			SerialNumber: serialNumber,
+			Title:        title,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("iterate editor device options failed: %v", err)
+		http.Error(w, "failed to load device options", http.StatusInternalServerError)
 		return
 	}
 

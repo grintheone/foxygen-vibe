@@ -12,6 +12,9 @@ import { SelectField } from "../../../shared/ui/select-field";
 import { StatusMessage } from "../../../shared/ui/status-message";
 import {
   BackButton,
+  EditorContextItem,
+  EditorContextPanel,
+  EditorContextSection,
   editorFieldClassName,
   EditorFormField,
   EditorListError,
@@ -25,7 +28,6 @@ import {
   EditorSidebar,
   editorTextareaClassName,
   EditorWorkspace,
-  SummaryCard,
   useSyncedSidebarHeight,
 } from "./editor-shared";
 import { useEditorSearchParamSelection, useLoadedEditorRecord, useUnsavedChangesWarning } from "./editor-hooks";
@@ -305,12 +307,6 @@ export function EditorDevicesPage() {
 
                 {feedback.message ? <StatusMessage feedback={feedback} /> : null}
 
-                <div className="grid gap-4 md:grid-cols-3">
-                  <SummaryCard label="Классификатор" value={selectedClassificatorTitle} />
-                  <SummaryCard label="Клиент" value={selectedClientTitle} />
-                  <SummaryCard label="Договор" value={selectedAgreementTitle} />
-                </div>
-
                 <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
                   <div className="space-y-5 rounded-3xl border border-white/10 bg-white/5 p-5">
                     <EditorFormField label="Классификатор" hint="Здесь меняется отображаемое название устройства.">
@@ -374,58 +370,50 @@ export function EditorDevicesPage() {
                     </div>
                   </div>
 
-                  <aside className="space-y-4 rounded-3xl border border-white/10 bg-slate-950/35 p-5">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Текущий контекст</p>
-                      <div className="mt-4 space-y-3 text-sm text-slate-300">
-                        <p>
-                          <span className="text-slate-500">Клиент:</span> {selectedClientTitle}
+                  <EditorContextPanel
+                    title="Контекст устройства"
+                    footer={
+                      <>
+                        <p className="text-xs text-slate-500">
+                          Карточка изменяет только базовые поля устройства. Клиент и договор здесь показываются как
+                          справочный контекст.
                         </p>
-                        <p>
-                          <span className="text-slate-500">Адрес:</span> {selectedDevice.clientAddress?.trim() || "Не указан"}
-                        </p>
-                        <p>
-                          <span className="text-slate-500">Договор:</span> {selectedAgreementTitle}
-                        </p>
-                        <p>
-                          <span className="text-slate-500">Статус договора:</span>{" "}
-                          {selectedDevice.agreement
+                        {classificatorsError ? (
+                          <p className="text-xs text-rose-300">
+                            {typeof classificatorsError?.data === "string"
+                              ? classificatorsError.data
+                              : "Не удалось загрузить список классификаторов."}
+                          </p>
+                        ) : null}
+                      </>
+                    }
+                  >
+                    <EditorContextSection title="Основное">
+                      <EditorContextItem label="Классификатор" value={selectedClassificatorTitle} />
+                      <EditorContextItem label="Клиент" value={selectedClientTitle} />
+                      <EditorContextItem label="Адрес" value={selectedDevice.clientAddress?.trim() || "Не указан"} />
+                      <EditorContextItem label="Договор" value={selectedAgreementTitle} />
+                      <EditorContextItem
+                        label="Статус договора"
+                        value={
+                          selectedDevice.agreement
                             ? selectedDevice.isActiveAgreement
                               ? "Активный"
                               : "Неактивный"
-                            : "Не найден"}
-                        </p>
-                        <p>
-                          <span className="text-slate-500">Гарантия:</span>{" "}
-                          {selectedDevice.agreement ? (selectedDevice.onWarranty ? "Да" : "Нет") : "Не указана"}
-                        </p>
-                      </div>
-                    </div>
+                            : "Не найден"
+                        }
+                      />
+                      <EditorContextItem
+                        label="Гарантия"
+                        value={selectedDevice.agreement ? (selectedDevice.onWarranty ? "Да" : "Нет") : "Не указана"}
+                      />
+                    </EditorContextSection>
 
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Служебные флаги</p>
-                      <div className="mt-4 space-y-3 text-sm text-slate-300">
-                        <p>
-                          <span className="text-slate-500">LIS:</span> {formState.connectedToLis ? "Подключено" : "Не подключено"}
-                        </p>
-                        <p>
-                          <span className="text-slate-500">Состояние:</span> {formState.isUsed ? "Б/У" : "Новое"}
-                        </p>
-                      </div>
-                    </div>
-
-                    <p className="text-xs text-slate-500">
-                      Карточка изменяет только базовые поля устройства. Клиент и договор здесь показываются как
-                      справочный контекст.
-                    </p>
-                    {classificatorsError ? (
-                      <p className="text-xs text-rose-300">
-                        {typeof classificatorsError?.data === "string"
-                          ? classificatorsError.data
-                          : "Не удалось загрузить список классификаторов."}
-                      </p>
-                    ) : null}
-                  </aside>
+                    <EditorContextSection title="Служебные флаги">
+                      <EditorContextItem label="LIS" value={formState.connectedToLis ? "Подключено" : "Не подключено"} />
+                      <EditorContextItem label="Состояние" value={formState.isUsed ? "Б/У" : "Новое"} />
+                    </EditorContextSection>
+                  </EditorContextPanel>
                 </section>
 
                 <p className="text-xs text-slate-500">

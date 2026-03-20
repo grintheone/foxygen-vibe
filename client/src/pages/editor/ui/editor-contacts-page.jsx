@@ -12,6 +12,9 @@ import { SelectField } from "../../../shared/ui/select-field";
 import { StatusMessage } from "../../../shared/ui/status-message";
 import {
   BackButton,
+  EditorContextItem,
+  EditorContextPanel,
+  EditorContextSection,
   editorFieldClassName,
   EditorFormField,
   EditorListError,
@@ -24,7 +27,6 @@ import {
   editorSelectClassName,
   EditorSidebar,
   EditorWorkspace,
-  SummaryCard,
   useSyncedSidebarHeight,
 } from "./editor-shared";
 import { useEditorSearchParamSelection, useLoadedEditorRecord, useUnsavedChangesWarning } from "./editor-hooks";
@@ -263,12 +265,6 @@ export function EditorContactsPage() {
 
                 {feedback.message ? <StatusMessage feedback={feedback} /> : null}
 
-                <div className="grid gap-4 md:grid-cols-3">
-                  <SummaryCard label="Клиент" value={selectedClientTitle} />
-                  <SummaryCard label="Телефон" value={formState.phone?.trim() || "Не указан"} />
-                  <SummaryCard label="Email" value={formState.email?.trim() || "Не указан"} />
-                </div>
-
                 <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
                   <div className="space-y-5 rounded-3xl border border-white/10 bg-white/5 p-5">
                     <EditorFormField label="Имя">
@@ -335,33 +331,30 @@ export function EditorContactsPage() {
                     </EditorFormField>
                   </div>
 
-                  <aside className="space-y-4 rounded-3xl border border-white/10 bg-slate-950/35 p-5">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Связанные поля</p>
-                      <div className="mt-4 space-y-3 text-sm text-slate-300">
-                        <p>
-                          <span className="text-slate-500">Клиент:</span> {selectedClientTitle}
+                  <EditorContextPanel
+                    title="Контекст контакта"
+                    footer={
+                      <>
+                        <p className="text-xs text-slate-500">
+                          Эта карточка покрывает базовые поля контакта и его привязку к клиенту.
                         </p>
-                        <p>
-                          <span className="text-slate-500">Телефон:</span> {formState.phone?.trim() || "Не указан"}
-                        </p>
-                        <p>
-                          <span className="text-slate-500">Email:</span> {formState.email?.trim() || "Не указан"}
-                        </p>
-                      </div>
-                    </div>
-
-                    <p className="text-xs text-slate-500">
-                      Эта карточка покрывает базовые поля контакта и его привязку к клиенту.
-                    </p>
-                    {clientOptionsError ? (
-                      <p className="text-xs text-rose-300">
-                        {typeof clientOptionsError?.data === "string"
-                          ? clientOptionsError.data
-                          : "Не удалось загрузить список клиентов."}
-                      </p>
-                    ) : null}
-                  </aside>
+                        {clientOptionsError ? (
+                          <p className="text-xs text-rose-300">
+                            {typeof clientOptionsError?.data === "string"
+                              ? clientOptionsError.data
+                              : "Не удалось загрузить список клиентов."}
+                          </p>
+                        ) : null}
+                      </>
+                    }
+                  >
+                    <EditorContextSection title="Основное">
+                      <EditorContextItem label="Клиент" value={selectedClientTitle} />
+                      <EditorContextItem label="Должность" value={formState.position?.trim() || "Не указана"} />
+                      <EditorContextItem label="Телефон" value={formState.phone?.trim() || "Не указан"} />
+                      <EditorContextItem label="Email" value={formState.email?.trim() || "Не указан"} />
+                    </EditorContextSection>
+                  </EditorContextPanel>
                 </section>
 
                 <p className="text-xs text-slate-500">

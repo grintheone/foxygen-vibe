@@ -157,6 +157,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/editor/classificators/", s.handleEditorClassificatorByID)
 	mux.HandleFunc("/api/editor/contacts", s.handleEditorContacts)
 	mux.HandleFunc("/api/editor/contacts/", s.handleEditorContactByID)
+	mux.HandleFunc("/api/editor/device-options", s.handleEditorDeviceOptions)
 	mux.HandleFunc("/api/editor/devices", s.handleEditorDevices)
 	mux.HandleFunc("/api/editor/devices/", s.handleEditorDeviceByID)
 	mux.HandleFunc("/api/editor/tickets", s.handleEditorTickets)

@@ -118,6 +118,40 @@ export function SummaryCard({ label, value }) {
   );
 }
 
+export function EditorContextPanel({ children, footer = null, height = null, title }) {
+  return (
+    <aside
+      style={height ? { height: `${height}px` } : undefined}
+      className="self-start rounded-3xl border border-white/10 bg-slate-950/35 p-5"
+    >
+      <div className="space-y-5 lg:sticky lg:top-6">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">{title}</p>
+        </div>
+        {children}
+        {footer}
+      </div>
+    </aside>
+  );
+}
+
+export function EditorContextSection({ children, title }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">{title}</p>
+      <div className="mt-4 space-y-3 text-sm text-slate-300">{children}</div>
+    </div>
+  );
+}
+
+export function EditorContextItem({ label, value }) {
+  return (
+    <p>
+      <span className="text-slate-500">{label}:</span> {value}
+    </p>
+  );
+}
+
 export function EditorFormField({ label, children, hint }) {
   return (
     <label className="block">
