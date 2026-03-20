@@ -123,38 +123,32 @@ export function EditorPage() {
         <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
           <EditorEntityCard
             title="Клиенты"
-            badge="Готово"
-            description="Редактирование названия, адреса, региона и JSON-поля location."
+            description="Название, адрес, регион и координаты клиента."
             onClick={() => navigate(routePaths.editorClients())}
           />
           <EditorEntityCard
             title="Договоры"
-            badge="Готово"
-            description="Редактирование клиента, дистрибьютора, устройства, статуса, гарантии и дат договора."
+            description="Фактический клиент, дистрибьютор, оборудование, даты, активность и гарантия."
             onClick={() => navigate(routePaths.editorAgreements())}
           />
           <EditorEntityCard
             title="Классификаторы"
-            badge="Готово"
-            description="Редактирование названия, производителя, типа исследования, JSON-документов и вложений."
+            description="Название, производитель, тип исследования и регистрационное удостоверение."
             onClick={() => navigate(routePaths.editorClassificators())}
           />
           <EditorEntityCard
             title="Контакты"
-            badge="Готово"
             description="Редактирование имени, должности, телефона, email и привязки к клиенту."
             onClick={() => navigate(routePaths.editorContacts())}
           />
           <EditorEntityCard
-            title="Устройства"
-            badge="Готово"
-            description="Редактирование классификатора, серийного номера, JSON-параметров и служебных флагов."
+            title="Оборудование"
+            description="Классификатор, серийный номер и служебные флаги оборудования."
             onClick={() => navigate(routePaths.editorDevices())}
           />
           <EditorEntityCard
             title="Тикеты"
-            badge="Готово"
-            description="Редактирование статуса, причины, исполнителя, клиента, устройства, сроков и итогового результата."
+            description="Статус, причина, тип, отдел, клиент, оборудование, контакт, исполнитель, описание, результат, даты и флаги."
             onClick={() => navigate(routePaths.editorTickets())}
           />
         </section>
