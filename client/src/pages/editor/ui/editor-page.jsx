@@ -30,6 +30,11 @@ const EditorDevicesPage = lazy(() =>
     default: module.EditorDevicesPage,
   })),
 );
+const EditorTicketsPage = lazy(() =>
+  import("./editor-tickets-page").then((module) => ({
+    default: module.EditorTicketsPage,
+  })),
+);
 
 function EditorPageLoader({ message }) {
   return (
@@ -98,12 +103,20 @@ export function EditorPage() {
     );
   }
 
+  if (entity === "tickets") {
+    return (
+      <Suspense fallback={<EditorPageLoader message="Загружаем редактор тикетов..." />}>
+        <EditorTicketsPage />
+      </Suspense>
+    );
+  }
+
   return (
     <PageShell>
       <section className="w-full space-y-6">
         <EditorPageHeader
           title="Выбор сущности"
-          description="Выберите, что именно хотите редактировать. Сейчас доступны рабочие срезы для клиентов, договоров, классификаторов, контактов и устройств."
+          description="Выберите, что именно хотите редактировать. Сейчас доступны рабочие срезы для клиентов, договоров, классификаторов, контактов, устройств и тикетов."
           action={<DashboardButton onClick={handleOpenDashboard} />}
         />
 
@@ -137,6 +150,12 @@ export function EditorPage() {
             badge="Готово"
             description="Редактирование классификатора, серийного номера, JSON-параметров и служебных флагов."
             onClick={() => navigate(routePaths.editorDevices())}
+          />
+          <EditorEntityCard
+            title="Тикеты"
+            badge="Готово"
+            description="Редактирование статуса, причины, исполнителя, клиента, устройства, сроков и итогового результата."
+            onClick={() => navigate(routePaths.editorTickets())}
           />
         </section>
       </section>

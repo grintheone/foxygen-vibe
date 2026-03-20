@@ -159,6 +159,58 @@ type editorClassificatorDetailResponse struct {
 	Title                   string          `json:"title"`
 }
 
+type editorAccountListItemResponse struct {
+	DepartmentTitle string `json:"departmentTitle"`
+	ID              string `json:"id"`
+	Title           string `json:"title"`
+	Username        string `json:"username"`
+}
+
+type editorTicketListItemResponse struct {
+	ClientName         string  `json:"clientName"`
+	CreatedAt          *string `json:"createdAt"`
+	DeviceSerialNumber string  `json:"deviceSerialNumber"`
+	DeviceTitle        string  `json:"deviceTitle"`
+	ID                 string  `json:"id"`
+	Number             int32   `json:"number"`
+	ResolvedReason     string  `json:"resolvedReason"`
+	Status             string  `json:"status"`
+	StatusTitle        string  `json:"statusTitle"`
+	Urgent             bool    `json:"urgent"`
+}
+
+type editorTicketDetailResponse struct {
+	AssignedEnd        *string `json:"assignedEnd"`
+	AssignedStart      *string `json:"assignedStart"`
+	Client             *string `json:"client"`
+	ClientName         string  `json:"clientName"`
+	ClosedAt           *string `json:"closedAt"`
+	ContactName        string  `json:"contactName"`
+	ContactPerson      *string `json:"contactPerson"`
+	CreatedAt          *string `json:"createdAt"`
+	Department         *string `json:"department"`
+	DepartmentTitle    string  `json:"departmentTitle"`
+	Description        string  `json:"description"`
+	Device             *string `json:"device"`
+	DeviceSerialNumber string  `json:"deviceSerialNumber"`
+	DeviceTitle        string  `json:"deviceTitle"`
+	DoubleSigned       bool    `json:"doubleSigned"`
+	Executor           *string `json:"executor"`
+	ExecutorName       string  `json:"executorName"`
+	ID                 string  `json:"id"`
+	Number             int32   `json:"number"`
+	Reason             string  `json:"reason"`
+	ResolvedReason     string  `json:"resolvedReason"`
+	Result             string  `json:"result"`
+	Status             string  `json:"status"`
+	StatusTitle        string  `json:"statusTitle"`
+	TicketType         *string `json:"ticketType"`
+	TicketTypeTitle    string  `json:"ticketTypeTitle"`
+	Urgent             bool    `json:"urgent"`
+	WorkfinishedAt     *string `json:"workfinishedAt"`
+	WorkstartedAt      *string `json:"workstartedAt"`
+}
+
 func (s *Server) handleEditorAgreements(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/api/editor/agreements" {
 		http.NotFound(w, r)
@@ -694,6 +746,342 @@ func (s *Server) handleEditorDevices(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, response)
 }
 
+func (s *Server) handleEditorTickets(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/api/editor/tickets" {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if _, ok := s.requireEditorAccess(w, r); !ok {
+		return
+	}
+
+	limit := defaultEditorClientListLimit
+	if rawLimit := strings.TrimSpace(r.URL.Query().Get("limit")); rawLimit != "" {
+		parsedLimit, err := strconv.Atoi(rawLimit)
+		if err != nil || parsedLimit <= 0 {
+			http.Error(w, "limit must be a positive integer", http.StatusBadRequest)
+			return
+		}
+		if parsedLimit > maxEditorClientListLimit {
+			parsedLimit = maxEditorClientListLimit
+		}
+		limit = parsedLimit
+	}
+
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	rows, err := s.db.Query(ctx, `
+		SELECT
+			t.id,
+			t.number,
+			COALESCE(ts.type, COALESCE(t.status, '')),
+			COALESCE(ts.title, ''),
+			COALESCE(
+				NULLIF(
+					CASE
+						WHEN t.status = 'assigned' THEN tr.future
+						WHEN t.status = 'worksDone' THEN tr.past
+						ELSE tr.present
+					END,
+					''
+				),
+				NULLIF(tr.title, ''),
+				'Не указано'
+			) AS resolved_reason,
+			COALESCE(c.title, ''),
+			COALESCE(cls.title, ''),
+			COALESCE(d.serial_number, ''),
+			COALESCE(t.urgent, FALSE),
+			t.created_at
+		FROM tickets t
+		LEFT JOIN ticket_statuses ts ON ts.type = t.status
+		LEFT JOIN ticket_reasons tr ON tr.id = t.reason
+		LEFT JOIN clients c ON c.id = t.client
+		LEFT JOIN devices d ON d.id = t.device
+		LEFT JOIN classificators cls ON cls.id = d.classificator
+		WHERE (
+			$1 = ''
+			OR t.number::text ILIKE '%' || $1 || '%'
+			OR COALESCE(ts.title, '') ILIKE '%' || $1 || '%'
+			OR COALESCE(tr.title, '') ILIKE '%' || $1 || '%'
+			OR COALESCE(c.title, '') ILIKE '%' || $1 || '%'
+			OR COALESCE(cls.title, '') ILIKE '%' || $1 || '%'
+			OR COALESCE(d.serial_number, '') ILIKE '%' || $1 || '%'
+			OR COALESCE(t.description, '') ILIKE '%' || $1 || '%'
+		)
+		ORDER BY
+			t.number DESC,
+			t.created_at DESC NULLS LAST,
+			t.id ASC
+		LIMIT $2
+	`, query, limit)
+	if err != nil {
+		log.Printf("query editor tickets failed: %v", err)
+		http.Error(w, "failed to load editor tickets", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	response := make([]editorTicketListItemResponse, 0)
+	for rows.Next() {
+		var (
+			id                 pgtype.UUID
+			number             pgtype.Int4
+			status             string
+			statusTitle        string
+			resolvedReason     string
+			clientName         string
+			deviceTitle        string
+			deviceSerialNumber string
+			urgent             bool
+			createdAt          pgtype.Timestamp
+		)
+
+		if err := rows.Scan(
+			&id,
+			&number,
+			&status,
+			&statusTitle,
+			&resolvedReason,
+			&clientName,
+			&deviceTitle,
+			&deviceSerialNumber,
+			&urgent,
+			&createdAt,
+		); err != nil {
+			log.Printf("scan editor ticket failed: %v", err)
+			http.Error(w, "failed to load editor tickets", http.StatusInternalServerError)
+			return
+		}
+
+		response = append(response, editorTicketListItemResponse{
+			ClientName:         clientName,
+			CreatedAt:          timestampToRFC3339(createdAt),
+			DeviceSerialNumber: deviceSerialNumber,
+			DeviceTitle:        deviceTitle,
+			ID:                 uuidToString(id),
+			Number:             number.Int32,
+			ResolvedReason:     resolvedReason,
+			Status:             status,
+			StatusTitle:        statusTitle,
+			Urgent:             urgent,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("iterate editor tickets failed: %v", err)
+		http.Error(w, "failed to load editor tickets", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (s *Server) handleEditorAccounts(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/api/editor/accounts" {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if _, ok := s.requireEditorAccess(w, r); !ok {
+		return
+	}
+
+	limit := defaultEditorClientListLimit
+	if rawLimit := strings.TrimSpace(r.URL.Query().Get("limit")); rawLimit != "" {
+		parsedLimit, err := strconv.Atoi(rawLimit)
+		if err != nil || parsedLimit <= 0 {
+			http.Error(w, "limit must be a positive integer", http.StatusBadRequest)
+			return
+		}
+		if parsedLimit > maxEditorClientListLimit {
+			parsedLimit = maxEditorClientListLimit
+		}
+		limit = parsedLimit
+	}
+
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	rows, err := s.db.Query(ctx, `
+		SELECT
+			u.user_id,
+			TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))) AS full_name,
+			a.username,
+			COALESCE(d.title, '')
+		FROM users u
+		JOIN accounts a ON a.user_id = u.user_id
+		LEFT JOIN departments d ON d.id = u.department
+		WHERE (
+			$1 = ''
+			OR TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))) ILIKE '%' || $1 || '%'
+			OR a.username::text ILIKE '%' || $1 || '%'
+			OR COALESCE(d.title, '') ILIKE '%' || $1 || '%'
+		)
+		ORDER BY
+			CASE WHEN TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))) = '' THEN 1 ELSE 0 END ASC,
+			TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))) ASC,
+			a.username ASC,
+			u.user_id ASC
+		LIMIT $2
+	`, query, limit)
+	if err != nil {
+		log.Printf("query editor accounts failed: %v", err)
+		http.Error(w, "failed to load editor accounts", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	response := make([]editorAccountListItemResponse, 0)
+	for rows.Next() {
+		var (
+			id              pgtype.UUID
+			title           string
+			username        string
+			departmentTitle string
+		)
+
+		if err := rows.Scan(&id, &title, &username, &departmentTitle); err != nil {
+			log.Printf("scan editor account failed: %v", err)
+			http.Error(w, "failed to load editor accounts", http.StatusInternalServerError)
+			return
+		}
+
+		response = append(response, editorAccountListItemResponse{
+			DepartmentTitle: departmentTitle,
+			ID:              uuidToString(id),
+			Title:           title,
+			Username:        username,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("iterate editor accounts failed: %v", err)
+		http.Error(w, "failed to load editor accounts", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (s *Server) handleEditorTicketStatuses(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/api/editor/ticket-statuses" {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if _, ok := s.requireEditorAccess(w, r); !ok {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	rows, err := s.db.Query(ctx, `
+		SELECT COALESCE(type, ''), COALESCE(title, '')
+		FROM ticket_statuses
+		ORDER BY title ASC, type ASC
+	`)
+	if err != nil {
+		log.Printf("query editor ticket statuses failed: %v", err)
+		http.Error(w, "failed to load ticket statuses", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	response := make([]editorLookupResponse, 0)
+	for rows.Next() {
+		var id string
+		var title string
+
+		if err := rows.Scan(&id, &title); err != nil {
+			log.Printf("scan editor ticket status failed: %v", err)
+			http.Error(w, "failed to load ticket statuses", http.StatusInternalServerError)
+			return
+		}
+
+		response = append(response, editorLookupResponse{ID: id, Title: title})
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("iterate editor ticket statuses failed: %v", err)
+		http.Error(w, "failed to load ticket statuses", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (s *Server) handleEditorTicketTypes(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/api/editor/ticket-types" {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if _, ok := s.requireEditorAccess(w, r); !ok {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	rows, err := s.db.Query(ctx, `
+		SELECT COALESCE(type, ''), COALESCE(title, '')
+		FROM ticket_types
+		ORDER BY title ASC, type ASC
+	`)
+	if err != nil {
+		log.Printf("query editor ticket types failed: %v", err)
+		http.Error(w, "failed to load ticket types", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	response := make([]editorLookupResponse, 0)
+	for rows.Next() {
+		var id string
+		var title string
+
+		if err := rows.Scan(&id, &title); err != nil {
+			log.Printf("scan editor ticket type failed: %v", err)
+			http.Error(w, "failed to load ticket types", http.StatusInternalServerError)
+			return
+		}
+
+		response = append(response, editorLookupResponse{ID: id, Title: title})
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("iterate editor ticket types failed: %v", err)
+		http.Error(w, "failed to load ticket types", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
 func (s *Server) handleEditorClassificators(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/api/editor/classificators" {
 		http.NotFound(w, r)
@@ -1011,6 +1399,33 @@ func (s *Server) handleEditorDeviceByID(w http.ResponseWriter, r *http.Request) 
 		s.handleEditorDeviceDetail(w, r, deviceID)
 	case http.MethodPatch:
 		s.handleEditorDevicePatch(w, r, deviceID)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *Server) handleEditorTicketByID(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireEditorAccess(w, r); !ok {
+		return
+	}
+
+	ticketPath := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/editor/tickets/"), "/")
+	if ticketPath == "" || strings.Contains(ticketPath, "/") {
+		http.NotFound(w, r)
+		return
+	}
+
+	var ticketID pgtype.UUID
+	if err := ticketID.Scan(ticketPath); err != nil {
+		http.Error(w, "invalid ticket id", http.StatusBadRequest)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		s.handleEditorTicketDetail(w, r, ticketID)
+	case http.MethodPatch:
+		s.handleEditorTicketPatch(w, r, ticketID)
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -1615,6 +2030,24 @@ func (s *Server) handleEditorDeviceDetail(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, response)
 }
 
+func (s *Server) handleEditorTicketDetail(w http.ResponseWriter, r *http.Request, ticketID pgtype.UUID) {
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	response, found, err := s.loadEditorTicketDetail(ctx, ticketID)
+	if err != nil {
+		log.Printf("load editor ticket detail failed: %v", err)
+		http.Error(w, "failed to load ticket", http.StatusInternalServerError)
+		return
+	}
+	if !found {
+		http.Error(w, "ticket not found", http.StatusNotFound)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
 func (s *Server) handleEditorDevicePatch(w http.ResponseWriter, r *http.Request, deviceID pgtype.UUID) {
 	type patchEditorDeviceRequest struct {
 		Classificator  string `json:"classificator"`
@@ -1692,6 +2125,303 @@ func (s *Server) handleEditorDevicePatch(w http.ResponseWriter, r *http.Request,
 	}
 	if !found {
 		http.Error(w, "device not found", http.StatusNotFound)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (s *Server) handleEditorTicketPatch(w http.ResponseWriter, r *http.Request, ticketID pgtype.UUID) {
+	type patchEditorTicketRequest struct {
+		AssignedEnd    string `json:"assignedEnd"`
+		AssignedStart  string `json:"assignedStart"`
+		Client         string `json:"client"`
+		ClosedAt       string `json:"closedAt"`
+		ContactPerson  string `json:"contactPerson"`
+		Department     string `json:"department"`
+		Description    string `json:"description"`
+		Device         string `json:"device"`
+		DoubleSigned   bool   `json:"doubleSigned"`
+		Executor       string `json:"executor"`
+		Reason         string `json:"reason"`
+		Result         string `json:"result"`
+		Status         string `json:"status"`
+		TicketType     string `json:"ticketType"`
+		Urgent         bool   `json:"urgent"`
+		WorkfinishedAt string `json:"workfinishedAt"`
+		WorkstartedAt  string `json:"workstartedAt"`
+	}
+
+	defer r.Body.Close()
+
+	var input patchEditorTicketRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	input.AssignedEnd = strings.TrimSpace(input.AssignedEnd)
+	input.AssignedStart = strings.TrimSpace(input.AssignedStart)
+	input.Client = strings.TrimSpace(input.Client)
+	input.ClosedAt = strings.TrimSpace(input.ClosedAt)
+	input.ContactPerson = strings.TrimSpace(input.ContactPerson)
+	input.Department = strings.TrimSpace(input.Department)
+	input.Description = strings.TrimSpace(input.Description)
+	input.Device = strings.TrimSpace(input.Device)
+	input.Executor = strings.TrimSpace(input.Executor)
+	input.Reason = strings.TrimSpace(input.Reason)
+	input.Result = strings.TrimSpace(input.Result)
+	input.Status = strings.TrimSpace(input.Status)
+	input.TicketType = strings.TrimSpace(input.TicketType)
+	input.WorkfinishedAt = strings.TrimSpace(input.WorkfinishedAt)
+	input.WorkstartedAt = strings.TrimSpace(input.WorkstartedAt)
+
+	if input.Status == "" {
+		http.Error(w, "status is required", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	statusExists, err := s.editorTicketStatusExistsByID(ctx, input.Status)
+	if err != nil {
+		log.Printf("validate editor ticket status failed: %v", err)
+		http.Error(w, "failed to update ticket", http.StatusInternalServerError)
+		return
+	}
+	if !statusExists {
+		http.Error(w, "ticket status not found", http.StatusBadRequest)
+		return
+	}
+
+	var clientValue any = nil
+	if input.Client != "" {
+		var clientID pgtype.UUID
+		if err := clientID.Scan(input.Client); err != nil {
+			http.Error(w, "client must be a valid UUID", http.StatusBadRequest)
+			return
+		}
+
+		clientExists, err := s.editorClientExistsByID(ctx, clientID)
+		if err != nil {
+			log.Printf("validate editor ticket client failed: %v", err)
+			http.Error(w, "failed to update ticket", http.StatusInternalServerError)
+			return
+		}
+		if !clientExists {
+			http.Error(w, "client not found", http.StatusBadRequest)
+			return
+		}
+
+		clientValue = clientID
+	}
+
+	var deviceValue any = nil
+	if input.Device != "" {
+		var deviceID pgtype.UUID
+		if err := deviceID.Scan(input.Device); err != nil {
+			http.Error(w, "device must be a valid UUID", http.StatusBadRequest)
+			return
+		}
+
+		deviceExists, err := s.editorDeviceExistsByID(ctx, deviceID)
+		if err != nil {
+			log.Printf("validate editor ticket device failed: %v", err)
+			http.Error(w, "failed to update ticket", http.StatusInternalServerError)
+			return
+		}
+		if !deviceExists {
+			http.Error(w, "device not found", http.StatusBadRequest)
+			return
+		}
+
+		deviceValue = deviceID
+	}
+
+	var departmentValue any = nil
+	if input.Department != "" {
+		var departmentID pgtype.UUID
+		if err := departmentID.Scan(input.Department); err != nil {
+			http.Error(w, "department must be a valid UUID", http.StatusBadRequest)
+			return
+		}
+
+		departmentExists, err := s.editorDepartmentExistsByID(ctx, departmentID)
+		if err != nil {
+			log.Printf("validate editor ticket department failed: %v", err)
+			http.Error(w, "failed to update ticket", http.StatusInternalServerError)
+			return
+		}
+		if !departmentExists {
+			http.Error(w, "department not found", http.StatusBadRequest)
+			return
+		}
+
+		departmentValue = departmentID
+	}
+
+	var contactValue any = nil
+	if input.ContactPerson != "" {
+		var contactID pgtype.UUID
+		if err := contactID.Scan(input.ContactPerson); err != nil {
+			http.Error(w, "contactPerson must be a valid UUID", http.StatusBadRequest)
+			return
+		}
+
+		contactExists, err := s.editorContactExistsByID(ctx, contactID)
+		if err != nil {
+			log.Printf("validate editor ticket contact failed: %v", err)
+			http.Error(w, "failed to update ticket", http.StatusInternalServerError)
+			return
+		}
+		if !contactExists {
+			http.Error(w, "contact not found", http.StatusBadRequest)
+			return
+		}
+
+		contactValue = contactID
+	}
+
+	var executorValue any = nil
+	if input.Executor != "" {
+		var executorID pgtype.UUID
+		if err := executorID.Scan(input.Executor); err != nil {
+			http.Error(w, "executor must be a valid UUID", http.StatusBadRequest)
+			return
+		}
+
+		accountExists, err := s.editorAccountExistsByID(ctx, executorID)
+		if err != nil {
+			log.Printf("validate editor ticket executor failed: %v", err)
+			http.Error(w, "failed to update ticket", http.StatusInternalServerError)
+			return
+		}
+		if !accountExists {
+			http.Error(w, "executor not found", http.StatusBadRequest)
+			return
+		}
+
+		executorValue = executorID
+	}
+
+	var reasonValue any = nil
+	if input.Reason != "" {
+		reasonExists, err := s.editorTicketReasonExistsByID(ctx, input.Reason)
+		if err != nil {
+			log.Printf("validate editor ticket reason failed: %v", err)
+			http.Error(w, "failed to update ticket", http.StatusInternalServerError)
+			return
+		}
+		if !reasonExists {
+			http.Error(w, "ticket reason not found", http.StatusBadRequest)
+			return
+		}
+
+		reasonValue = input.Reason
+	}
+
+	var ticketTypeValue any = nil
+	if input.TicketType != "" {
+		ticketTypeExists, err := s.editorTicketTypeExistsByID(ctx, input.TicketType)
+		if err != nil {
+			log.Printf("validate editor ticket type failed: %v", err)
+			http.Error(w, "failed to update ticket", http.StatusInternalServerError)
+			return
+		}
+		if !ticketTypeExists {
+			http.Error(w, "ticket type not found", http.StatusBadRequest)
+			return
+		}
+
+		ticketTypeValue = input.TicketType
+	}
+
+	assignedStartValue, err := parseOptionalEditorTimestamp(input.AssignedStart)
+	if err != nil {
+		http.Error(w, "assignedStart must be a valid date or ISO timestamp", http.StatusBadRequest)
+		return
+	}
+
+	assignedEndValue, err := parseOptionalEditorTimestamp(input.AssignedEnd)
+	if err != nil {
+		http.Error(w, "assignedEnd must be a valid date or ISO timestamp", http.StatusBadRequest)
+		return
+	}
+
+	if assignedStartTime, ok := assignedStartValue.(time.Time); ok {
+		if assignedEndTime, ok := assignedEndValue.(time.Time); ok && assignedStartTime.After(assignedEndTime) {
+			http.Error(w, "assignedEnd must be greater than or equal to assignedStart", http.StatusBadRequest)
+			return
+		}
+	}
+
+	workstartedAtValue, err := parseOptionalEditorTimestamp(input.WorkstartedAt)
+	if err != nil {
+		http.Error(w, "workstartedAt must be a valid date or ISO timestamp", http.StatusBadRequest)
+		return
+	}
+
+	workfinishedAtValue, err := parseOptionalEditorTimestamp(input.WorkfinishedAt)
+	if err != nil {
+		http.Error(w, "workfinishedAt must be a valid date or ISO timestamp", http.StatusBadRequest)
+		return
+	}
+
+	if workstartedAtTime, ok := workstartedAtValue.(time.Time); ok {
+		if workfinishedAtTime, ok := workfinishedAtValue.(time.Time); ok && workstartedAtTime.After(workfinishedAtTime) {
+			http.Error(w, "workfinishedAt must be greater than or equal to workstartedAt", http.StatusBadRequest)
+			return
+		}
+	}
+
+	closedAtValue, err := parseOptionalEditorTimestamp(input.ClosedAt)
+	if err != nil {
+		http.Error(w, "closedAt must be a valid date or ISO timestamp", http.StatusBadRequest)
+		return
+	}
+
+	rowsAffected, err := s.updateEditorTicketRecord(
+		ctx,
+		ticketID,
+		clientValue,
+		deviceValue,
+		ticketTypeValue,
+		departmentValue,
+		reasonValue,
+		contactValue,
+		executorValue,
+		input.Status,
+		input.Description,
+		input.Result,
+		input.Urgent,
+		input.DoubleSigned,
+		assignedStartValue,
+		assignedEndValue,
+		workstartedAtValue,
+		workfinishedAtValue,
+		closedAtValue,
+	)
+	if err != nil {
+		log.Printf("update editor ticket failed: %v", err)
+		http.Error(w, "failed to update ticket", http.StatusInternalServerError)
+		return
+	}
+	if rowsAffected == 0 {
+		http.Error(w, "ticket not found", http.StatusNotFound)
+		return
+	}
+
+	response, found, err := s.loadEditorTicketDetail(ctx, ticketID)
+	if err != nil {
+		log.Printf("reload editor ticket failed: %v", err)
+		http.Error(w, "failed to update ticket", http.StatusInternalServerError)
+		return
+	}
+	if !found {
+		http.Error(w, "ticket not found", http.StatusNotFound)
 		return
 	}
 
@@ -2085,6 +2815,170 @@ func (s *Server) loadEditorDeviceDetail(ctx context.Context, deviceID pgtype.UUI
 	}, true, nil
 }
 
+func (s *Server) loadEditorTicketDetail(ctx context.Context, ticketID pgtype.UUID) (editorTicketDetailResponse, bool, error) {
+	if s.editorTicketDetailLoader != nil {
+		return s.editorTicketDetailLoader(ctx, ticketID)
+	}
+
+	row := s.db.QueryRow(ctx, `
+		SELECT
+			t.id,
+			t.number,
+			COALESCE(t.status, ''),
+			COALESCE(ts.title, ''),
+			t.ticket_type,
+			COALESCE(tt.title, ''),
+			COALESCE(t.reason, ''),
+			COALESCE(
+				NULLIF(
+					CASE
+						WHEN t.status = 'assigned' THEN tr.future
+						WHEN t.status = 'worksDone' THEN tr.past
+						ELSE tr.present
+					END,
+					''
+				),
+				NULLIF(tr.title, ''),
+				'Не указано'
+			) AS resolved_reason,
+			COALESCE(t.description, ''),
+			COALESCE(t.result, ''),
+			COALESCE(t.urgent, FALSE),
+			COALESCE(t.double_signed, FALSE),
+			t.created_at,
+			t.assigned_start,
+			t.assigned_end,
+			t.workstarted_at,
+			t.workfinished_at,
+			t.closed_at,
+			t.client,
+			COALESCE(c.title, ''),
+			t.device,
+			COALESCE(cls.title, ''),
+			COALESCE(d.serial_number, ''),
+			t.contact_person,
+			COALESCE(cp.name, ''),
+			t.executor,
+			TRIM(CONCAT(COALESCE(u_exec.first_name, ''), ' ', COALESCE(u_exec.last_name, ''))),
+			t.department,
+			COALESCE(dpt.title, '')
+		FROM tickets t
+		LEFT JOIN ticket_statuses ts ON ts.type = t.status
+		LEFT JOIN ticket_types tt ON tt.type = t.ticket_type
+		LEFT JOIN ticket_reasons tr ON tr.id = t.reason
+		LEFT JOIN clients c ON c.id = t.client
+		LEFT JOIN devices d ON d.id = t.device
+		LEFT JOIN classificators cls ON cls.id = d.classificator
+		LEFT JOIN contacts cp ON cp.id = t.contact_person
+		LEFT JOIN users u_exec ON u_exec.user_id = t.executor
+		LEFT JOIN departments dpt ON dpt.id = t.department
+		WHERE t.id = $1
+		LIMIT 1
+	`, ticketID)
+
+	var (
+		id                 pgtype.UUID
+		number             pgtype.Int4
+		status             string
+		statusTitle        string
+		ticketType         pgtype.Text
+		ticketTypeTitle    string
+		reason             string
+		resolvedReason     string
+		description        string
+		result             string
+		urgent             bool
+		doubleSigned       bool
+		createdAt          pgtype.Timestamp
+		assignedStart      pgtype.Timestamp
+		assignedEnd        pgtype.Timestamp
+		workstartedAt      pgtype.Timestamp
+		workfinishedAt     pgtype.Timestamp
+		closedAt           pgtype.Timestamp
+		clientID           pgtype.UUID
+		clientName         string
+		deviceID           pgtype.UUID
+		deviceTitle        string
+		deviceSerialNumber string
+		contactPersonID    pgtype.UUID
+		contactName        string
+		executorID         pgtype.UUID
+		executorName       string
+		departmentID       pgtype.UUID
+		departmentTitle    string
+	)
+
+	if err := row.Scan(
+		&id,
+		&number,
+		&status,
+		&statusTitle,
+		&ticketType,
+		&ticketTypeTitle,
+		&reason,
+		&resolvedReason,
+		&description,
+		&result,
+		&urgent,
+		&doubleSigned,
+		&createdAt,
+		&assignedStart,
+		&assignedEnd,
+		&workstartedAt,
+		&workfinishedAt,
+		&closedAt,
+		&clientID,
+		&clientName,
+		&deviceID,
+		&deviceTitle,
+		&deviceSerialNumber,
+		&contactPersonID,
+		&contactName,
+		&executorID,
+		&executorName,
+		&departmentID,
+		&departmentTitle,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return editorTicketDetailResponse{}, false, nil
+		}
+
+		return editorTicketDetailResponse{}, false, err
+	}
+
+	return editorTicketDetailResponse{
+		AssignedEnd:        timestampToRFC3339(assignedEnd),
+		AssignedStart:      timestampToRFC3339(assignedStart),
+		Client:             nullableUUIDToString(clientID),
+		ClientName:         clientName,
+		ClosedAt:           timestampToRFC3339(closedAt),
+		ContactName:        contactName,
+		ContactPerson:      nullableUUIDToString(contactPersonID),
+		CreatedAt:          timestampToRFC3339(createdAt),
+		Department:         nullableUUIDToString(departmentID),
+		DepartmentTitle:    departmentTitle,
+		Description:        description,
+		Device:             nullableUUIDToString(deviceID),
+		DeviceSerialNumber: deviceSerialNumber,
+		DeviceTitle:        deviceTitle,
+		DoubleSigned:       doubleSigned,
+		Executor:           nullableUUIDToString(executorID),
+		ExecutorName:       executorName,
+		ID:                 uuidToString(id),
+		Number:             number.Int32,
+		Reason:             reason,
+		ResolvedReason:     resolvedReason,
+		Result:             result,
+		Status:             status,
+		StatusTitle:        statusTitle,
+		TicketType:         nullableTextToString(ticketType),
+		TicketTypeTitle:    ticketTypeTitle,
+		Urgent:             urgent,
+		WorkfinishedAt:     timestampToRFC3339(workfinishedAt),
+		WorkstartedAt:      timestampToRFC3339(workstartedAt),
+	}, true, nil
+}
+
 func (s *Server) editorRegionExistsByID(ctx context.Context, regionID pgtype.UUID) (bool, error) {
 	if s.editorRegionExists != nil {
 		return s.editorRegionExists(ctx, regionID)
@@ -2122,6 +3016,84 @@ func (s *Server) editorDeviceExistsByID(ctx context.Context, deviceID pgtype.UUI
 	}
 
 	return deviceExists, nil
+}
+
+func (s *Server) editorContactExistsByID(ctx context.Context, contactID pgtype.UUID) (bool, error) {
+	if s.editorContactExists != nil {
+		return s.editorContactExists(ctx, contactID)
+	}
+
+	var contactExists bool
+	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM contacts WHERE id = $1)`, contactID).Scan(&contactExists); err != nil {
+		return false, err
+	}
+
+	return contactExists, nil
+}
+
+func (s *Server) editorAccountExistsByID(ctx context.Context, accountID pgtype.UUID) (bool, error) {
+	if s.editorAccountExists != nil {
+		return s.editorAccountExists(ctx, accountID)
+	}
+
+	var accountExists bool
+	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM accounts WHERE user_id = $1)`, accountID).Scan(&accountExists); err != nil {
+		return false, err
+	}
+
+	return accountExists, nil
+}
+
+func (s *Server) editorDepartmentExistsByID(ctx context.Context, departmentID pgtype.UUID) (bool, error) {
+	if s.editorDepartmentExists != nil {
+		return s.editorDepartmentExists(ctx, departmentID)
+	}
+
+	var departmentExists bool
+	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM departments WHERE id = $1)`, departmentID).Scan(&departmentExists); err != nil {
+		return false, err
+	}
+
+	return departmentExists, nil
+}
+
+func (s *Server) editorTicketReasonExistsByID(ctx context.Context, reasonID string) (bool, error) {
+	if s.editorTicketReasonExists != nil {
+		return s.editorTicketReasonExists(ctx, reasonID)
+	}
+
+	var reasonExists bool
+	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM ticket_reasons WHERE id = $1)`, reasonID).Scan(&reasonExists); err != nil {
+		return false, err
+	}
+
+	return reasonExists, nil
+}
+
+func (s *Server) editorTicketStatusExistsByID(ctx context.Context, statusID string) (bool, error) {
+	if s.editorTicketStatusExists != nil {
+		return s.editorTicketStatusExists(ctx, statusID)
+	}
+
+	var statusExists bool
+	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM ticket_statuses WHERE type = $1)`, statusID).Scan(&statusExists); err != nil {
+		return false, err
+	}
+
+	return statusExists, nil
+}
+
+func (s *Server) editorTicketTypeExistsByID(ctx context.Context, ticketType string) (bool, error) {
+	if s.editorTicketTypeExists != nil {
+		return s.editorTicketTypeExists(ctx, ticketType)
+	}
+
+	var ticketTypeExists bool
+	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM ticket_types WHERE type = $1)`, ticketType).Scan(&ticketTypeExists); err != nil {
+		return false, err
+	}
+
+	return ticketTypeExists, nil
 }
 
 func (s *Server) editorManufacturerExistsByID(ctx context.Context, manufacturerID pgtype.UUID) (bool, error) {
@@ -2316,6 +3288,92 @@ func (s *Server) updateEditorDeviceRecord(ctx context.Context, deviceID pgtype.U
 	}
 
 	return tag.RowsAffected(), nil
+}
+
+func (s *Server) updateEditorTicketRecord(
+	ctx context.Context,
+	ticketID pgtype.UUID,
+	client any,
+	device any,
+	ticketType any,
+	department any,
+	reason any,
+	contactPerson any,
+	executor any,
+	status string,
+	description string,
+	resultText string,
+	urgent bool,
+	doubleSigned bool,
+	assignedStart any,
+	assignedEnd any,
+	workstartedAt any,
+	workfinishedAt any,
+	closedAt any,
+) (int64, error) {
+	if s.editorTicketUpdater != nil {
+		return s.editorTicketUpdater(
+			ctx,
+			ticketID,
+			client,
+			device,
+			ticketType,
+			department,
+			reason,
+			contactPerson,
+			executor,
+			status,
+			description,
+			resultText,
+			urgent,
+			doubleSigned,
+			assignedStart,
+			assignedEnd,
+			workstartedAt,
+			workfinishedAt,
+			closedAt,
+		)
+	}
+
+	tag, err := s.db.Exec(ctx, `
+		UPDATE tickets
+		SET client = $1,
+			device = $2,
+			ticket_type = $3,
+			department = $4,
+			reason = $5,
+			contact_person = $6,
+			executor = $7,
+			status = $8,
+			description = $9,
+			result = $10,
+			urgent = $11,
+			double_signed = $12,
+			assigned_start = $13,
+			assigned_end = $14,
+			workstarted_at = $15,
+			workfinished_at = $16,
+			closed_at = $17
+		WHERE id = $18
+	`, client, device, ticketType, department, reason, contactPerson, executor, status, description, resultText, urgent, doubleSigned, assignedStart, assignedEnd, workstartedAt, workfinishedAt, closedAt, ticketID)
+	if err != nil {
+		return 0, err
+	}
+
+	return tag.RowsAffected(), nil
+}
+
+func parseOptionalEditorTimestamp(value string) (any, error) {
+	if value == "" {
+		return nil, nil
+	}
+
+	parsedValue, err := parseTicketDateInput(value)
+	if err != nil {
+		return nil, err
+	}
+
+	return parsedValue, nil
 }
 
 func nullableInt32ToPointer(value pgtype.Int4) *int32 {

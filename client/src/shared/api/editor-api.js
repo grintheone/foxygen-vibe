@@ -11,8 +11,10 @@ export const editorApi = createApi({
     "EditorContact",
     "EditorDevice",
     "EditorManufacturer",
+    "EditorAccount",
     "EditorRegion",
     "EditorResearchType",
+    "EditorTicket",
   ],
   endpoints: (builder) => ({
     getEditorAgreements: builder.query({
@@ -125,6 +127,46 @@ export const editorApi = createApi({
       query: (deviceId) => `api/editor/devices/${deviceId}`,
       providesTags: (_, __, deviceId) => [{ type: "EditorDevice", id: deviceId }],
     }),
+    getEditorTickets: builder.query({
+      query: ({ limit = 50, q = "" } = {}) => ({
+        params: {
+          ...(limit ? { limit } : {}),
+          ...(q ? { q } : {}),
+        },
+        url: "api/editor/tickets",
+      }),
+      providesTags: (result) => [
+        { type: "EditorTicket", id: "LIST" },
+        ...(Array.isArray(result)
+          ? result.map((ticket) => ({
+              type: "EditorTicket",
+              id: ticket.id,
+            }))
+          : []),
+      ],
+    }),
+    getEditorTicketById: builder.query({
+      query: (ticketId) => `api/editor/tickets/${ticketId}`,
+      providesTags: (_, __, ticketId) => [{ type: "EditorTicket", id: ticketId }],
+    }),
+    getEditorAccounts: builder.query({
+      query: ({ limit = 50, q = "" } = {}) => ({
+        params: {
+          ...(limit ? { limit } : {}),
+          ...(q ? { q } : {}),
+        },
+        url: "api/editor/accounts",
+      }),
+      providesTags: (result) => [
+        { type: "EditorAccount", id: "LIST" },
+        ...(Array.isArray(result)
+          ? result.map((account) => ({
+              type: "EditorAccount",
+              id: account.id,
+            }))
+          : []),
+      ],
+    }),
     getEditorRegions: builder.query({
       query: () => "api/editor/regions",
       providesTags: ["EditorRegion"],
@@ -152,6 +194,14 @@ export const editorApi = createApi({
             }))
           : []),
       ],
+    }),
+    getEditorTicketStatuses: builder.query({
+      query: () => "api/editor/ticket-statuses",
+      providesTags: ["EditorTicket"],
+    }),
+    getEditorTicketTypes: builder.query({
+      query: () => "api/editor/ticket-types",
+      providesTags: ["EditorTicket"],
     }),
     patchEditorAgreement: builder.mutation({
       query: ({ agreementId, patch }) => ({
@@ -223,10 +273,25 @@ export const editorApi = createApi({
         { type: "EditorDevice", id: "LIST" },
       ],
     }),
+    patchEditorTicket: builder.mutation({
+      query: ({ ticketId, patch }) => ({
+        body: patch,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "PATCH",
+        url: `api/editor/tickets/${ticketId}`,
+      }),
+      invalidatesTags: (_, __, { ticketId }) => [
+        { type: "EditorTicket", id: ticketId },
+        { type: "EditorTicket", id: "LIST" },
+      ],
+    }),
   }),
 });
 
 export const {
+  useGetEditorAccountsQuery,
   useGetEditorAgreementByIdQuery,
   useGetEditorAgreementsQuery,
   useGetEditorClassificatorByIdQuery,
@@ -240,9 +305,14 @@ export const {
   useGetEditorManufacturersQuery,
   useGetEditorRegionsQuery,
   useGetEditorResearchTypesQuery,
+  useGetEditorTicketByIdQuery,
+  useGetEditorTicketsQuery,
+  useGetEditorTicketStatusesQuery,
+  useGetEditorTicketTypesQuery,
   usePatchEditorAgreementMutation,
   usePatchEditorClassificatorMutation,
   usePatchEditorContactMutation,
   usePatchEditorClientMutation,
   usePatchEditorDeviceMutation,
+  usePatchEditorTicketMutation,
 } = editorApi;

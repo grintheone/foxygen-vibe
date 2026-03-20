@@ -54,4 +54,7 @@ export const routePaths = {
   editorDevices() {
     return "/editor?entity=devices";
   },
+  editorTickets() {
+    return "/editor?entity=tickets";
+  },
 };
