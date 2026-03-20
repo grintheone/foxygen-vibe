@@ -53,6 +53,7 @@ Useful notes:
 - The frontend is exposed on `PUBLIC_HTTP_PORT` from the env file and proxies `/api/*` to the backend container.
 - PostgreSQL stays on the internal Docker network by default, which is safer for a company server.
 - For object storage, set `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET`, and either `MINIO_REGION` or `MINIO_LOCATION`.
+- `MINIO_ENDPOINT` can be a bare hostname. Bootstrap will default to port `443` when `MINIO_USE_SSL=true`, otherwise `80`.
 - The first-start import is controlled by `BOOTSTRAP_IMPORT_ENABLED=true|false`.
 - Imported users receive the temporary password from `IMPORT_DEFAULT_PASSWORD`.
 - If the database already contains app data, the bootstrap step skips the import and starts the API normally.

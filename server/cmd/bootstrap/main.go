@@ -36,7 +36,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if err := waitForStorage(options.StorageEndpoint, options.StorageWaitTimeout, options.StorageWaitInterval); err != nil {
+	if err := waitForStorage(options.StorageEndpoint, options.StorageUseSSL, options.StorageWaitTimeout, options.StorageWaitInterval); err != nil {
 		log.Fatal(err)
 	}
 
@@ -71,6 +71,7 @@ type options struct {
 	ImportOnly            string
 	ImportBinaryPath      string
 	StorageEndpoint       string
+	StorageUseSSL         bool
 	StorageWaitTimeout    time.Duration
 	StorageWaitInterval   time.Duration
 }
@@ -109,6 +110,11 @@ func loadOptions() (options, error) {
 		return options{}, err
 	}
 
+	storageUseSSL, err := resolveBoolEnv("MINIO_USE_SSL", false)
+	if err != nil {
+		return options{}, err
+	}
+
 	importSourcePath := strings.TrimSpace(os.Getenv("BOOTSTRAP_IMPORT_SOURCE"))
 	if importSourcePath == "" {
 		importSourcePath = "/bootstrap/dump.json"
@@ -140,6 +146,7 @@ func loadOptions() (options, error) {
 		ImportOnly:            strings.TrimSpace(os.Getenv("BOOTSTRAP_IMPORT_ONLY")),
 		ImportBinaryPath:      importBinaryPath,
 		StorageEndpoint:       strings.TrimSpace(os.Getenv("MINIO_ENDPOINT")),
+		StorageUseSSL:         storageUseSSL,
 		StorageWaitTimeout:    storageWaitTimeout,
 		StorageWaitInterval:   storageWaitInterval,
 	}, nil
@@ -174,23 +181,24 @@ func waitForDatabase(databaseURL string, timeout, interval time.Duration) (*pgxp
 	return nil, fmt.Errorf("wait for database: %w", lastErr)
 }
 
-func waitForStorage(endpoint string, timeout, interval time.Duration) error {
+func waitForStorage(endpoint string, useSSL bool, timeout, interval time.Duration) error {
 	if strings.TrimSpace(endpoint) == "" {
 		return nil
 	}
 
+	dialAddress := storageDialAddress(endpoint, useSSL)
 	deadline := time.Now().Add(timeout)
 	var lastErr error
 
 	for time.Now().Before(deadline) {
-		conn, err := net.DialTimeout("tcp", endpoint, minDuration(interval, 5*time.Second))
+		conn, err := net.DialTimeout("tcp", dialAddress, minDuration(interval, 5*time.Second))
 		if err == nil {
 			_ = conn.Close()
 			return nil
 		}
 
 		lastErr = err
-		log.Printf("waiting for object storage at %s: %v", endpoint, err)
+		log.Printf("waiting for object storage at %s: %v", dialAddress, err)
 		time.Sleep(interval)
 	}
 
@@ -199,6 +207,19 @@ func waitForStorage(endpoint string, timeout, interval time.Duration) error {
 	}
 
 	return fmt.Errorf("wait for object storage: %w", lastErr)
+}
+
+func storageDialAddress(endpoint string, useSSL bool) string {
+	if _, _, err := net.SplitHostPort(endpoint); err == nil {
+		return endpoint
+	}
+
+	defaultPort := "80"
+	if useSSL {
+		defaultPort = "443"
+	}
+
+	return net.JoinHostPort(endpoint, defaultPort)
 }
 
 func runImport(options options) error {

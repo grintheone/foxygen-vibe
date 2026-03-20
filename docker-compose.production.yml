@@ -62,6 +62,7 @@ services:
       - ./deploy/production/bootstrap:/bootstrap:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/api/health >/dev/null"]
+      start_period: 5m
       interval: 15s
       timeout: 5s
       retries: 10
