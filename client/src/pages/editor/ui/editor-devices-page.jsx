@@ -8,7 +8,7 @@ import {
 } from "../../../shared/api/editor-api";
 import { routePaths } from "../../../shared/config/routes";
 import { PageShell } from "../../../shared/ui/page-shell";
-import { SelectField } from "../../../shared/ui/select-field";
+import { SelectField } from "../../../shared/ui/select-picker-field";
 import { StatusMessage } from "../../../shared/ui/status-message";
 import {
   BackButton,
@@ -26,7 +26,6 @@ import {
   EditorSearchField,
   editorSelectClassName,
   EditorSidebar,
-  editorTextareaClassName,
   EditorWorkspace,
   useSyncedSidebarHeight,
 } from "./editor-shared";
@@ -143,12 +142,10 @@ export function EditorDevicesPage() {
     skip: !selectedDeviceId,
   });
 
-  const initialProperties = formatEditorJson(selectedDevice?.properties);
   const isDirty =
     Boolean(selectedDeviceId) &&
     (formState.classificator !== (selectedDevice?.classificator || "") ||
       formState.serialNumber !== (selectedDevice?.serialNumber || "") ||
-      formState.properties !== initialProperties ||
       formState.connectedToLis !== Boolean(selectedDevice?.connectedToLis) ||
       formState.isUsed !== Boolean(selectedDevice?.isUsed));
   const selectedClassificatorTitle =
@@ -211,16 +208,6 @@ export function EditorDevicesPage() {
     }
 
     try {
-      JSON.parse(formState.properties || "{}");
-    } catch {
-      setFeedback({
-        message: "Поле параметров должно содержать валидный JSON.",
-        tone: "error",
-      });
-      return;
-    }
-
-    try {
       const updatedDevice = await patchEditorDevice({
         deviceId: selectedDeviceId,
         patch: formState,
@@ -244,7 +231,7 @@ export function EditorDevicesPage() {
     <PageShell>
       <section className="w-full space-y-6">
         <EditorPageHeader
-          title="Устройства"
+          title="Оборудование"
           leadingAction={<BackButton onClick={handleBack} />}
         />
 
@@ -255,17 +242,17 @@ export function EditorDevicesPage() {
               footer={isDevicesFetching ? "Обновляем список..." : `Показано ${devices.length} записей.`}
             >
               <div className="space-y-4">
-                <EditorListHeader title="Карточки устройств" />
+                <EditorListHeader title="Карточки оборудования" />
                 <EditorSearchField
                   value={searchValue}
                   onChange={(event) => setSearchValue(event.target.value)}
                   placeholder="Классификатор, серийный номер, клиент"
                 />
-                <EditorListError error={devicesError} fallbackMessage="Не удалось загрузить список устройств." />
+                <EditorListError error={devicesError} fallbackMessage="Не удалось загрузить список оборудования." />
               </div>
 
               <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
-                {isDevicesLoading ? <EditorNoticeCard message="Загружаем устройства..." /> : null}
+                {isDevicesLoading ? <EditorNoticeCard message="Загружаем оборудование..." /> : null}
                 {!isDevicesLoading && devices.length === 0 ? (
                   <EditorNoticeCard message="По текущему запросу ничего не найдено." />
                 ) : null}
@@ -284,13 +271,13 @@ export function EditorDevicesPage() {
         >
           <EditorPane editorPaneRef={editorPaneRef}>
             {!selectedDeviceId ? (
-              <EditorNoticeCard dashed message="Выберите устройство слева, чтобы открыть карточку редактора." />
+              <EditorNoticeCard dashed message="Выберите оборудование слева, чтобы открыть карточку редактора." />
             ) : null}
 
-            {selectedDeviceId && isDeviceLoading ? <EditorNoticeCard message="Загружаем карточку устройства..." /> : null}
+            {selectedDeviceId && isDeviceLoading ? <EditorNoticeCard message="Загружаем карточку оборудования..." /> : null}
 
             {selectedDeviceId && selectedDeviceError ? (
-              <EditorListError error={selectedDeviceError} fallbackMessage="Не удалось загрузить карточку устройства." />
+              <EditorListError error={selectedDeviceError} fallbackMessage="Не удалось загрузить карточку оборудования." />
             ) : null}
 
             {selectedDevice ? (
@@ -301,14 +288,14 @@ export function EditorDevicesPage() {
                   isSaving={isSaving}
                   onSave={handleSave}
                   title={selectedDevice.title?.trim() || "Классификатор не указан"}
-                  titleLabel="Карточка устройства"
+                  titleLabel="Карточка оборудования"
                 />
 
                 {feedback.message ? <StatusMessage feedback={feedback} /> : null}
 
                 <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
                   <div className="space-y-5 rounded-3xl border border-white/10 bg-white/5 p-5">
-                    <EditorFormField label="Классификатор" hint="Здесь меняется отображаемое название устройства.">
+                    <EditorFormField label="Классификатор" hint="Здесь меняется отображаемое название оборудования.">
                       <div className="mt-3">
                         <SelectField
                           name="classificator"
@@ -338,21 +325,6 @@ export function EditorDevicesPage() {
                       />
                     </EditorFormField>
 
-                    <EditorFormField
-                      label="Параметры JSON"
-                      hint="Поле сохраняется как JSONB. Можно оставить `{}` или передать полноценный объект параметров."
-                    >
-                      <textarea
-                        name="properties"
-                        value={formState.properties}
-                        onChange={handleFormChange}
-                        rows="12"
-                        spellCheck={false}
-                        placeholder='{\n  "model": "XP-1000"\n}'
-                        className={editorTextareaClassName}
-                      />
-                    </EditorFormField>
-
                     <div className="flex flex-wrap gap-3">
                       <EditorCheckboxField
                         name="connectedToLis"
@@ -364,17 +336,17 @@ export function EditorDevicesPage() {
                         name="isUsed"
                         checked={formState.isUsed}
                         onChange={handleCheckboxChange}
-                        label="Б/У устройство"
+                        label="Б/У оборудование"
                       />
                     </div>
                   </div>
 
                   <EditorContextPanel
-                    title="Контекст устройства"
+                    title="Контекст оборудования"
                     footer={
                       <>
                         <p className="text-xs text-slate-500">
-                          Карточка изменяет только базовые поля устройства. Клиент и договор здесь показываются как
+                          Карточка изменяет только базовые поля оборудования. Клиент и договор здесь показываются как
                           справочный контекст.
                         </p>
                         {classificatorsError ? (
@@ -420,7 +392,7 @@ export function EditorDevicesPage() {
                     ? "Обновляем карточку..."
                     : isClassificatorsFetching
                       ? "Обновляем список классификаторов..."
-                      : "Изменения применяются к базовым полям устройства и не трогают связанные договоры."}
+                      : "Изменения применяются к базовым полям оборудования и не трогают связанные договоры."}
                 </p>
               </>
             ) : null}

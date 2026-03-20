@@ -159,7 +159,7 @@ function AgreementListItem({ agreement, isActive, onClick }) {
             <div className="flex items-start justify-between gap-4">
                 <div className="space-y-2">
                     <p className="text-base font-semibold text-white">{title}</p>
-                    <p className="text-sm text-slate-400">{meta || "Клиент и устройство пока не указаны."}</p>
+                    <p className="text-sm text-slate-400">{meta || "Клиент и оборудование пока не указаны."}</p>
                     <p className="text-xs text-slate-500">
                         {agreement.assignedAt
                             ? `Назначен: ${formatAgreementDateTime(agreement.assignedAt)}`
@@ -469,7 +469,7 @@ export function EditorAgreementsPage() {
                                 <EditorSearchField
                                     value={searchValue}
                                     onChange={(event) => setSearchValue(event.target.value)}
-                                    placeholder="Номер, клиент, дистрибьютор, устройство"
+                  placeholder="Номер, клиент, дистрибьютор, оборудование"
                                 />
                                 <EditorListError
                                     error={agreementsError}
@@ -602,7 +602,7 @@ export function EditorAgreementsPage() {
                                             </div>
                                         </EditorFormField>
 
-                                        <EditorFormField label="Устройство">
+                                        <EditorFormField label="Оборудование">
                                             <div className="mt-3">
                                                 <AsyncSearchSelect
                                                     value={formState.device}
@@ -614,15 +614,15 @@ export function EditorAgreementsPage() {
                                                     getOptionDescription={(device) => device.clientName?.trim() || ""}
                                                     placeholder="Не выбрано"
                                                     searchPlaceholder="Поиск по классификатору или серийному номеру"
-                                                    emptyMessage="Устройства не найдены."
-                                                    clearLabel="Отвязать устройство"
+                                                    emptyMessage="Оборудование не найдено."
+                                                    clearLabel="Отвязать оборудование"
                                                     disabled={isDeviceOptionsLoading && deviceOptions.length === 0}
                                                     isLoading={isDeviceOptionsLoading || isDeviceOptionsFetching}
                                                     errorMessage={
                                                         deviceOptionsError
                                                             ? typeof deviceOptionsError?.data === "string"
                                                                 ? deviceOptionsError.data
-                                                                : "Не удалось загрузить устройства."
+                                                                : "Не удалось загрузить оборудование."
                                                             : ""
                                                     }
                                                 />
@@ -682,7 +682,7 @@ export function EditorAgreementsPage() {
                                                     <p className="text-xs text-rose-300">
                                                         {typeof deviceOptionsError?.data === "string"
                                                             ? deviceOptionsError.data
-                                                            : "Не удалось загрузить список устройств."}
+                                                            : "Не удалось загрузить список оборудования."}
                                                     </p>
                                                 ) : null}
                                             </>
@@ -699,7 +699,7 @@ export function EditorAgreementsPage() {
                                             />
                                             <EditorContextItem label="Клиент" value={selectedActualClientTitle} />
                                             <EditorContextItem label="Дистрибьютор" value={selectedDistributorTitle} />
-                                            <EditorContextItem label="Устройство" value={selectedDeviceLabel} />
+                                            <EditorContextItem label="Оборудование" value={selectedDeviceLabel} />
                                         </EditorContextSection>
 
                                         <EditorContextSection title="Статус">
@@ -729,7 +729,7 @@ export function EditorAgreementsPage() {
                                         : isActualClientOptionsFetching || isDistributorOptionsFetching
                                           ? "Обновляем результаты поиска клиентов..."
                                           : isDeviceOptionsFetching
-                                            ? "Обновляем результаты поиска устройств..."
+                                            ? "Обновляем результаты поиска оборудования..."
                                             : "Изменения применяются к связям договора, его датам и служебным флагам."}
                                 </p>
                             </>

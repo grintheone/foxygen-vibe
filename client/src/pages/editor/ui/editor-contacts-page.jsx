@@ -8,7 +8,7 @@ import {
 } from "../../../shared/api/editor-api";
 import { routePaths } from "../../../shared/config/routes";
 import { PageShell } from "../../../shared/ui/page-shell";
-import { SelectField } from "../../../shared/ui/select-field";
+import { SelectField } from "../../../shared/ui/select-picker-field";
 import { StatusMessage } from "../../../shared/ui/status-message";
 import {
     BackButton,

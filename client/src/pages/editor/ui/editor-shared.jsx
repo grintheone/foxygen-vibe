@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { PageShell } from "../../../shared/ui/page-shell";
 import { StatusMessage } from "../../../shared/ui/status-message";
 
@@ -12,19 +12,12 @@ export const editorSelectClassName = "min-h-[3.25rem] bg-slate-950/40 px-4 py-3 
 export function useSyncedSidebarHeight(targetRef) {
     const [height, setHeight] = useState(null);
 
-    useEffect(() => {
+    useLayoutEffect(() => {
         if (typeof window === "undefined") {
             return undefined;
         }
 
-        const mediaQuery = window.matchMedia("(min-width: 1280px)");
-
         function updateHeight() {
-            if (!mediaQuery.matches) {
-                setHeight(null);
-                return;
-            }
-
             const nextHeight = targetRef.current?.offsetHeight;
             setHeight(Number.isFinite(nextHeight) ? nextHeight : null);
         }
@@ -39,16 +32,10 @@ export function useSyncedSidebarHeight(targetRef) {
             observer.observe(targetRef.current);
         }
 
-        function handleMediaChange() {
-            updateHeight();
-        }
-
-        mediaQuery.addEventListener("change", handleMediaChange);
         window.addEventListener("resize", updateHeight);
 
         return () => {
             observer.disconnect();
-            mediaQuery.removeEventListener("change", handleMediaChange);
             window.removeEventListener("resize", updateHeight);
         };
     }, [targetRef]);
@@ -201,7 +188,7 @@ export function EditorPageHeader({ action, description, leadingAction, textAlign
 
 export function EditorWorkspace({ sidebar, children }) {
     return (
-        <section className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+        <section className="grid items-start gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
             {sidebar}
             {children}
         </section>
@@ -212,7 +199,7 @@ export function EditorSidebar({ footer, height, children }) {
     return (
         <aside
             style={height ? { height: `${height}px` } : undefined}
-            className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-4 overflow-hidden rounded-[2rem] border border-white/10 bg-white/10 p-5 shadow-2xl shadow-[#6A3BF2]/15 backdrop-blur-xl"
+            className="grid self-start min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-4 overflow-hidden rounded-[2rem] border border-white/10 bg-white/10 p-5 shadow-2xl shadow-[#6A3BF2]/15 backdrop-blur-xl"
         >
             {children}
             <p className="self-end text-xs text-slate-500">{footer}</p>
@@ -248,7 +235,7 @@ export function EditorPane({ editorPaneRef, children }) {
     return (
         <section
             ref={editorPaneRef}
-            className="space-y-6 rounded-[2rem] border border-white/10 bg-slate-950/30 p-6 shadow-2xl shadow-black/20 backdrop-blur-xl"
+            className="self-start space-y-6 rounded-[2rem] border border-white/10 bg-slate-950/30 p-6 shadow-2xl shadow-black/20 backdrop-blur-xl"
         >
             {children}
         </section>

@@ -18,7 +18,7 @@ import {
 import { routePaths } from "../../../shared/config/routes";
 import { AsyncSearchSelect } from "../../../shared/ui/async-search-select";
 import { PageShell } from "../../../shared/ui/page-shell";
-import { SelectField } from "../../../shared/ui/select-field";
+import { SelectField } from "../../../shared/ui/select-picker-field";
 import { StatusMessage } from "../../../shared/ui/status-message";
 import {
   BackButton,
