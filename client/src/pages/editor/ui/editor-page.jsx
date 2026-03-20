@@ -123,32 +123,32 @@ export function EditorPage() {
         <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
           <EditorEntityCard
             title="Клиенты"
-            description="Название, адрес, регион и координаты клиента."
+            description="Когда нужно уточнить саму карточку клиента, здесь можно поправить название, адрес, регион и точку на карте."
             onClick={() => navigate(routePaths.editorClients())}
           />
           <EditorEntityCard
             title="Договоры"
-            description="Фактический клиент, дистрибьютор, оборудование, даты, активность и гарантия."
+            description="Если договор связан не с тем клиентом или оборудованием, здесь можно быстро обновить эти привязки, даты и служебные флаги."
             onClick={() => navigate(routePaths.editorAgreements())}
           />
           <EditorEntityCard
             title="Классификаторы"
-            description="Название, производитель, тип исследования и регистрационное удостоверение."
+            description="Для самого классификатора доступны его ключевые данные: название, производитель, тип исследования и регистрационные сведения."
             onClick={() => navigate(routePaths.editorClassificators())}
           />
           <EditorEntityCard
             title="Контакты"
-            description="Редактирование имени, должности, телефона, email и привязки к клиенту."
+            description="Когда меняются данные контактного лица, здесь можно поправить его имя, должность, контакты и связь с клиентом."
             onClick={() => navigate(routePaths.editorContacts())}
           />
           <EditorEntityCard
             title="Оборудование"
-            description="Классификатор, серийный номер и служебные флаги оборудования."
+            description="Для единицы оборудования здесь редактируются ее основные признаки: классификатор, серийный номер и служебное состояние."
             onClick={() => navigate(routePaths.editorDevices())}
           />
           <EditorEntityCard
             title="Тикеты"
-            description="Статус, причина, тип, отдел, клиент, оборудование, контакт, исполнитель, описание, результат, даты и флаги."
+            description="Если нужно привести в порядок сам тикет, здесь можно обновить его статус, связи, сроки, описание работы и итог."
             onClick={() => navigate(routePaths.editorTickets())}
           />
         </section>
