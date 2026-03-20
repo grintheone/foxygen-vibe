@@ -245,8 +245,7 @@ export function EditorDevicesPage() {
       <section className="w-full space-y-6">
         <EditorPageHeader
           title="Устройства"
-          description="Здесь можно редактировать устройство, его классификатор, серийный номер и JSON-параметры без прямого доступа к базе."
-          action={<BackButton onClick={handleBack} />}
+          leadingAction={<BackButton onClick={handleBack} />}
         />
 
         <EditorWorkspace

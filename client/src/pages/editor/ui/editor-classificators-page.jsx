@@ -276,8 +276,7 @@ export function EditorClassificatorsPage() {
       <section className="w-full space-y-6">
         <EditorPageHeader
           title="Классификаторы"
-          description="Здесь можно редактировать справочник оборудования: название, производителя, тип исследования и сопроводительные данные."
-          action={<BackButton onClick={handleBack} />}
+          leadingAction={<BackButton onClick={handleBack} />}
         />
 
         <EditorWorkspace

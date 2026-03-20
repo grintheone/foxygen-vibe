@@ -116,8 +116,8 @@ export function EditorPage() {
       <section className="w-full space-y-6">
         <EditorPageHeader
           title="Выбор сущности"
-          description="Выберите, что именно хотите редактировать. Сейчас доступны рабочие срезы для клиентов, договоров, классификаторов, контактов, устройств и тикетов."
           action={<DashboardButton onClick={handleOpenDashboard} />}
+          textAlign="left"
         />
 
         <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">

@@ -504,8 +504,7 @@ export function EditorTicketsPage() {
       <section className="w-full space-y-6">
         <EditorPageHeader
           title="Тикеты"
-          description="Здесь можно редактировать карточку тикета: статус, причину, сроки, исполнителя, клиента, устройство и итог работы."
-          action={<BackButton onClick={handleBack} />}
+          leadingAction={<BackButton onClick={handleBack} />}
         />
 
         <EditorWorkspace

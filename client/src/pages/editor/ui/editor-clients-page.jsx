@@ -259,8 +259,7 @@ export function EditorClientsPage() {
       <section className="w-full space-y-6">
         <EditorPageHeader
           title="Клиенты"
-          description="Здесь можно редактировать клиентскую карточку, регион и JSON-поля без прямого доступа к базе."
-          action={<BackButton onClick={handleBack} />}
+          leadingAction={<BackButton onClick={handleBack} />}
         />
 
         <EditorWorkspace
