@@ -24,6 +24,11 @@ const ClientPage = lazy(() =>
     default: module.ClientPage,
   })),
 );
+const ChangePasswordPage = lazy(() =>
+  import("../../pages/change-password").then((module) => ({
+    default: module.ChangePasswordPage,
+  })),
+);
 const DashboardPage = lazy(() =>
   import("../../pages/dashboard").then((module) => ({
     default: module.DashboardPage,
@@ -95,6 +100,10 @@ export function AppRouter() {
           <Route
             path={routePaths.profile}
             element={withRouteLoader(ProfilePage, "Открываем профиль...")}
+          />
+          <Route
+            path={routePaths.changePassword}
+            element={withRouteLoader(ChangePasswordPage, "Открываем смену пароля...")}
           />
           <Route
             path={routePaths.profileArchivePattern}

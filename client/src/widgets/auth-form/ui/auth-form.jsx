@@ -3,7 +3,7 @@ import { StatusMessage } from "../../../shared/ui/status-message";
 export function AuthForm({ feedback, form, isSubmitting, onChange, onSubmit }) {
     return (
         <div className="rounded-[2rem] border border-white/10 bg-white/10 p-8 shadow-2xl shadow-[#6A3BF2]/25 backdrop-blur-xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.45em] text-[#6A3BF2]">Mobile Engineer V3</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.45em] text-[#6A3BF2]">Мобильный инженер V3</p>
             <h1 className="mt-4 text-4xl font-bold tracking-tight sm:text-5xl">Вход</h1>
             <form className="mt-8 space-y-5" onSubmit={onSubmit}>
                 <label className="block">

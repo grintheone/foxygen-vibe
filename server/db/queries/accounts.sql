@@ -18,6 +18,11 @@ SELECT user_id, username, disabled, password_hash
 FROM accounts
 WHERE user_id = $1;
 
+-- name: UpdateAccountPasswordHash :execrows
+UPDATE accounts
+SET password_hash = $2
+WHERE user_id = $1;
+
 -- name: GetUserProfileByUserID :one
 SELECT
   a.user_id,

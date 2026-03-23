@@ -17,32 +17,36 @@ import (
 )
 
 type fakeAccountStore struct {
-	account             appdb.Account
-	accountByUserID     appdb.Account
-	profile             appdb.GetUserProfileByUserIDRow
-	refreshTokens       []appdb.RefreshToken
-	createAccountErr    error
-	createUserErr       error
-	getAccountErr       error
-	getAccountByIDErr   error
-	getProfileErr       error
-	createRefreshErr    error
-	getRefreshErrs      []error
-	rotateRefreshErr    error
-	createAccountParams appdb.CreateAccountParams
-	createRefreshParams appdb.CreateRefreshTokenParams
-	rotateRefreshParams appdb.RotateRefreshTokenParams
-	accountCalled       bool
-	userCalled          bool
-	getCalled           bool
-	getByIDCalled       bool
-	getProfileCalled    bool
-	createRefreshCalled bool
-	rotateRefreshCalled bool
-	username            string
-	userID              pgtype.UUID
-	rotateRows          int64
-	refreshIndex        int
+	account              appdb.Account
+	accountByUserID      appdb.Account
+	profile              appdb.GetUserProfileByUserIDRow
+	refreshTokens        []appdb.RefreshToken
+	createAccountErr     error
+	createUserErr        error
+	getAccountErr        error
+	getAccountByIDErr    error
+	getProfileErr        error
+	createRefreshErr     error
+	getRefreshErrs       []error
+	rotateRefreshErr     error
+	updatePasswordErr    error
+	createAccountParams  appdb.CreateAccountParams
+	createRefreshParams  appdb.CreateRefreshTokenParams
+	rotateRefreshParams  appdb.RotateRefreshTokenParams
+	updatePasswordArgs   appdb.UpdateAccountPasswordHashParams
+	accountCalled        bool
+	userCalled           bool
+	getCalled            bool
+	getByIDCalled        bool
+	getProfileCalled     bool
+	createRefreshCalled  bool
+	rotateRefreshCalled  bool
+	updatePasswordCalled bool
+	username             string
+	userID               pgtype.UUID
+	rotateRows           int64
+	updatePasswordRows   int64
+	refreshIndex         int
 }
 
 func (f *fakeAccountStore) CreateAccount(_ context.Context, params appdb.CreateAccountParams) (appdb.Account, error) {
@@ -67,6 +71,12 @@ func (f *fakeAccountStore) GetAccountByUserID(_ context.Context, userID pgtype.U
 	f.getByIDCalled = true
 	f.userID = userID
 	return f.accountByUserID, f.getAccountByIDErr
+}
+
+func (f *fakeAccountStore) UpdateAccountPasswordHash(_ context.Context, params appdb.UpdateAccountPasswordHashParams) (int64, error) {
+	f.updatePasswordCalled = true
+	f.updatePasswordArgs = params
+	return f.updatePasswordRows, f.updatePasswordErr
 }
 
 func (f *fakeAccountStore) GetUserProfileByUserID(_ context.Context, userID pgtype.UUID) (appdb.GetUserProfileByUserIDRow, error) {
@@ -748,6 +758,182 @@ func TestRefreshEndpointRejectsRotatedToken(t *testing.T) {
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected status %d, got %d", http.StatusUnauthorized, rec.Code)
+	}
+}
+
+func TestChangePasswordEndpointRejectsMissingToken(t *testing.T) {
+	t.Parallel()
+
+	srv := &Server{
+		queries: &fakeAccountStore{},
+		auth:    testAuthConfig(),
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/change-password", strings.NewReader(`{"currentPassword":"secret","newPassword":"new-secret"}`))
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status %d, got %d", http.StatusUnauthorized, rec.Code)
+	}
+}
+
+func TestChangePasswordEndpointRejectsInvalidBody(t *testing.T) {
+	t.Parallel()
+
+	secret := testAuthConfig().jwtSecret
+	token, err := signJWT(secret, accessTokenClaims{
+		Subject:   "11111111-1111-1111-1111-111111111111",
+		Username:  "alice",
+		TokenType: accessTokenType,
+		ExpiresAt: time.Now().Add(time.Minute).Unix(),
+		IssuedAt:  time.Now().Unix(),
+	})
+	if err != nil {
+		t.Fatalf("sign jwt: %v", err)
+	}
+
+	srv := &Server{
+		queries: &fakeAccountStore{},
+		auth:    testAuthConfig(),
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/change-password", strings.NewReader(`{"currentPassword":"secret","newPassword":"new-secret","extra":true}`))
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestChangePasswordEndpointValidatesInput(t *testing.T) {
+	t.Parallel()
+
+	secret := testAuthConfig().jwtSecret
+	token, err := signJWT(secret, accessTokenClaims{
+		Subject:   "11111111-1111-1111-1111-111111111111",
+		Username:  "alice",
+		TokenType: accessTokenType,
+		ExpiresAt: time.Now().Add(time.Minute).Unix(),
+		IssuedAt:  time.Now().Unix(),
+	})
+	if err != nil {
+		t.Fatalf("sign jwt: %v", err)
+	}
+
+	srv := &Server{
+		queries: &fakeAccountStore{},
+		auth:    testAuthConfig(),
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/change-password", strings.NewReader(`{"currentPassword":" ","newPassword":"short"}`))
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestChangePasswordEndpointRejectsWrongCurrentPassword(t *testing.T) {
+	t.Parallel()
+
+	passwordHash, err := hashPassword("secret")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+
+	secret := testAuthConfig().jwtSecret
+	token, err := signJWT(secret, accessTokenClaims{
+		Subject:   "11111111-1111-1111-1111-111111111111",
+		Username:  "alice",
+		TokenType: accessTokenType,
+		ExpiresAt: time.Now().Add(time.Minute).Unix(),
+		IssuedAt:  time.Now().Unix(),
+	})
+	if err != nil {
+		t.Fatalf("sign jwt: %v", err)
+	}
+
+	srv := &Server{
+		queries: &fakeAccountStore{
+			accountByUserID: appdb.Account{
+				UserID:       pgtype.UUID{Bytes: [16]byte{1, 1, 1}, Valid: true},
+				Username:     "alice",
+				PasswordHash: passwordHash,
+			},
+		},
+		auth: testAuthConfig(),
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/change-password", strings.NewReader(`{"currentPassword":"wrong","newPassword":"new-secret"}`))
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestChangePasswordEndpointUpdatesPasswordHash(t *testing.T) {
+	t.Parallel()
+
+	passwordHash, err := hashPassword("secret")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+
+	secret := testAuthConfig().jwtSecret
+	token, err := signJWT(secret, accessTokenClaims{
+		Subject:   "11111111-1111-1111-1111-111111111111",
+		Username:  "alice",
+		TokenType: accessTokenType,
+		ExpiresAt: time.Now().Add(time.Minute).Unix(),
+		IssuedAt:  time.Now().Unix(),
+	})
+	if err != nil {
+		t.Fatalf("sign jwt: %v", err)
+	}
+
+	store := &fakeAccountStore{
+		accountByUserID: appdb.Account{
+			UserID:       pgtype.UUID{Bytes: [16]byte{1, 1, 1}, Valid: true},
+			Username:     "alice",
+			PasswordHash: passwordHash,
+		},
+		updatePasswordRows: 1,
+	}
+	srv := &Server{
+		queries: store,
+		auth:    testAuthConfig(),
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/change-password", strings.NewReader(`{"currentPassword":" secret ","newPassword":" fresh-secret "}`))
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if !store.getByIDCalled {
+		t.Fatal("expected GetAccountByUserID to be called")
+	}
+	if !store.updatePasswordCalled {
+		t.Fatal("expected UpdateAccountPasswordHash to be called")
+	}
+	if store.updatePasswordArgs.PasswordHash == "" || store.updatePasswordArgs.PasswordHash == "fresh-secret" {
+		t.Fatalf("expected hashed password, got %q", store.updatePasswordArgs.PasswordHash)
+	}
+	if !strings.HasPrefix(store.updatePasswordArgs.PasswordHash, "$2") {
+		t.Fatalf("expected bcrypt password hash, got %q", store.updatePasswordArgs.PasswordHash)
+	}
+	if !verifyPassword("fresh-secret", store.updatePasswordArgs.PasswordHash) {
+		t.Fatal("expected updated password hash to verify")
 	}
 }
 

@@ -92,6 +92,25 @@ func (q *Queries) GetAccountByUsername(ctx context.Context, username string) (Ac
 	return i, err
 }
 
+const updateAccountPasswordHash = `-- name: UpdateAccountPasswordHash :execrows
+UPDATE accounts
+SET password_hash = $2
+WHERE user_id = $1
+`
+
+type UpdateAccountPasswordHashParams struct {
+	UserID       pgtype.UUID
+	PasswordHash string
+}
+
+func (q *Queries) UpdateAccountPasswordHash(ctx context.Context, arg UpdateAccountPasswordHashParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateAccountPasswordHash, arg.UserID, arg.PasswordHash)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getUserProfileByUserID = `-- name: GetUserProfileByUserID :one
 SELECT
   a.user_id,

@@ -2,6 +2,7 @@ export const routePaths = {
   dashboard: "/dashboard",
   editor: "/editor",
   profile: "/profile",
+  changePassword: "/profile/change-password",
   memberProfilePattern: "/profile/:userId",
   profileArchivePattern: "/profile/:userId/archive",
   signIn: "/",

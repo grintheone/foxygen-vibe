@@ -108,6 +108,16 @@ export const ticketsApi = createApi({
       query: (userId) => `api/profile/${userId}`,
       providesTags: (_, __, userId) => [{ type: "Profile", id: userId }],
     }),
+    changePassword: builder.mutation({
+      query: (payload) => ({
+        body: payload,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+        url: "api/auth/change-password",
+      }),
+    }),
     getDepartments: builder.query({
       query: () => "api/departments",
       providesTags: ["Department"],
@@ -431,6 +441,7 @@ export const {
   useGetTicketByIdQuery,
   useGetTicketReasonsQuery,
   useCreateTicketMutation,
+  useChangePasswordMutation,
   usePatchTicketMutation,
   useUploadProfileAvatarMutation,
   useUploadTicketAttachmentMutation,

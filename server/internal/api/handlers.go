@@ -681,7 +681,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	account, err := store.GetAccountByUsername(ctx, input.Username)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			http.Error(w, "invalid credentials", http.StatusUnauthorized)
+			http.Error(w, "Произошла ошибка", http.StatusUnauthorized)
 			return
 		}
 
@@ -696,7 +696,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !verifyPassword(input.Password, account.PasswordHash) {
-		http.Error(w, "invalid credentials", http.StatusUnauthorized)
+		http.Error(w, "Произошла ошибка", http.StatusUnauthorized)
 		return
 	}
 
@@ -839,6 +839,136 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, response)
+}
+
+func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
+	type changePasswordRequest struct {
+		CurrentPassword string `json:"currentPassword"`
+		NewPassword     string `json:"newPassword"`
+	}
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	claims, err := parseAuthorizationHeader(s.auth.jwtSecret, r.Header.Get("Authorization"))
+	if err != nil {
+		http.Error(w, "invalid access token", http.StatusUnauthorized)
+		return
+	}
+
+	if s.queries == nil {
+		http.Error(w, "database not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	defer r.Body.Close()
+
+	var input changePasswordRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	input.CurrentPassword = strings.TrimSpace(input.CurrentPassword)
+	input.NewPassword = strings.TrimSpace(input.NewPassword)
+
+	switch {
+	case input.CurrentPassword == "":
+		http.Error(w, "current password is required", http.StatusBadRequest)
+		return
+	case input.NewPassword == "":
+		http.Error(w, "new password is required", http.StatusBadRequest)
+		return
+	case len(input.NewPassword) < 8:
+		http.Error(w, "new password must be at least 8 characters", http.StatusBadRequest)
+		return
+	case input.CurrentPassword == input.NewPassword:
+		http.Error(w, "new password must be different", http.StatusBadRequest)
+		return
+	}
+
+	userID := pgtype.UUID{}
+	if err := userID.Scan(claims.Subject); err != nil {
+		http.Error(w, "invalid access token", http.StatusUnauthorized)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	store := s.queries
+	var tx pgx.Tx
+
+	if s.db != nil {
+		tx, err = s.db.Begin(ctx)
+		if err != nil {
+			log.Printf("begin change password transaction failed: %v", err)
+			http.Error(w, "failed to change password", http.StatusInternalServerError)
+			return
+		}
+		defer tx.Rollback(ctx)
+
+		store = appdb.New(tx)
+	}
+
+	account, err := store.GetAccountByUserID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			http.Error(w, "account not found", http.StatusNotFound)
+			return
+		}
+
+		log.Printf("load account for password change failed: %v", err)
+		http.Error(w, "failed to change password", http.StatusInternalServerError)
+		return
+	}
+
+	if account.Disabled {
+		http.Error(w, "account is disabled", http.StatusForbidden)
+		return
+	}
+
+	if !verifyPassword(input.CurrentPassword, account.PasswordHash) {
+		http.Error(w, "current password is incorrect", http.StatusBadRequest)
+		return
+	}
+
+	passwordHash, err := hashPassword(input.NewPassword)
+	if err != nil {
+		log.Printf("hash new password failed: %v", err)
+		http.Error(w, "failed to change password", http.StatusInternalServerError)
+		return
+	}
+
+	rows, err := store.UpdateAccountPasswordHash(ctx, appdb.UpdateAccountPasswordHashParams{
+		UserID:       userID,
+		PasswordHash: passwordHash,
+	})
+	if err != nil {
+		log.Printf("update account password failed: %v", err)
+		http.Error(w, "failed to change password", http.StatusInternalServerError)
+		return
+	}
+	if rows == 0 {
+		http.Error(w, "account not found", http.StatusNotFound)
+		return
+	}
+
+	if tx != nil {
+		if err := tx.Commit(ctx); err != nil {
+			log.Printf("commit change password transaction failed: %v", err)
+			http.Error(w, "failed to change password", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"status": "ok",
+	})
 }
 
 func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {

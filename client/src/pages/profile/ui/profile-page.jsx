@@ -246,7 +246,13 @@ function ActiveTicketsSection({ archiveHref, isMemberProfile, onOpenArchive, onO
   );
 }
 
-function ProfileActionsSection({ canOpenEditor, isOwnProfile, onEditorOpen, onSignOut }) {
+function ProfileActionsSection({
+  canOpenEditor,
+  isOwnProfile,
+  onChangePasswordOpen,
+  onEditorOpen,
+  onSignOut,
+}) {
   if (!isOwnProfile) {
     return null;
   }
@@ -254,7 +260,7 @@ function ProfileActionsSection({ canOpenEditor, isOwnProfile, onEditorOpen, onSi
   return (
     <section className="rounded-3xl border border-white/10 bg-slate-950/35 p-6 shadow-xl shadow-black/20 backdrop-blur">
       <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Действия</p>
-      <div className="mt-5 grid gap-3 sm:grid-cols-2">
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <button
           type="button"
           onClick={onEditorOpen}
@@ -266,6 +272,13 @@ function ProfileActionsSection({ canOpenEditor, isOwnProfile, onEditorOpen, onSi
           }`}
         >
           Редактор
+        </button>
+        <button
+          type="button"
+          onClick={onChangePasswordOpen}
+          className="rounded-2xl border border-amber-200/25 bg-amber-400/10 px-4 py-3 text-sm font-semibold text-amber-50 transition hover:border-amber-100/40 hover:bg-amber-400/15"
+        >
+          Сменить пароль
         </button>
         <button
           type="button"
@@ -348,6 +361,10 @@ export function ProfilePage() {
     }
 
     navigate(routePaths.editor);
+  }
+
+  function handleOpenChangePassword() {
+    navigate(routePaths.changePassword);
   }
 
   function handleAvatarUploadClick() {
@@ -512,6 +529,7 @@ export function ProfilePage() {
             <ProfileActionsSection
               canOpenEditor={canOpenEditor}
               isOwnProfile={!isMemberProfile}
+              onChangePasswordOpen={handleOpenChangePassword}
               onEditorOpen={handleOpenEditor}
               onSignOut={handleSignOut}
             />
