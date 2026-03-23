@@ -1,0 +1,1608 @@
+[
+    {
+        "id": "user_1_01eaedd4-1bf2-11ef-811c-40b0765b1e01",
+        "key": "user_1_01eaedd4-1bf2-11ef-811c-40b0765b1e01",
+        "value": {
+            "rev": "3-d1952afc30d1c3130d1877a5a338c8f6"
+        },
+        "doc": {
+            "_id": "user_1_01eaedd4-1bf2-11ef-811c-40b0765b1e01",
+            "_rev": "3-d1952afc30d1c3130d1877a5a338c8f6",
+            "firstName": "Надежда",
+            "lastName": "Петкова",
+            "department": "91d50980-4c47-11ec-80ec-40b0765b1e01",
+            "roles": [],
+            "email": ""
+        }
+    },
+    {
+        "id": "user_1_032e65e2-950c-11ef-8127-40b0765b1e01",
+        "key": "user_1_032e65e2-950c-11ef-8127-40b0765b1e01",
+        "value": {
+            "rev": "2-35f93fb8701ce88d95d2b70a7e7b44aa"
+        },
+        "doc": {
+            "_id": "user_1_032e65e2-950c-11ef-8127-40b0765b1e01",
+            "_rev": "2-35f93fb8701ce88d95d2b70a7e7b44aa",
+            "firstName": "Регина",
+            "lastName": "Усманова",
+            "department": "1f62a258-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "usmanova@vbest.ru"
+        }
+    },
+    {
+        "id": "user_1_042c281c-4f0b-11ea-80d0-40b0765b1e01",
+        "key": "user_1_042c281c-4f0b-11ea-80d0-40b0765b1e01",
+        "value": {
+            "rev": "4-4c1e250e38e6a89a5c1a5b7eb958a004"
+        },
+        "doc": {
+            "_id": "user_1_042c281c-4f0b-11ea-80d0-40b0765b1e01",
+            "_rev": "4-4c1e250e38e6a89a5c1a5b7eb958a004",
+            "firstName": "Наталья",
+            "lastName": "Чугайнова",
+            "department": "91d50980-4c47-11ec-80ec-40b0765b1e01",
+            "roles": ["user"],
+            "email": ""
+        }
+    },
+    {
+        "id": "user_1_0d7cf0fb-bbea-11ed-8100-40b0765b1e01",
+        "key": "user_1_0d7cf0fb-bbea-11ed-8100-40b0765b1e01",
+        "value": {
+            "rev": "5-ae39cdfc88944c57bb15c15c8df75f5c"
+        },
+        "doc": {
+            "_id": "user_1_0d7cf0fb-bbea-11ed-8100-40b0765b1e01",
+            "_rev": "5-ae39cdfc88944c57bb15c15c8df75f5c",
+            "firstName": "Анастасия",
+            "lastName": "Селиванова",
+            "department": "0d7cf0f9-bbea-11ed-8100-40b0765b1e01",
+            "roles": [],
+            "email": "as@kpd.com.ru"
+        }
+    },
+    {
+        "id": "user_1_0f5d2cf8-646b-11eb-80e1-40b0765b1e01",
+        "key": "user_1_0f5d2cf8-646b-11eb-80e1-40b0765b1e01",
+        "value": {
+            "rev": "2-500920985315f016360f366f38ccb6cb"
+        },
+        "doc": {
+            "_id": "user_1_0f5d2cf8-646b-11eb-80e1-40b0765b1e01",
+            "_rev": "2-500920985315f016360f366f38ccb6cb",
+            "firstName": "Владимир",
+            "lastName": "Терентьев",
+            "department": "1f62a259-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "vladimir.terentiev@labmail.ru"
+        }
+    },
+    {
+        "id": "user_1_0f7ee96d-e922-11eb-80e5-40b0765b1e01",
+        "key": "user_1_0f7ee96d-e922-11eb-80e5-40b0765b1e01",
+        "value": {
+            "rev": "5-76a8e4d5b73370fb4db69451d94f0a87"
+        },
+        "doc": {
+            "_id": "user_1_0f7ee96d-e922-11eb-80e5-40b0765b1e01",
+            "_rev": "5-76a8e4d5b73370fb4db69451d94f0a87",
+            "firstName": "Дмитрий",
+            "lastName": "Тарасов",
+            "department": null,
+            "roles": [],
+            "email": "",
+            "logo": "e7ff344a-a59c-4527-b29e-9c7c932b4b7f.jpg"
+        }
+    },
+    {
+        "id": "user_1_18c0f636-6737-11ee-8110-40b0765b1e01",
+        "key": "user_1_18c0f636-6737-11ee-8110-40b0765b1e01",
+        "value": {
+            "rev": "2-2f27467b4192990eccf241f20ae2c45c"
+        },
+        "doc": {
+            "_id": "user_1_18c0f636-6737-11ee-8110-40b0765b1e01",
+            "_rev": "2-2f27467b4192990eccf241f20ae2c45c",
+            "firstName": "Дмитрий",
+            "lastName": "Ефанов",
+            "department": "add49497-f8f5-11e6-a1f7-001a64d22812",
+            "roles": [],
+            "email": ""
+        }
+    },
+    {
+        "id": "user_1_1dc0e904-f58e-11ee-811a-40b0765b1e01",
+        "key": "user_1_1dc0e904-f58e-11ee-811a-40b0765b1e01",
+        "value": {
+            "rev": "5-7df6e5adb51311f0cdd9995789098a7f"
+        },
+        "doc": {
+            "_id": "user_1_1dc0e904-f58e-11ee-811a-40b0765b1e01",
+            "_rev": "5-7df6e5adb51311f0cdd9995789098a7f",
+            "firstName": "Максим",
+            "lastName": "Ипполитов",
+            "department": "1f62a259-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "ippolitov@labanaliz.ru",
+            "logo": "8334bc26-2350-480d-bb62-90204b05eee6.jpg"
+        }
+    },
+    {
+        "id": "user_1_1dc0e905-f58e-11ee-811a-40b0765b1e01",
+        "key": "user_1_1dc0e905-f58e-11ee-811a-40b0765b1e01",
+        "value": {
+            "rev": "2-5bf7caba2f218caf9dbfd7c685f7c589"
+        },
+        "doc": {
+            "_id": "user_1_1dc0e905-f58e-11ee-811a-40b0765b1e01",
+            "_rev": "2-5bf7caba2f218caf9dbfd7c685f7c589",
+            "firstName": "Денис",
+            "lastName": "Меньшов",
+            "department": "1f62a259-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "menshov@labanaliz.ru"
+        }
+    },
+    {
+        "id": "user_1_1f62a25a-ef3a-11e5-8d88-001a64d22812",
+        "key": "user_1_1f62a25a-ef3a-11e5-8d88-001a64d22812",
+        "value": {
+            "rev": "7-d8a0ea951c36a7c29e410178e2604412"
+        },
+        "doc": {
+            "_id": "user_1_1f62a25a-ef3a-11e5-8d88-001a64d22812",
+            "_rev": "7-d8a0ea951c36a7c29e410178e2604412",
+            "firstName": "Дмитрий",
+            "lastName": "Ходосевич",
+            "department": "1f62a255-ef3a-11e5-8d88-001a64d22812",
+            "roles": ["coordinator"],
+            "email": "",
+            "logo": "6587f16b-51f7-414e-85f6-50d274a92b3a.jpg"
+        }
+    },
+    {
+        "id": "user_1_1f62a25b-ef3a-11e5-8d88-001a64d22812",
+        "key": "user_1_1f62a25b-ef3a-11e5-8d88-001a64d22812",
+        "value": {
+            "rev": "7-6aa2249e9bca31881802c8373f45884a"
+        },
+        "doc": {
+            "_id": "user_1_1f62a25b-ef3a-11e5-8d88-001a64d22812",
+            "_rev": "7-6aa2249e9bca31881802c8373f45884a",
+            "firstName": "Виктория",
+            "lastName": "Белова",
+            "department": "1f62a256-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "",
+            "logo": "f7257268-d11d-48dc-b447-9b1aa48e3ee5.jpg"
+        }
+    },
+    {
+        "id": "user_1_1f62a25c-ef3a-11e5-8d88-001a64d22812",
+        "key": "user_1_1f62a25c-ef3a-11e5-8d88-001a64d22812",
+        "value": {
+            "rev": "4-0d5cc13df5b67f55cd7f974032432025"
+        },
+        "doc": {
+            "_id": "user_1_1f62a25c-ef3a-11e5-8d88-001a64d22812",
+            "_rev": "4-0d5cc13df5b67f55cd7f974032432025",
+            "firstName": "Ирина",
+            "lastName": "Кухтинова",
+            "department": "1f62a256-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "",
+            "logo": "9a827d83-42f1-43ec-8983-7ad4b9be3024.png"
+        }
+    },
+    {
+        "id": "user_1_1f62a25d-ef3a-11e5-8d88-001a64d22812",
+        "key": "user_1_1f62a25d-ef3a-11e5-8d88-001a64d22812",
+        "value": {
+            "rev": "4-88fdee9b5cf003fe052235e63bc76405"
+        },
+        "doc": {
+            "_id": "user_1_1f62a25d-ef3a-11e5-8d88-001a64d22812",
+            "_rev": "4-88fdee9b5cf003fe052235e63bc76405",
+            "firstName": "Дарья",
+            "lastName": "Ходарева",
+            "department": null,
+            "roles": [],
+            "email": ""
+        }
+    },
+    {
+        "id": "user_1_1f62a25e-ef3a-11e5-8d88-001a64d22812",
+        "key": "user_1_1f62a25e-ef3a-11e5-8d88-001a64d22812",
+        "value": {
+            "rev": "6-2fe4c02e04ad9840bdb1fd36316b8bec"
+        },
+        "doc": {
+            "_id": "user_1_1f62a25e-ef3a-11e5-8d88-001a64d22812",
+            "_rev": "6-2fe4c02e04ad9840bdb1fd36316b8bec",
+            "firstName": "Олеся",
+            "lastName": "Бондаренко",
+            "department": "1f62a258-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": ""
+        }
+    },
+    {
+        "id": "user_1_1f62a25f-ef3a-11e5-8d88-001a64d22812",
+        "key": "user_1_1f62a25f-ef3a-11e5-8d88-001a64d22812",
+        "value": {
+            "rev": "4-99e842f060c9944e216aef487c5d740d"
+        },
+        "doc": {
+            "_id": "user_1_1f62a25f-ef3a-11e5-8d88-001a64d22812",
+            "_rev": "4-99e842f060c9944e216aef487c5d740d",
+            "firstName": "Татьяна",
+            "lastName": "Леонтьева",
+            "department": "1f62a256-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "",
+            "logo": "fa3cad44-7f0e-4e82-bb54-66d33d1c8805.png"
+        }
+    },
+    {
+        "id": "user_1_1f62a260-ef3a-11e5-8d88-001a64d22812",
+        "key": "user_1_1f62a260-ef3a-11e5-8d88-001a64d22812",
+        "value": {
+            "rev": "4-b4fc5d41b36b80c645dda6c6535cdd1c"
+        },
+        "doc": {
+            "_id": "user_1_1f62a260-ef3a-11e5-8d88-001a64d22812",
+            "_rev": "4-b4fc5d41b36b80c645dda6c6535cdd1c",
+            "firstName": "Людмила",
+            "lastName": "Ульянова",
+            "department": null,
+            "roles": [],
+            "email": ""
+        }
+    },
+    {
+        "id": "user_1_1f62a261-ef3a-11e5-8d88-001a64d22812",
+        "key": "user_1_1f62a261-ef3a-11e5-8d88-001a64d22812",
+        "value": {
+            "rev": "8-2784069650af69716e6289161c97382d"
+        },
+        "doc": {
+            "_id": "user_1_1f62a261-ef3a-11e5-8d88-001a64d22812",
+            "_rev": "8-2784069650af69716e6289161c97382d",
+            "firstName": "Светлана",
+            "lastName": "Бережная",
+            "department": "1f62a258-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "",
+            "logo": "0f007bf9-5655-4517-bb98-91d7ab9f60ab.jpg"
+        }
+    },
+    {
+        "id": "user_1_1f62a262-ef3a-11e5-8d88-001a64d22812",
+        "key": "user_1_1f62a262-ef3a-11e5-8d88-001a64d22812",
+        "value": {
+            "rev": "4-1f3dfbd29bc5a86caae388f1dbc2e303"
+        },
+        "doc": {
+            "_id": "user_1_1f62a262-ef3a-11e5-8d88-001a64d22812",
+            "_rev": "4-1f3dfbd29bc5a86caae388f1dbc2e303",
+            "firstName": "Александра",
+            "lastName": "Арюткина",
+            "department": "1f62a257-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": ""
+        }
+    },
+    {
+        "id": "user_1_1f62a263-ef3a-11e5-8d88-001a64d22812",
+        "key": "user_1_1f62a263-ef3a-11e5-8d88-001a64d22812",
+        "value": {
+            "rev": "4-810394e3e47cbaf402592512806f50c1"
+        },
+        "doc": {
+            "_id": "user_1_1f62a263-ef3a-11e5-8d88-001a64d22812",
+            "_rev": "4-810394e3e47cbaf402592512806f50c1",
+            "firstName": "Иван",
+            "lastName": "Хейлык",
+            "department": null,
+            "roles": [],
+            "email": ""
+        }
+    },
+    {
+        "id": "user_1_1f62a264-ef3a-11e5-8d88-001a64d22812",
+        "key": "user_1_1f62a264-ef3a-11e5-8d88-001a64d22812",
+        "value": {
+            "rev": "6-5e16dba3c985af631e58ee5b4c7f143e"
+        },
+        "doc": {
+            "_id": "user_1_1f62a264-ef3a-11e5-8d88-001a64d22812",
+            "_rev": "6-5e16dba3c985af631e58ee5b4c7f143e",
+            "firstName": "Дмитрий",
+            "lastName": "Бахолдин",
+            "department": "1f62a259-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "baholdin@labanaliz.ru",
+            "logo": "0c8c9dfc-6f65-4f52-80f2-8ec632797177.png"
+        }
+    },
+    {
+        "id": "user_1_1f62a265-ef3a-11e5-8d88-001a64d22812",
+        "key": "user_1_1f62a265-ef3a-11e5-8d88-001a64d22812",
+        "value": {
+            "rev": "5-1820efbb7d38d41263f3651e34a7b264"
+        },
+        "doc": {
+            "_id": "user_1_1f62a265-ef3a-11e5-8d88-001a64d22812",
+            "_rev": "5-1820efbb7d38d41263f3651e34a7b264",
+            "firstName": "Михаил",
+            "lastName": "Иванов",
+            "department": "1f62a259-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "ivanov@labanaliz.ru"
+        }
+    },
+    {
+        "id": "user_1_1f62a266-ef3a-11e5-8d88-001a64d22812",
+        "key": "user_1_1f62a266-ef3a-11e5-8d88-001a64d22812",
+        "value": {
+            "rev": "5-654e1445ff800ed7f2450b01461a2b18"
+        },
+        "doc": {
+            "_id": "user_1_1f62a266-ef3a-11e5-8d88-001a64d22812",
+            "_rev": "5-654e1445ff800ed7f2450b01461a2b18",
+            "firstName": "Максим",
+            "lastName": "Волков",
+            "department": "1f62a259-ef3a-11e5-8d88-001a64d22812",
+            "roles": ["user"],
+            "email": "volkov@labanaliz.ru"
+        }
+    },
+    {
+        "id": "user_1_1f62a267-ef3a-11e5-8d88-001a64d22812",
+        "key": "user_1_1f62a267-ef3a-11e5-8d88-001a64d22812",
+        "value": {
+            "rev": "5-424dc15ed653e65fce885192bdf05287"
+        },
+        "doc": {
+            "_id": "user_1_1f62a267-ef3a-11e5-8d88-001a64d22812",
+            "_rev": "5-424dc15ed653e65fce885192bdf05287",
+            "firstName": "Вадим",
+            "lastName": "Шнейдер",
+            "department": "1f62a259-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "shneider@labanaliz.ru",
+            "logo": "60191102-270c-4105-a6fa-cd4bdc9eb148.png"
+        }
+    },
+    {
+        "id": "user_1_1f62a268-ef3a-11e5-8d88-001a64d22812",
+        "key": "user_1_1f62a268-ef3a-11e5-8d88-001a64d22812",
+        "value": {
+            "rev": "4-b031c093b58e020266cb7df4d7dd3dc5"
+        },
+        "doc": {
+            "_id": "user_1_1f62a268-ef3a-11e5-8d88-001a64d22812",
+            "_rev": "4-b031c093b58e020266cb7df4d7dd3dc5",
+            "firstName": "Антон",
+            "lastName": "Кузьмин",
+            "department": "1f62a259-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "kuzmin@labanaliz.ru"
+        }
+    },
+    {
+        "id": "user_1_1f62a269-ef3a-11e5-8d88-001a64d22812",
+        "key": "user_1_1f62a269-ef3a-11e5-8d88-001a64d22812",
+        "value": {
+            "rev": "4-83002b84963f93764edf7e8de389919a"
+        },
+        "doc": {
+            "_id": "user_1_1f62a269-ef3a-11e5-8d88-001a64d22812",
+            "_rev": "4-83002b84963f93764edf7e8de389919a",
+            "firstName": "Никита",
+            "lastName": "Мушников",
+            "department": "1f62a259-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "mushnikov@labanaliz.ru"
+        }
+    },
+    {
+        "id": "user_1_1f62a26a-ef3a-11e5-8d88-001a64d22812",
+        "key": "user_1_1f62a26a-ef3a-11e5-8d88-001a64d22812",
+        "value": {
+            "rev": "4-0bcc85198483cb03173094f9110ad9a7"
+        },
+        "doc": {
+            "_id": "user_1_1f62a26a-ef3a-11e5-8d88-001a64d22812",
+            "_rev": "4-0bcc85198483cb03173094f9110ad9a7",
+            "firstName": "Артем",
+            "lastName": "Голланд",
+            "department": "1f62a259-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "golland@labanaliz.ru"
+        }
+    },
+    {
+        "id": "user_1_1f62a26b-ef3a-11e5-8d88-001a64d22812",
+        "key": "user_1_1f62a26b-ef3a-11e5-8d88-001a64d22812",
+        "value": {
+            "rev": "9-4282e5439624ce191fce65246e0488c7"
+        },
+        "doc": {
+            "_id": "user_1_1f62a26b-ef3a-11e5-8d88-001a64d22812",
+            "_rev": "9-4282e5439624ce191fce65246e0488c7",
+            "firstName": "Василий",
+            "lastName": "Неверов",
+            "department": "1f62a259-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "neverov@labanaliz.ru",
+            "logo": "601c83cf-9a05-4260-b5a5-54a48d13d70b.jpeg"
+        }
+    },
+    {
+        "id": "user_1_1f62a26c-ef3a-11e5-8d88-001a64d22812",
+        "key": "user_1_1f62a26c-ef3a-11e5-8d88-001a64d22812",
+        "value": {
+            "rev": "6-9da5826cc808314a1b0d2c45f69dadcc"
+        },
+        "doc": {
+            "_id": "user_1_1f62a26c-ef3a-11e5-8d88-001a64d22812",
+            "_rev": "6-9da5826cc808314a1b0d2c45f69dadcc",
+            "firstName": "Олег",
+            "lastName": "Буторин",
+            "department": "1f62a259-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "butorin@labanaliz.ru",
+            "logo": "bf751d4c-1cc6-4fc9-98e9-a402d77ef796.jpg"
+        }
+    },
+    {
+        "id": "user_1_27ac2b1a-0d33-11e6-bd50-001a64d22812",
+        "key": "user_1_27ac2b1a-0d33-11e6-bd50-001a64d22812",
+        "value": {
+            "rev": "6-e4cc6f6341a71772c6a2ab00849b6721"
+        },
+        "doc": {
+            "_id": "user_1_27ac2b1a-0d33-11e6-bd50-001a64d22812",
+            "_rev": "6-e4cc6f6341a71772c6a2ab00849b6721",
+            "firstName": "Станислав",
+            "lastName": "Шигаев",
+            "department": "1f62a259-ef3a-11e5-8d88-001a64d22812",
+            "roles": ["leader", "coordinator"],
+            "email": "stanislav.shigaev@labmail.ru",
+            "logo": "eb23d747-27e9-4866-b4a7-8a10868761c9.png"
+        }
+    },
+    {
+        "id": "user_1_2d5a8a20-c558-11ec-80f0-40b0765b1e01",
+        "key": "user_1_2d5a8a20-c558-11ec-80f0-40b0765b1e01",
+        "value": {
+            "rev": "4-5ed73e301a9042787b1322add67d2120"
+        },
+        "doc": {
+            "_id": "user_1_2d5a8a20-c558-11ec-80f0-40b0765b1e01",
+            "_rev": "4-5ed73e301a9042787b1322add67d2120",
+            "firstName": "Алексей",
+            "lastName": "Селезнёв",
+            "department": null,
+            "roles": [],
+            "email": ""
+        }
+    },
+    {
+        "id": "user_1_31d7d456-5e6b-11e8-be8f-001a64d22812",
+        "key": "user_1_31d7d456-5e6b-11e8-be8f-001a64d22812",
+        "value": {
+            "rev": "7-16ce2290348d6010ebd76beb917e1ec5"
+        },
+        "doc": {
+            "_id": "user_1_31d7d456-5e6b-11e8-be8f-001a64d22812",
+            "_rev": "7-16ce2290348d6010ebd76beb917e1ec5",
+            "firstName": "Антон",
+            "lastName": "Теличкин",
+            "department": "1f62a259-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "telichkin@labanaliz.ru",
+            "logo": "98749d41-b257-4c8d-92ea-859edb7bbf83.jpg"
+        }
+    },
+    {
+        "id": "user_1_3251f10a-a5e3-11e8-ac77-001a64d22812",
+        "key": "user_1_3251f10a-a5e3-11e8-ac77-001a64d22812",
+        "value": {
+            "rev": "8-0e09a93d062e372412713614640fad5e"
+        },
+        "doc": {
+            "_id": "user_1_3251f10a-a5e3-11e8-ac77-001a64d22812",
+            "_rev": "8-0e09a93d062e372412713614640fad5e",
+            "firstName": "Анна",
+            "lastName": "Нагорная",
+            "department": "1f62a258-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": ""
+        }
+    },
+    {
+        "id": "user_1_3cb94d22-20ae-11ea-80cd-40b0765b1e01",
+        "key": "user_1_3cb94d22-20ae-11ea-80cd-40b0765b1e01",
+        "value": {
+            "rev": "3-a50715939692a0227ec1304bdecb4fe6"
+        },
+        "doc": {
+            "_id": "user_1_3cb94d22-20ae-11ea-80cd-40b0765b1e01",
+            "_rev": "3-a50715939692a0227ec1304bdecb4fe6",
+            "firstName": "Трегуб",
+            "lastName": "Михаил",
+            "department": null,
+            "roles": [],
+            "email": "mishatre123@gmail.com"
+        }
+    },
+    {
+        "id": "user_1_3e47d8ae-311e-11ee-810b-40b0765b1e01",
+        "key": "user_1_3e47d8ae-311e-11ee-810b-40b0765b1e01",
+        "value": {
+            "rev": "5-f9c9f1d7aaac93b0c212f4be2cebb416"
+        },
+        "doc": {
+            "_id": "user_1_3e47d8ae-311e-11ee-810b-40b0765b1e01",
+            "_rev": "5-f9c9f1d7aaac93b0c212f4be2cebb416",
+            "firstName": "Алексей",
+            "lastName": "Иларионов",
+            "department": "1f62a255-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "logo": "5fbcee5e-2275-4830-b263-5c7008826c78.jpg",
+            "email": "ilarionov@vbest.ru"
+        }
+    },
+    {
+        "id": "user_1_437a7392-9b13-11ed-80fe-40b0765b1e01",
+        "key": "user_1_437a7392-9b13-11ed-80fe-40b0765b1e01",
+        "value": {
+            "rev": "2-eb9fce0aecbaa5d8415052e92ac1dd6b"
+        },
+        "doc": {
+            "_id": "user_1_437a7392-9b13-11ed-80fe-40b0765b1e01",
+            "_rev": "2-eb9fce0aecbaa5d8415052e92ac1dd6b",
+            "firstName": "Ольга",
+            "lastName": "Колесова",
+            "department": "add49497-f8f5-11e6-a1f7-001a64d22812",
+            "roles": [],
+            "email": ""
+        }
+    },
+    {
+        "id": "user_1_45ff2669-078d-11e6-bd50-001a64d22812",
+        "key": "user_1_45ff2669-078d-11e6-bd50-001a64d22812",
+        "value": {
+            "rev": "6-ae245d31638f4ec8d3758509415f24b5"
+        },
+        "doc": {
+            "_id": "user_1_45ff2669-078d-11e6-bd50-001a64d22812",
+            "_rev": "6-ae245d31638f4ec8d3758509415f24b5",
+            "firstName": "Григорий",
+            "lastName": "Саталкин",
+            "department": "",
+            "roles": [],
+            "email": "",
+            "logo": "17600e89-001e-4bec-adab-77d0d9e06663.png"
+        }
+    },
+    {
+        "id": "user_1_4aefc606-7abf-11ed-80fc-40b0765b1e01",
+        "key": "user_1_4aefc606-7abf-11ed-80fc-40b0765b1e01",
+        "value": {
+            "rev": "4-829397790a714c3bdd4cc81f43e9b37b"
+        },
+        "doc": {
+            "_id": "user_1_4aefc606-7abf-11ed-80fc-40b0765b1e01",
+            "_rev": "4-829397790a714c3bdd4cc81f43e9b37b",
+            "firstName": "Валентин",
+            "department": "1f62a255-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "Dmitriev@vbest.ru",
+            "logo": "c2ed95c7-0773-4a28-b20a-e0746f81386e.png",
+            "lastName": "Дмитриев"
+        }
+    },
+    {
+        "id": "user_1_4ed430f2-69b3-11ea-80d2-40b0765b1e01",
+        "key": "user_1_4ed430f2-69b3-11ea-80d2-40b0765b1e01",
+        "value": {
+            "rev": "3-0918cb98490d05eb7e03c180cbd3ca8f"
+        },
+        "doc": {
+            "_id": "user_1_4ed430f2-69b3-11ea-80d2-40b0765b1e01",
+            "_rev": "3-0918cb98490d05eb7e03c180cbd3ca8f",
+            "firstName": "Артем",
+            "lastName": "Борисов",
+            "department": "1f62a258-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": ""
+        }
+    },
+    {
+        "id": "user_1_51c3f1a5-c1ea-11e6-a1f7-001a64d22812",
+        "key": "user_1_51c3f1a5-c1ea-11e6-a1f7-001a64d22812",
+        "value": {
+            "rev": "3-a01aba863edf656ad0068d5ee632155b"
+        },
+        "doc": {
+            "_id": "user_1_51c3f1a5-c1ea-11e6-a1f7-001a64d22812",
+            "_rev": "3-a01aba863edf656ad0068d5ee632155b",
+            "firstName": "Ксения",
+            "lastName": "Колесниченко",
+            "department": "1f62a258-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "",
+            "logo": "26d8a52f-3c9f-4947-8862-bb9a9fb42e7a.png"
+        }
+    },
+    {
+        "id": "user_1_51c3f1a6-c1ea-11e6-a1f7-001a64d22812",
+        "key": "user_1_51c3f1a6-c1ea-11e6-a1f7-001a64d22812",
+        "value": {
+            "rev": "4-9242b233c8bc3d883d7b6b3c40937c25"
+        },
+        "doc": {
+            "_id": "user_1_51c3f1a6-c1ea-11e6-a1f7-001a64d22812",
+            "_rev": "4-9242b233c8bc3d883d7b6b3c40937c25",
+            "firstName": "Александра",
+            "lastName": "Алексеева",
+            "department": null,
+            "roles": [],
+            "email": ""
+        }
+    },
+    {
+        "id": "user_1_524b937f-640e-11ed-80fb-40b0765b1e01",
+        "key": "user_1_524b937f-640e-11ed-80fb-40b0765b1e01",
+        "value": {
+            "rev": "3-b81d71ea4ca9fc38a1d2b5f4c7e04be0"
+        },
+        "doc": {
+            "_id": "user_1_524b937f-640e-11ed-80fb-40b0765b1e01",
+            "_rev": "3-b81d71ea4ca9fc38a1d2b5f4c7e04be0",
+            "firstName": "Анна",
+            "lastName": "Пожиткова",
+            "department": "1f62a256-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "anna.pozhitkova@labmail.ru"
+        }
+    },
+    {
+        "id": "user_1_579f0c01-58d5-11ec-80ec-40b0765b1e01",
+        "key": "user_1_579f0c01-58d5-11ec-80ec-40b0765b1e01",
+        "value": {
+            "rev": "4-0620c783b48941bbc806c633f8f861ef"
+        },
+        "doc": {
+            "_id": "user_1_579f0c01-58d5-11ec-80ec-40b0765b1e01",
+            "_rev": "4-0620c783b48941bbc806c633f8f861ef",
+            "firstName": "Елена",
+            "lastName": "Сюзюмова",
+            "department": "91d50980-4c47-11ec-80ec-40b0765b1e01",
+            "roles": [],
+            "email": ""
+        }
+    },
+    {
+        "id": "user_1_59f713ba-0b6b-11ee-8109-40b0765b1e01",
+        "key": "user_1_59f713ba-0b6b-11ee-8109-40b0765b1e01",
+        "value": {
+            "rev": "2-2d580eedcedf97ceab55c379a800a2b6"
+        },
+        "doc": {
+            "_id": "user_1_59f713ba-0b6b-11ee-8109-40b0765b1e01",
+            "_rev": "2-2d580eedcedf97ceab55c379a800a2b6",
+            "firstName": "Анна",
+            "lastName": "Котенко",
+            "department": "91d50980-4c47-11ec-80ec-40b0765b1e01",
+            "roles": [],
+            "email": ""
+        }
+    },
+    {
+        "id": "user_1_59f713bc-0b6b-11ee-8109-40b0765b1e01",
+        "key": "user_1_59f713bc-0b6b-11ee-8109-40b0765b1e01",
+        "value": {
+            "rev": "3-103035f08d8a96c2ed19656d08360e5f"
+        },
+        "doc": {
+            "_id": "user_1_59f713bc-0b6b-11ee-8109-40b0765b1e01",
+            "_rev": "3-103035f08d8a96c2ed19656d08360e5f",
+            "firstName": "Руфь",
+            "lastName": "Корнилова",
+            "department": "1f62a259-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "rk@labanaliz.ru"
+        }
+    },
+    {
+        "id": "user_1_5e7e1464-1c1b-11ef-811c-40b0765b1e01",
+        "key": "user_1_5e7e1464-1c1b-11ef-811c-40b0765b1e01",
+        "value": {
+            "rev": "2-8aad3e83b90944a4c580082e7b098454"
+        },
+        "doc": {
+            "_id": "user_1_5e7e1464-1c1b-11ef-811c-40b0765b1e01",
+            "_rev": "2-8aad3e83b90944a4c580082e7b098454",
+            "firstName": "Кристина",
+            "lastName": "Жиганова",
+            "department": "1f62a256-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": ""
+        }
+    },
+    {
+        "id": "user_1_627f646a-edf5-11eb-80e5-40b0765b1e01",
+        "key": "user_1_627f646a-edf5-11eb-80e5-40b0765b1e01",
+        "value": {
+            "rev": "5-6f2b5bdf5dc9b2e696e6cdc2753aebd3"
+        },
+        "doc": {
+            "_id": "user_1_627f646a-edf5-11eb-80e5-40b0765b1e01",
+            "_rev": "5-6f2b5bdf5dc9b2e696e6cdc2753aebd3",
+            "firstName": "Алексей",
+            "lastName": "Прокудин",
+            "department": null,
+            "roles": [],
+            "email": "",
+            "logo": "4254aa81-5d72-4986-a0c9-efb0e7ffba6e.jpg"
+        }
+    },
+    {
+        "id": "user_1_64c681d2-9bb2-11ed-80fe-40b0765b1e01",
+        "key": "user_1_64c681d2-9bb2-11ed-80fe-40b0765b1e01",
+        "value": {
+            "rev": "3-1a39ac0656fff65a858ecc538006c93a"
+        },
+        "doc": {
+            "_id": "user_1_64c681d2-9bb2-11ed-80fe-40b0765b1e01",
+            "_rev": "3-1a39ac0656fff65a858ecc538006c93a",
+            "firstName": "Андрей",
+            "lastName": "Екимов",
+            "department": "1f62a259-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "ekimov@labanaliz.ru"
+        }
+    },
+    {
+        "id": "user_1_6ec0371f-f99f-11ea-80db-40b0765b1e01",
+        "key": "user_1_6ec0371f-f99f-11ea-80db-40b0765b1e01",
+        "value": {
+            "rev": "6-20741c0d6e6f0bb3248fe1dbb8c84abd"
+        },
+        "doc": {
+            "_id": "user_1_6ec0371f-f99f-11ea-80db-40b0765b1e01",
+            "_rev": "6-20741c0d6e6f0bb3248fe1dbb8c84abd",
+            "firstName": "Мария",
+            "lastName": "Динаева",
+            "department": "1f62a255-ef3a-11e5-8d88-001a64d22812",
+            "roles": ["coordinator"],
+            "email": "",
+            "logo": "6c53be0b-0969-45f8-8ec1-8e5f300fb3ee.jpg"
+        }
+    },
+    {
+        "id": "user_1_76824998-9b4e-4318-8297-1491867659bb",
+        "key": "user_1_76824998-9b4e-4318-8297-1491867659bb",
+        "value": {
+            "rev": "1-09ef3c949e96fc8fadfe1382c566ba58"
+        },
+        "doc": {
+            "_id": "user_1_76824998-9b4e-4318-8297-1491867659bb",
+            "_rev": "1-09ef3c949e96fc8fadfe1382c566ba58",
+            "firstName": "Дарина",
+            "lastName": "Лагунова",
+            "department": "add49497-f8f5-11e6-a1f7-001a64d22812",
+            "roles": [],
+            "email": "dl@labinformservice.ru"
+        }
+    },
+    {
+        "id": "user_1_7c1b0fef-1a18-11ec-80ea-40b0765b1e01",
+        "key": "user_1_7c1b0fef-1a18-11ec-80ea-40b0765b1e01",
+        "value": {
+            "rev": "3-1ae30ba4c5916492e9c6da24ebb141f1"
+        },
+        "doc": {
+            "_id": "user_1_7c1b0fef-1a18-11ec-80ea-40b0765b1e01",
+            "_rev": "3-1ae30ba4c5916492e9c6da24ebb141f1",
+            "firstName": "Ринат",
+            "lastName": "Шайхутдинов",
+            "department": "1f62a255-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "shaihutdinov@vbest.ru",
+            "logo": "d0ad92c9-db80-4923-8f3b-fb5939f9b809.jpeg"
+        }
+    },
+    {
+        "id": "user_1_82834ed6-3dad-11ee-810c-40b0765b1e01",
+        "key": "user_1_82834ed6-3dad-11ee-810c-40b0765b1e01",
+        "value": {
+            "rev": "2-105752409c5e9062e2ecfeda774665a7"
+        },
+        "doc": {
+            "_id": "user_1_82834ed6-3dad-11ee-810c-40b0765b1e01",
+            "_rev": "2-105752409c5e9062e2ecfeda774665a7",
+            "firstName": "Виолетта",
+            "lastName": "Ихнова",
+            "department": "1f62a256-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "ikhnova@vbest.ru"
+        }
+    },
+    {
+        "id": "user_1_8b833c77-9289-11ee-8114-40b0765b1e01",
+        "key": "user_1_8b833c77-9289-11ee-8114-40b0765b1e01",
+        "value": {
+            "rev": "2-0595365bb36905143691cd1a8969705e"
+        },
+        "doc": {
+            "_id": "user_1_8b833c77-9289-11ee-8114-40b0765b1e01",
+            "_rev": "2-0595365bb36905143691cd1a8969705e",
+            "firstName": "Мария",
+            "lastName": "Киселёва",
+            "department": "1f62a256-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "kiseleva@vbest.ru"
+        }
+    },
+    {
+        "id": "user_1_8c086d49-a3e0-11ee-8115-40b0765b1e01",
+        "key": "user_1_8c086d49-a3e0-11ee-8115-40b0765b1e01",
+        "value": {
+            "rev": "2-e10777cf2962cc221b81e30fa51c0efb"
+        },
+        "doc": {
+            "_id": "user_1_8c086d49-a3e0-11ee-8115-40b0765b1e01",
+            "_rev": "2-e10777cf2962cc221b81e30fa51c0efb",
+            "firstName": "Анна",
+            "lastName": "Кавина",
+            "department": "91d50980-4c47-11ec-80ec-40b0765b1e01",
+            "roles": [],
+            "email": ""
+        }
+    },
+    {
+        "id": "user_1_8d56a909-6a37-11ed-80fc-40b0765b1e01",
+        "key": "user_1_8d56a909-6a37-11ed-80fc-40b0765b1e01",
+        "value": {
+            "rev": "6-2308246b2bdf098981f07cf0c5e83ca8"
+        },
+        "doc": {
+            "_id": "user_1_8d56a909-6a37-11ed-80fc-40b0765b1e01",
+            "_rev": "6-2308246b2bdf098981f07cf0c5e83ca8",
+            "firstName": "Сергей",
+            "lastName": "Фролов",
+            "department": null,
+            "roles": [],
+            "email": ""
+        }
+    },
+    {
+        "id": "user_1_8f24fc1d-311d-11ee-810b-40b0765b1e01",
+        "key": "user_1_8f24fc1d-311d-11ee-810b-40b0765b1e01",
+        "value": {
+            "rev": "4-92d8710d245a32d61f6e04ed94fa10f7"
+        },
+        "doc": {
+            "_id": "user_1_8f24fc1d-311d-11ee-810b-40b0765b1e01",
+            "_rev": "4-92d8710d245a32d61f6e04ed94fa10f7",
+            "firstName": "Евгений",
+            "lastName": "Булавин",
+            "department": "1f62a255-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "logo": "a4200d85-3afe-4827-91d3-a99bc2796a83.jpg",
+            "email": "bulavin@vbest.ru"
+        }
+    },
+    {
+        "id": "user_1_91b36e55-809d-11e6-a1f7-001a64d22812",
+        "key": "user_1_91b36e55-809d-11e6-a1f7-001a64d22812",
+        "value": {
+            "rev": "4-7818435b79774c96e809eb26d6371f94"
+        },
+        "doc": {
+            "_id": "user_1_91b36e55-809d-11e6-a1f7-001a64d22812",
+            "_rev": "4-7818435b79774c96e809eb26d6371f94",
+            "firstName": "Кристина",
+            "lastName": "Бурлева",
+            "department": "1f62a259-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "burleva@labanaliz.ru"
+        }
+    },
+    {
+        "id": "user_1_91b36e56-809d-11e6-a1f7-001a64d22812",
+        "key": "user_1_91b36e56-809d-11e6-a1f7-001a64d22812",
+        "value": {
+            "rev": "4-858d0673ce5d0bc8b07c2e96ba4191e2"
+        },
+        "doc": {
+            "_id": "user_1_91b36e56-809d-11e6-a1f7-001a64d22812",
+            "_rev": "4-858d0673ce5d0bc8b07c2e96ba4191e2",
+            "firstName": "Алексей",
+            "lastName": "Носов",
+            "department": "1f62a259-ef3a-11e5-8d88-001a64d22812",
+            "roles": ["coordinator"],
+            "email": "alexey.nosov@labmail.ru"
+        }
+    },
+    {
+        "id": "user_1_997f472f-d2b6-11e8-9619-001a64d22812",
+        "key": "user_1_997f472f-d2b6-11e8-9619-001a64d22812",
+        "value": {
+            "rev": "4-2e7bcd8196182eacc6e2d673692a4fe3"
+        },
+        "doc": {
+            "_id": "user_1_997f472f-d2b6-11e8-9619-001a64d22812",
+            "_rev": "4-2e7bcd8196182eacc6e2d673692a4fe3",
+            "firstName": "Сергей",
+            "lastName": "Маркин",
+            "department": "1f62a255-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "",
+            "logo": "8c7f49ed-df40-4dae-b475-8de698b53a50.jpg"
+        }
+    },
+    {
+        "id": "user_1_9a4916a5-b051-11ee-8115-40b0765b1e01",
+        "key": "user_1_9a4916a5-b051-11ee-8115-40b0765b1e01",
+        "value": {
+            "rev": "2-65e739c1ed0d7f296fe3d081e9c345ce"
+        },
+        "doc": {
+            "_id": "user_1_9a4916a5-b051-11ee-8115-40b0765b1e01",
+            "_rev": "2-65e739c1ed0d7f296fe3d081e9c345ce",
+            "firstName": "Ручий",
+            "lastName": "Анастасия",
+            "department": "1f62a258-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "ruchii@vbest.ru"
+        }
+    },
+    {
+        "id": "user_1_9a6fa468-1372-11eb-80dd-40b0765b1e01",
+        "key": "user_1_9a6fa468-1372-11eb-80dd-40b0765b1e01",
+        "value": {
+            "rev": "3-d28272e20c6af3da0434b79c77fa25b7"
+        },
+        "doc": {
+            "_id": "user_1_9a6fa468-1372-11eb-80dd-40b0765b1e01",
+            "_rev": "3-d28272e20c6af3da0434b79c77fa25b7",
+            "firstName": "Павел",
+            "lastName": "Коновалов",
+            "department": null,
+            "roles": [],
+            "email": ""
+        }
+    },
+    {
+        "id": "user_1_9ca5d95c-b2fe-11ef-8129-40b0765b1e01",
+        "key": "user_1_9ca5d95c-b2fe-11ef-8129-40b0765b1e01",
+        "value": {
+            "rev": "3-4376d7f796a8fb0723fabcc6bd23562c"
+        },
+        "doc": {
+            "_id": "user_1_9ca5d95c-b2fe-11ef-8129-40b0765b1e01",
+            "_rev": "3-4376d7f796a8fb0723fabcc6bd23562c",
+            "firstName": "Алина",
+            "lastName": "Гарина",
+            "department": "1f62a256-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "garina@vbest.ru",
+            "logo": "4c380ae5-7a35-4a98-8806-d8fc254b8b23.jpg"
+        }
+    },
+    {
+        "id": "user_1_9d798b44-9bdd-11ed-80fe-40b0765b1e01",
+        "key": "user_1_9d798b44-9bdd-11ed-80fe-40b0765b1e01",
+        "value": {
+            "rev": "2-40531a1844c973db9431f829413fbe1b"
+        },
+        "doc": {
+            "_id": "user_1_9d798b44-9bdd-11ed-80fe-40b0765b1e01",
+            "_rev": "2-40531a1844c973db9431f829413fbe1b",
+            "firstName": "Елена",
+            "lastName": "Матизова",
+            "department": null,
+            "roles": [],
+            "email": ""
+        }
+    },
+    {
+        "id": "user_1_9d798b46-9bdd-11ed-80fe-40b0765b1e01",
+        "key": "user_1_9d798b46-9bdd-11ed-80fe-40b0765b1e01",
+        "value": {
+            "rev": "5-1070ac7d68d61624e452fbaa82f805b8"
+        },
+        "doc": {
+            "_id": "user_1_9d798b46-9bdd-11ed-80fe-40b0765b1e01",
+            "_rev": "5-1070ac7d68d61624e452fbaa82f805b8",
+            "firstName": "Леся",
+            "lastName": "Бойцова",
+            "department": null,
+            "roles": [],
+            "email": ""
+        }
+    },
+    {
+        "id": "user_1_a7f480fe-6f6c-11eb-80e1-40b0765b1e01",
+        "key": "user_1_a7f480fe-6f6c-11eb-80e1-40b0765b1e01",
+        "value": {
+            "rev": "4-1cc271c639ad18939d977caa1ef5a271"
+        },
+        "doc": {
+            "_id": "user_1_a7f480fe-6f6c-11eb-80e1-40b0765b1e01",
+            "_rev": "4-1cc271c639ad18939d977caa1ef5a271",
+            "firstName": "Алексей",
+            "lastName": "Еличев",
+            "department": "1f62a255-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "a.elichev@vbest.ru",
+            "logo": "9028c4e7-16a2-4733-864a-84a50cb7edf4.jpg"
+        }
+    },
+    {
+        "id": "user_1_a804bd09-ee3f-11ec-80f4-40b0765b1e01",
+        "key": "user_1_a804bd09-ee3f-11ec-80f4-40b0765b1e01",
+        "value": {
+            "rev": "3-cba26794f4ee3d2c699c1433511cadfe"
+        },
+        "doc": {
+            "_id": "user_1_a804bd09-ee3f-11ec-80f4-40b0765b1e01",
+            "_rev": "3-cba26794f4ee3d2c699c1433511cadfe",
+            "firstName": "Константин",
+            "lastName": "Ефименко",
+            "department": "1f62a259-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "efimenko@labanaliz.ru"
+        }
+    },
+    {
+        "id": "user_1_a9cb1f48-d74a-11ec-80f2-40b0765b1e01",
+        "key": "user_1_a9cb1f48-d74a-11ec-80f2-40b0765b1e01",
+        "value": {
+            "rev": "3-861f635f33a142fd6743040d06e68d39"
+        },
+        "doc": {
+            "_id": "user_1_a9cb1f48-d74a-11ec-80f2-40b0765b1e01",
+            "_rev": "3-861f635f33a142fd6743040d06e68d39",
+            "firstName": "Александр",
+            "lastName": "Беляев",
+            "department": "1f62a255-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "beliaev@vbest.ru",
+            "logo": "aca7cb70-9379-48e1-9d45-ddc757c55593.jpg"
+        }
+    },
+    {
+        "id": "user_1_a9cb1f49-d74a-11ec-80f2-40b0765b1e01",
+        "key": "user_1_a9cb1f49-d74a-11ec-80f2-40b0765b1e01",
+        "value": {
+            "rev": "3-50e6b5ef794232312e4b50f24f956c7f"
+        },
+        "doc": {
+            "_id": "user_1_a9cb1f49-d74a-11ec-80f2-40b0765b1e01",
+            "_rev": "3-50e6b5ef794232312e4b50f24f956c7f",
+            "firstName": "Артем",
+            "lastName": "Гусев",
+            "department": "1f62a255-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "gusev@vbest.ru",
+            "logo": "bcf4481c-b9f1-4b3b-ad2d-453cab67a880.jpg"
+        }
+    },
+    {
+        "id": "user_1_acde1c1d-125c-48db-8811-5f2e846f97c2",
+        "key": "user_1_acde1c1d-125c-48db-8811-5f2e846f97c2",
+        "value": {
+            "rev": "12-10f325afffd8d28d96625b1e25057eee"
+        },
+        "doc": {
+            "_id": "user_1_acde1c1d-125c-48db-8811-5f2e846f97c2",
+            "_rev": "12-10f325afffd8d28d96625b1e25057eee",
+            "firstName": "Владимир",
+            "lastName": "Елисеев",
+            "department": "add49497-f8f5-11e6-a1f7-001a64d22812",
+            "roles": ["user", "coordinator"],
+            "email": "",
+            "logo": "b57db2be-daf6-41f8-9adb-53ec1a151b9e.jpg"
+        }
+    },
+    {
+        "id": "user_1_b0351e48-81d9-11e9-80c3-40b0765b1e01",
+        "key": "user_1_b0351e48-81d9-11e9-80c3-40b0765b1e01",
+        "value": {
+            "rev": "7-44f2dd627a677f7c2f2e83a02719ccb6"
+        },
+        "doc": {
+            "_id": "user_1_b0351e48-81d9-11e9-80c3-40b0765b1e01",
+            "_rev": "7-44f2dd627a677f7c2f2e83a02719ccb6",
+            "firstName": "Елена",
+            "lastName": "Матизова",
+            "department": "91d50980-4c47-11ec-80ec-40b0765b1e01",
+            "roles": [],
+            "email": "",
+            "logo": "18d33e2b-0a6d-4370-9f36-be8de046efce.HEIC"
+        }
+    },
+    {
+        "id": "user_1_b0351e49-81d9-11e9-80c3-40b0765b1e01",
+        "key": "user_1_b0351e49-81d9-11e9-80c3-40b0765b1e01",
+        "value": {
+            "rev": "5-c5d7dfaeb968daafbee41b7e63d53c01"
+        },
+        "doc": {
+            "_id": "user_1_b0351e49-81d9-11e9-80c3-40b0765b1e01",
+            "_rev": "5-c5d7dfaeb968daafbee41b7e63d53c01",
+            "firstName": "Дарья",
+            "lastName": "Баранникова",
+            "department": "91d50980-4c47-11ec-80ec-40b0765b1e01",
+            "roles": [],
+            "email": "darya.barannikova@labmail.ru"
+        }
+    },
+    {
+        "id": "user_1_b3bb03d7-9b9a-11eb-80e3-40b0765b1e01",
+        "key": "user_1_b3bb03d7-9b9a-11eb-80e3-40b0765b1e01",
+        "value": {
+            "rev": "5-57607c1afb3c318e205073375e3f7bd0"
+        },
+        "doc": {
+            "_id": "user_1_b3bb03d7-9b9a-11eb-80e3-40b0765b1e01",
+            "_rev": "5-57607c1afb3c318e205073375e3f7bd0",
+            "firstName": "Павел",
+            "lastName": "Грицок",
+            "department": "add49497-f8f5-11e6-a1f7-001a64d22812",
+            "roles": ["coordinator"],
+            "email": "",
+            "logo": "7e3d2b63-16e5-471d-b080-6f03b96e827d.png"
+        }
+    },
+    {
+        "id": "user_1_b3bb03d8-9b9a-11eb-80e3-40b0765b1e01",
+        "key": "user_1_b3bb03d8-9b9a-11eb-80e3-40b0765b1e01",
+        "value": {
+            "rev": "2-8c848f06557e1e00890190553aa07ee8"
+        },
+        "doc": {
+            "_id": "user_1_b3bb03d8-9b9a-11eb-80e3-40b0765b1e01",
+            "_rev": "2-8c848f06557e1e00890190553aa07ee8",
+            "firstName": "Прей",
+            "lastName": "Владимир",
+            "department": "add49497-f8f5-11e6-a1f7-001a64d22812",
+            "roles": [],
+            "email": ""
+        }
+    },
+    {
+        "id": "user_1_b89b5c77-c311-11ed-8100-40b0765b1e01",
+        "key": "user_1_b89b5c77-c311-11ed-8100-40b0765b1e01",
+        "value": {
+            "rev": "3-ccd656b01134b9eceb033e8d8052e38f"
+        },
+        "doc": {
+            "_id": "user_1_b89b5c77-c311-11ed-8100-40b0765b1e01",
+            "_rev": "3-ccd656b01134b9eceb033e8d8052e38f",
+            "firstName": "Михаил",
+            "lastName": "Федорченко",
+            "department": "1f62a259-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "fedorchenko@labanaliz.ru"
+        }
+    },
+    {
+        "id": "user_1_bb31c10a-43f7-11ea-80cd-40b0765b1e01",
+        "key": "user_1_bb31c10a-43f7-11ea-80cd-40b0765b1e01",
+        "value": {
+            "rev": "4-46eb07ae0dc43a3838d020375f1bd142"
+        },
+        "doc": {
+            "_id": "user_1_bb31c10a-43f7-11ea-80cd-40b0765b1e01",
+            "_rev": "4-46eb07ae0dc43a3838d020375f1bd142",
+            "firstName": "Никита",
+            "lastName": "Заяц",
+            "department": "1f62a259-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "zayats@labanaliz.ru",
+            "logo": "4623f3b9-0509-4a7f-983e-fbab951c300b.jpg"
+        }
+    },
+    {
+        "id": "user_1_bb76da14-312a-11ee-810b-40b0765b1e01",
+        "key": "user_1_bb76da14-312a-11ee-810b-40b0765b1e01",
+        "value": {
+            "rev": "3-e35b00fa4042966527bf267f33a87d1d"
+        },
+        "doc": {
+            "_id": "user_1_bb76da14-312a-11ee-810b-40b0765b1e01",
+            "_rev": "3-e35b00fa4042966527bf267f33a87d1d",
+            "firstName": "Андрей",
+            "lastName": "Суворов",
+            "department": "1f62a255-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "suvorov@vbest.ru",
+            "logo": "1b64f15f-aa97-4eca-983a-7fb9b8a24d19.jpg"
+        }
+    },
+    {
+        "id": "user_1_c6788299-ddb5-11ed-8104-40b0765b1e01",
+        "key": "user_1_c6788299-ddb5-11ed-8104-40b0765b1e01",
+        "value": {
+            "rev": "3-5734df883bfe419f7388db0e130f8ddb"
+        },
+        "doc": {
+            "_id": "user_1_c6788299-ddb5-11ed-8104-40b0765b1e01",
+            "_rev": "3-5734df883bfe419f7388db0e130f8ddb",
+            "firstName": "Данила",
+            "lastName": "Тушин",
+            "department": "1f62a255-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "logo": "cf521c35-0c5c-4734-acd8-bf31913e7a80.jpg",
+            "email": ""
+        }
+    },
+    {
+        "id": "user_1_c733447d-2567-11ea-80cd-40b0765b1e01",
+        "key": "user_1_c733447d-2567-11ea-80cd-40b0765b1e01",
+        "value": {
+            "rev": "1-cd554223cf13b2f40c6af1a6415a48f6"
+        },
+        "doc": {
+            "_id": "user_1_c733447d-2567-11ea-80cd-40b0765b1e01",
+            "_rev": "1-cd554223cf13b2f40c6af1a6415a48f6",
+            "firstName": "Валерия",
+            "lastName": "Лядощук",
+            "department": "c733447e-2567-11ea-80cd-40b0765b1e01",
+            "roles": [],
+            "email": ""
+        }
+    },
+    {
+        "id": "user_1_c8b2cb28-514f-11ea-80d0-40b0765b1e01",
+        "key": "user_1_c8b2cb28-514f-11ea-80d0-40b0765b1e01",
+        "value": {
+            "rev": "5-da89a392524e852a3fee7221e7e6bf1e"
+        },
+        "doc": {
+            "_id": "user_1_c8b2cb28-514f-11ea-80d0-40b0765b1e01",
+            "_rev": "5-da89a392524e852a3fee7221e7e6bf1e",
+            "firstName": "Денис",
+            "lastName": "Иванов",
+            "department": null,
+            "roles": [],
+            "email": "",
+            "logo": "3b2336af-3ee9-48a1-bdf4-74a35d9f18d0.jpg"
+        }
+    },
+    {
+        "id": "user_1_cb51dbc5-9156-11e7-bf42-001a64d22812",
+        "key": "user_1_cb51dbc5-9156-11e7-bf42-001a64d22812",
+        "value": {
+            "rev": "4-ccb1246c6c8070f8377a79a9ee3c5a9e"
+        },
+        "doc": {
+            "_id": "user_1_cb51dbc5-9156-11e7-bf42-001a64d22812",
+            "_rev": "4-ccb1246c6c8070f8377a79a9ee3c5a9e",
+            "firstName": "Отменено",
+            "department": "1f62a256-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": ""
+        }
+    },
+    {
+        "id": "user_1_d0e8239a-6ba3-11e7-bf42-001a64d22812",
+        "key": "user_1_d0e8239a-6ba3-11e7-bf42-001a64d22812",
+        "value": {
+            "rev": "3-375d94558790b726af9d6f1162c323bf"
+        },
+        "doc": {
+            "_id": "user_1_d0e8239a-6ba3-11e7-bf42-001a64d22812",
+            "_rev": "3-375d94558790b726af9d6f1162c323bf",
+            "firstName": "Яна",
+            "lastName": "Токарева",
+            "department": "1f62a256-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": ""
+        }
+    },
+    {
+        "id": "user_1_d1920bce-32eb-11eb-80de-40b0765b1e01",
+        "key": "user_1_d1920bce-32eb-11eb-80de-40b0765b1e01",
+        "value": {
+            "rev": "4-a631f2e8df396cfeb2ec258c7f864ab1"
+        },
+        "doc": {
+            "_id": "user_1_d1920bce-32eb-11eb-80de-40b0765b1e01",
+            "_rev": "4-a631f2e8df396cfeb2ec258c7f864ab1",
+            "firstName": "Игорь",
+            "lastName": "Мараков",
+            "department": "1f62a255-ef3a-11e5-8d88-001a64d22812",
+            "roles": ["coordinator"],
+            "email": "marakov@vbest.ru",
+            "logo": "44086b3c-4478-4c1d-90ca-7ec850c7d5d0.jpeg"
+        }
+    },
+    {
+        "id": "user_1_d648b3ef-f5d1-11eb-80e6-40b0765b1e01",
+        "key": "user_1_d648b3ef-f5d1-11eb-80e6-40b0765b1e01",
+        "value": {
+            "rev": "4-ed30e8b0b955128f3530852d34384535"
+        },
+        "doc": {
+            "_id": "user_1_d648b3ef-f5d1-11eb-80e6-40b0765b1e01",
+            "_rev": "4-ed30e8b0b955128f3530852d34384535",
+            "firstName": "Иван",
+            "lastName": "Торлюн",
+            "department": "1f62a259-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "torlyun@labanaliz.ru",
+            "logo": "b1769aed-890b-4ffc-a744-626c51224206.jpeg"
+        }
+    },
+    {
+        "id": "user_1_d648b3f0-f5d1-11eb-80e6-40b0765b1e01",
+        "key": "user_1_d648b3f0-f5d1-11eb-80e6-40b0765b1e01",
+        "value": {
+            "rev": "5-19a90295dad30757efcb31b46fc7e2c8"
+        },
+        "doc": {
+            "_id": "user_1_d648b3f0-f5d1-11eb-80e6-40b0765b1e01",
+            "_rev": "5-19a90295dad30757efcb31b46fc7e2c8",
+            "firstName": "Владислав",
+            "lastName": "Симонов",
+            "department": "1f62a259-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "simonov@labanaliz.ru",
+            "logo": "92aaf9a1-1312-4b21-ac68-4b5653fa96bf.jpg"
+        }
+    },
+    {
+        "id": "user_1_dc52a25a-9761-11e6-a1f7-001a64d22812",
+        "key": "user_1_dc52a25a-9761-11e6-a1f7-001a64d22812",
+        "value": {
+            "rev": "7-6f5366eb8580e7b51a9bd695b9dfc350"
+        },
+        "doc": {
+            "_id": "user_1_dc52a25a-9761-11e6-a1f7-001a64d22812",
+            "_rev": "7-6f5366eb8580e7b51a9bd695b9dfc350",
+            "firstName": "Валентина",
+            "lastName": "Федорищенко",
+            "department": "1f62a258-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "",
+            "logo": "4cc70628-dce7-4280-a8c5-717b5ba028c8.jpg"
+        }
+    },
+    {
+        "id": "user_1_dc52a25b-9761-11e6-a1f7-001a64d22812",
+        "key": "user_1_dc52a25b-9761-11e6-a1f7-001a64d22812",
+        "value": {
+            "rev": "4-512226da1f6aee4ed57cbc6d1f62098d"
+        },
+        "doc": {
+            "_id": "user_1_dc52a25b-9761-11e6-a1f7-001a64d22812",
+            "_rev": "4-512226da1f6aee4ed57cbc6d1f62098d",
+            "firstName": "Юлия",
+            "lastName": "Литвиненко",
+            "department": null,
+            "roles": [],
+            "email": ""
+        }
+    },
+    {
+        "id": "user_1_e4ca8b07-1b6e-11ec-80ea-40b0765b1e01",
+        "key": "user_1_e4ca8b07-1b6e-11ec-80ea-40b0765b1e01",
+        "value": {
+            "rev": "3-87a43ec72d320b1ab77ca3527eb682ea"
+        },
+        "doc": {
+            "_id": "user_1_e4ca8b07-1b6e-11ec-80ea-40b0765b1e01",
+            "_rev": "3-87a43ec72d320b1ab77ca3527eb682ea",
+            "firstName": "Игорь",
+            "lastName": "Возный",
+            "department": "1f62a259-ef3a-11e5-8d88-001a64d22812",
+            "roles": ["coordinator"],
+            "email": ""
+        }
+    },
+    {
+        "id": "user_1_e8e78223-68f4-11ef-8123-40b0765b1e01",
+        "key": "user_1_e8e78223-68f4-11ef-8123-40b0765b1e01",
+        "value": {
+            "rev": "2-cd3d168b0bc88dbbe0d77e4cec4c068c"
+        },
+        "doc": {
+            "_id": "user_1_e8e78223-68f4-11ef-8123-40b0765b1e01",
+            "_rev": "2-cd3d168b0bc88dbbe0d77e4cec4c068c",
+            "firstName": "Дарья",
+            "lastName": "Михашенок",
+            "department": "91d50980-4c47-11ec-80ec-40b0765b1e01",
+            "roles": [],
+            "email": ""
+        }
+    },
+    {
+        "id": "user_1_f5aebd5b-f645-11ee-811a-40b0765b1e01",
+        "key": "user_1_f5aebd5b-f645-11ee-811a-40b0765b1e01",
+        "value": {
+            "rev": "2-5d02aa7d04a267da8339fc25a9e96c51"
+        },
+        "doc": {
+            "_id": "user_1_f5aebd5b-f645-11ee-811a-40b0765b1e01",
+            "_rev": "2-5d02aa7d04a267da8339fc25a9e96c51",
+            "firstName": "Ирина",
+            "lastName": "Чирун",
+            "department": "0d7cf0f9-bbea-11ed-8100-40b0765b1e01",
+            "roles": [],
+            "email": ""
+        }
+    },
+    {
+        "id": "user_1_faf6a884-f4ee-11e5-bd50-001a64d22812",
+        "key": "user_1_faf6a884-f4ee-11e5-bd50-001a64d22812",
+        "value": {
+            "rev": "3-0167bcda5386f9027f6ab0e40b11f501"
+        },
+        "doc": {
+            "_id": "user_1_faf6a884-f4ee-11e5-bd50-001a64d22812",
+            "_rev": "3-0167bcda5386f9027f6ab0e40b11f501",
+            "firstName": "Игорь",
+            "lastName": "Абушаев",
+            "department": "1f62a259-ef3a-11e5-8d88-001a64d22812",
+            "roles": [],
+            "email": "igor.abushaev@labmail.ru"
+        }
+    },
+    {
+        "id": "user_1_fcded49a-3873-11e6-a438-001a64d22812",
+        "key": "user_1_fcded49a-3873-11e6-a438-001a64d22812",
+        "value": {
+            "rev": "1-60d0f74ef21b8f7b68d820468e5b1527"
+        },
+        "doc": {
+            "_id": "user_1_fcded49a-3873-11e6-a438-001a64d22812",
+            "_rev": "1-60d0f74ef21b8f7b68d820468e5b1527",
+            "firstName": "Земских",
+            "lastName": "Денис",
+            "department": null,
+            "roles": []
+        }
+    },
+    {
+        "id": "department_1_0d7cf0f9-bbea-11ed-8100-40b0765b1e01",
+        "key": "department_1_0d7cf0f9-bbea-11ed-8100-40b0765b1e01",
+        "value": {
+            "rev": "1-da5d067ff071d7fc3bf5eb8a0a0bdd12"
+        },
+        "doc": {
+            "_id": "department_1_0d7cf0f9-bbea-11ed-8100-40b0765b1e01",
+            "_rev": "1-da5d067ff071d7fc3bf5eb8a0a0bdd12",
+            "title": "Отдел Mindray"
+        }
+    },
+    {
+        "id": "department_1_1f62a255-ef3a-11e5-8d88-001a64d22812",
+        "key": "department_1_1f62a255-ef3a-11e5-8d88-001a64d22812",
+        "value": {
+            "rev": "2-9b1a1cff405a0ebcfcc835c057ab8d6e"
+        },
+        "doc": {
+            "_id": "department_1_1f62a255-ef3a-11e5-8d88-001a64d22812",
+            "_rev": "2-9b1a1cff405a0ebcfcc835c057ab8d6e",
+            "title": "Сервис ВББ"
+        }
+    },
+    {
+        "id": "department_1_1f62a256-ef3a-11e5-8d88-001a64d22812",
+        "key": "department_1_1f62a256-ef3a-11e5-8d88-001a64d22812",
+        "value": {
+            "rev": "1-187c4aae05f697a90ae9ec4b90f6c6e7"
+        },
+        "doc": {
+            "_id": "department_1_1f62a256-ef3a-11e5-8d88-001a64d22812",
+            "_rev": "1-187c4aae05f697a90ae9ec4b90f6c6e7",
+            "title": "Отдел биохимии"
+        }
+    },
+    {
+        "id": "department_1_1f62a257-ef3a-11e5-8d88-001a64d22812",
+        "key": "department_1_1f62a257-ef3a-11e5-8d88-001a64d22812",
+        "value": {
+            "rev": "1-31a47d83b4de2950dfc5fe33c5bbf91a"
+        },
+        "doc": {
+            "_id": "department_1_1f62a257-ef3a-11e5-8d88-001a64d22812",
+            "_rev": "1-31a47d83b4de2950dfc5fe33c5bbf91a",
+            "title": "Отдел ПЦР"
+        }
+    },
+    {
+        "id": "department_1_1f62a258-ef3a-11e5-8d88-001a64d22812",
+        "key": "department_1_1f62a258-ef3a-11e5-8d88-001a64d22812",
+        "value": {
+            "rev": "1-841eab36ed15cb6cadba018147dae36d"
+        },
+        "doc": {
+            "_id": "department_1_1f62a258-ef3a-11e5-8d88-001a64d22812",
+            "_rev": "1-841eab36ed15cb6cadba018147dae36d",
+            "title": "Отдел ИФА"
+        }
+    },
+    {
+        "id": "department_1_1f62a259-ef3a-11e5-8d88-001a64d22812",
+        "key": "department_1_1f62a259-ef3a-11e5-8d88-001a64d22812",
+        "value": {
+            "rev": "2-a1112863e8470a798afd840e8f68b80b"
+        },
+        "doc": {
+            "_id": "department_1_1f62a259-ef3a-11e5-8d88-001a64d22812",
+            "_rev": "2-a1112863e8470a798afd840e8f68b80b",
+            "title": "Сервис А78"
+        }
+    },
+    {
+        "id": "department_1_91d50980-4c47-11ec-80ec-40b0765b1e01",
+        "key": "department_1_91d50980-4c47-11ec-80ec-40b0765b1e01",
+        "value": {
+            "rev": "2-df29875fec6278f4b28aad53ece25d75"
+        },
+        "doc": {
+            "_id": "department_1_91d50980-4c47-11ec-80ec-40b0765b1e01",
+            "_rev": "2-df29875fec6278f4b28aad53ece25d75",
+            "title": "Методисты СОЛТ"
+        }
+    },
+    {
+        "id": "department_1_9d798b43-9bdd-11ed-80fe-40b0765b1e01",
+        "key": "department_1_9d798b43-9bdd-11ed-80fe-40b0765b1e01",
+        "value": {
+            "rev": "1-8294c9927c450cbf8e67e4f32b0a8fc6"
+        },
+        "doc": {
+            "_id": "department_1_9d798b43-9bdd-11ed-80fe-40b0765b1e01",
+            "_rev": "1-8294c9927c450cbf8e67e4f32b0a8fc6",
+            "title": "Отдел исследования мочи"
+        }
+    },
+    {
+        "id": "department_1_add49497-f8f5-11e6-a1f7-001a64d22812",
+        "key": "department_1_add49497-f8f5-11e6-a1f7-001a64d22812",
+        "value": {
+            "rev": "4-08c217b55bc8c70fa00cac6690b16343"
+        },
+        "doc": {
+            "_id": "department_1_add49497-f8f5-11e6-a1f7-001a64d22812",
+            "_rev": "4-08c217b55bc8c70fa00cac6690b16343",
+            "title": "Сервис ЛИС"
+        }
+    },
+    {
+        "id": "department_1_c733447e-2567-11ea-80cd-40b0765b1e01",
+        "key": "department_1_c733447e-2567-11ea-80cd-40b0765b1e01",
+        "value": {
+            "rev": "1-82a05586df2e8e757c8f38cdfbaf5e92"
+        },
+        "doc": {
+            "_id": "department_1_c733447e-2567-11ea-80cd-40b0765b1e01",
+            "_rev": "1-82a05586df2e8e757c8f38cdfbaf5e92",
+            "title": "Отдел общих клинических исследований"
+        }
+    },
+    {
+        "id": "department_1_undefined",
+        "key": "department_1_undefined",
+        "value": {
+            "rev": "1-967a00dff5e02add41819138abb3284d"
+        },
+        "doc": {
+            "_id": "department_1_undefined",
+            "_rev": "1-967a00dff5e02add41819138abb3284d"
+        }
+    }
+]

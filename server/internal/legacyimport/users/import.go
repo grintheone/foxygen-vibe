@@ -13,11 +13,13 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/text/unicode/norm"
 )
 
 type legacyDump struct {
@@ -196,7 +198,7 @@ func loadLegacyImportPlan(path string) (importPlan, error) {
 		email := strings.TrimSpace(strings.ToLower(doc.Email))
 		departmentRef := strings.TrimSpace(doc.Department)
 		departmentTitle := strings.TrimSpace(departments[departmentRef])
-		username := uniqueUsername(fmt.Sprintf("user_%d", len(users)+1), used)
+		username := uniqueUsername(legacyUsernameBase(firstName, lastName), used)
 
 		users = append(users, legacyUser{
 			LegacyID:         trimLegacyPrefix(doc.ID),
@@ -700,12 +702,121 @@ func preferredRole(roles []string) string {
 
 func uniqueUsername(base string, used map[string]int) string {
 	key := strings.ToLower(strings.TrimSpace(base))
+	if key == "" {
+		key = "user"
+		base = "user"
+	}
 	used[key]++
 	if used[key] == 1 {
 		return base
 	}
 
 	return fmt.Sprintf("%s-%d", base, used[key])
+}
+
+func legacyUsernameBase(firstName, lastName string) string {
+	first := normalizeUsernamePart(firstName)
+	last := normalizeUsernamePart(lastName)
+
+	switch {
+	case last != "" && first != "":
+		return last + "." + first
+	case last != "":
+		return last
+	case first != "":
+		return first
+	default:
+		return "user"
+	}
+}
+
+func normalizeUsernamePart(value string) string {
+	normalized := strings.TrimSpace(strings.ToLower(value))
+	if normalized == "" {
+		return ""
+	}
+
+	var builder strings.Builder
+	lastWasSeparator := false
+
+	for _, r := range normalized {
+		if mapped, ok := cyrillicToLatin[r]; ok {
+			if mapped == "" {
+				continue
+			}
+			builder.WriteString(mapped)
+			lastWasSeparator = false
+			continue
+		}
+
+		for _, decomposed := range norm.NFD.String(string(r)) {
+			switch {
+			case unicode.Is(unicode.Mn, decomposed):
+				continue
+			case decomposed >= 'a' && decomposed <= 'z':
+				builder.WriteRune(decomposed)
+				lastWasSeparator = false
+			case decomposed >= '0' && decomposed <= '9':
+				builder.WriteRune(decomposed)
+				lastWasSeparator = false
+			case isUsernameSeparator(decomposed) && builder.Len() > 0 && !lastWasSeparator:
+				builder.WriteByte('-')
+				lastWasSeparator = true
+			}
+		}
+	}
+
+	return strings.Trim(builder.String(), "-")
+}
+
+func isUsernameSeparator(r rune) bool {
+	switch r {
+	case ' ', '-', '_', '.', ',', '\'', '"', '`', '/', '\\':
+		return true
+	default:
+		return false
+	}
+}
+
+var cyrillicToLatin = map[rune]string{
+	'а': "a",
+	'б': "b",
+	'в': "v",
+	'г': "g",
+	'д': "d",
+	'е': "e",
+	'ё': "e",
+	'ж': "zh",
+	'з': "z",
+	'и': "i",
+	'й': "y",
+	'к': "k",
+	'л': "l",
+	'м': "m",
+	'н': "n",
+	'о': "o",
+	'п': "p",
+	'р': "r",
+	'с': "s",
+	'т': "t",
+	'у': "u",
+	'ф': "f",
+	'х': "kh",
+	'ц': "ts",
+	'ч': "ch",
+	'ш': "sh",
+	'щ': "shch",
+	'ъ': "",
+	'ы': "y",
+	'ь': "",
+	'э': "e",
+	'ю': "yu",
+	'я': "ya",
+	'є': "ie",
+	'і': "i",
+	'ї': "i",
+	'ґ': "g",
+	'ў': "u",
 }
 
 func trimLegacyPrefix(value string) string {

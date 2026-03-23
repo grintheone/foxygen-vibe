@@ -23,8 +23,8 @@ func TestLoadLegacyUsers(t *testing.T) {
 	    {
 	      "doc": {
 	        "_id": "user_1_user-a",
-	        "firstName": "Alex",
-	        "lastName": "Smith",
+	        "firstName": "Алексей",
+	        "lastName": "Смирнов",
 	        "department": "dept-1",
 	        "email": "Alex@example.com"
 	      }
@@ -32,8 +32,8 @@ func TestLoadLegacyUsers(t *testing.T) {
 	    {
 	      "doc": {
 	        "_id": "user_1_user-b",
-	        "firstName": "Blair",
-	        "lastName": "Jones",
+	        "firstName": "Alex",
+	        "lastName": "Smith",
 	        "department": "dept-1",
 	        "email": "alex@example.com"
 	      }
@@ -41,8 +41,8 @@ func TestLoadLegacyUsers(t *testing.T) {
 	    {
 	      "doc": {
 	        "_id": "user_1_user-c",
-	        "firstName": "Casey",
-	        "lastName": "Mills",
+	        "firstName": "Alex",
+	        "lastName": "Smith",
 	        "department": "missing",
 	        "email": ""
 	      }
@@ -64,16 +64,16 @@ func TestLoadLegacyUsers(t *testing.T) {
 		t.Fatalf("expected 3 users, got %d", len(users))
 	}
 
-	if users[0].Username != "user_1" {
-		t.Fatalf("expected first username to use sequential format, got %q", users[0].Username)
+	if users[0].Username != "smirnov.aleksey" {
+		t.Fatalf("expected first username to use transliterated lastname.firstname format, got %q", users[0].Username)
 	}
 
-	if users[1].Username != "user_2" {
-		t.Fatalf("expected second username to use sequential format, got %q", users[1].Username)
+	if users[1].Username != "smith.alex" {
+		t.Fatalf("expected second username to use lastname.firstname format, got %q", users[1].Username)
 	}
 
-	if users[2].Username != "user_3" {
-		t.Fatalf("expected third username to use sequential format, got %q", users[2].Username)
+	if users[2].Username != "smith.alex-2" {
+		t.Fatalf("expected duplicate names to receive a deterministic suffix, got %q", users[2].Username)
 	}
 
 	if users[0].DepartmentTitle != "Operations" {
@@ -98,5 +98,58 @@ func TestTrimLegacyPrefix(t *testing.T) {
 
 	if got := trimLegacyPrefix("plain-value"); got != "plain-value" {
 		t.Fatalf("unexpected value %q", got)
+	}
+}
+
+func TestLegacyUsernameBase(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		firstName string
+		lastName  string
+		want      string
+	}{
+		{
+			name:      "latin with accents",
+			firstName: "José",
+			lastName:  "Núñez",
+			want:      "nunez.jose",
+		},
+		{
+			name:      "cyrillic transliteration",
+			firstName: "Мария",
+			lastName:  "Ильина",
+			want:      "ilina.mariya",
+		},
+		{
+			name:      "hyphenated names",
+			firstName: "Anne Marie",
+			lastName:  "Smith-Jones",
+			want:      "smith-jones.anne-marie",
+		},
+		{
+			name:      "missing last name",
+			firstName: "Alex",
+			lastName:  "",
+			want:      "alex",
+		},
+		{
+			name:      "missing names",
+			firstName: "",
+			lastName:  "",
+			want:      "user",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := legacyUsernameBase(tt.firstName, tt.lastName); got != tt.want {
+				t.Fatalf("legacyUsernameBase(%q, %q) = %q, want %q", tt.firstName, tt.lastName, got, tt.want)
+			}
+		})
 	}
 }

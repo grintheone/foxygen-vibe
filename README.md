@@ -31,18 +31,18 @@ Setup:
    `POSTGRES_PASSWORD`
    `JWT_SECRET`
    `IMPORT_DEFAULT_PASSWORD`
-4. Keep the provided company object-storage values unless your infra team gives you newer ones.
+4. Fill in the object-storage settings with the values provided by your infrastructure team.
 5. Start the stack:
    `docker compose --env-file deploy/production/.env -f docker-compose.production.yml up -d --build`
 
-For your current company setup, the object-storage section should look like this:
+The object-storage section should use environment-specific values, for example:
 
-`MINIO_ENDPOINT=s3.internal.int.best`
-`MINIO_ACCESS_KEY=3L8BYP2lYjnGokfkaxX2`
-`MINIO_SECRET_KEY=RcnbKT1i9QpPi59Xc7Ejg8gRLD2otbd5t3fpRR2O`
-`MINIO_BUCKET=mobile-engineer`
+`MINIO_ENDPOINT=<storage-endpoint>`
+`MINIO_ACCESS_KEY=<storage-access-key>`
+`MINIO_SECRET_KEY=<storage-secret-key>`
+`MINIO_BUCKET=<storage-bucket>`
 `MINIO_USE_SSL=true`
-`MINIO_LOCATION=ru-sp-01`
+`MINIO_LOCATION=<storage-region>`
 
 If you want to run your own MinIO container instead of an external S3/MinIO endpoint, start with:
 
@@ -57,7 +57,7 @@ Useful notes:
 - The first-start import is controlled by `BOOTSTRAP_IMPORT_ENABLED=true|false`.
 - Imported users receive the temporary password from `IMPORT_DEFAULT_PASSWORD`.
 - If the database already contains app data, the bootstrap step skips the import and starts the API normally.
-- Your current production path uses the company object storage endpoint and does not need the local `with-minio` profile.
+- Use the local `with-minio` profile only when you are not connecting to an existing S3-compatible storage service.
 
 ## Run the server
 
@@ -73,7 +73,7 @@ The server reads `server/.env` for `DB_*` settings and builds a PostgreSQL conne
 The backend now exposes a webhook-style endpoint at `/api/v1/sync` for server-to-server ticket creation.
 
 1. Set a shared secret in `server/.env`:
-   `TICKET_SYNC_SECRET=replace-with-a-long-random-secret`
+   `TICKET_SYNC_SECRET=<sync-shared-secret>`
 2. Start the API from `server/`:
    `go run .`
 3. Send `POST` requests to your server with the `X-Sync-Secret` header and JSON like:
@@ -113,11 +113,11 @@ The backend now supports the MinIO Go SDK for S3-compatible object storage. Stor
    `docker compose up -d minio`
 2. Uncomment or add these values in `server/.env`:
    `MINIO_ENDPOINT=localhost:9000`
-   `MINIO_ACCESS_KEY=minioadmin`
-   `MINIO_SECRET_KEY=minioadmin`
-   `MINIO_BUCKET=foxygen-vibe`
+   `MINIO_ACCESS_KEY=<local-storage-access-key>`
+   `MINIO_SECRET_KEY=<local-storage-secret-key>`
+   `MINIO_BUCKET=<local-storage-bucket>`
    `MINIO_USE_SSL=false`
-   `MINIO_REGION=us-east-1`
+   `MINIO_REGION=<local-storage-region>`
 3. Start the API from `server/`:
    `go run .`
 
@@ -143,7 +143,7 @@ Generated files will be written to `server/internal/db/`.
 
 If you want to run the whole legacy import flow in one command, place the dump at `server/dump.json` and run the orchestrator from the `server/` directory:
 
-`go run ./cmd/import-dump -default-password "ChangeMe123!"`
+`go run ./cmd/import-dump -default-password "<temporary-password>"`
 
 Notes:
 
@@ -158,12 +158,12 @@ If you have a legacy CouchDB `_all_docs` export, you can import the `user_*` rec
 
 1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
 2. Run the importer from the `server/` directory:
-   `go run ./cmd/import-dump -source "/absolute/path/to/_all_docs.json" -only users -default-password "ChangeMe123!"`
+   `go run ./cmd/import-dump -source "/absolute/path/to/_all_docs.json" -only users -default-password "<temporary-password>"`
 
 Notes:
 
 - The legacy dump does not contain passwords, so the importer assigns the temporary password you provide to every imported account.
-- Imported usernames are assigned deterministically as `user_1`, `user_2`, `user_3`, and so on.
+- Imported usernames are assigned deterministically from the legacy real names as `lastname.firstname` using Latin transliteration. Duplicate names receive a numeric suffix such as `smith.alex-2`.
 - The command is safe to rerun. If a username already exists, that user is skipped.
 - Use `-dry-run` first if you want to inspect the planned usernames before writing to the database.
 
