@@ -51,6 +51,8 @@ type Server struct {
 	editorContactUpdater            func(context.Context, pgtype.UUID, string, string, string, string, pgtype.UUID) (int64, error)
 	editorDeviceUpdater             func(context.Context, pgtype.UUID, any, string, json.RawMessage, bool, bool) (int64, error)
 	editorTicketUpdater             func(context.Context, pgtype.UUID, any, any, any, any, any, any, any, string, string, string, bool, bool, any, any, any, any, any) (int64, error)
+	profileAccessCheck              func(context.Context, pgtype.UUID, pgtype.UUID) (bool, error)
+	accountDisabledUpdater          func(context.Context, pgtype.UUID, bool) (bool, error)
 }
 
 type accountStore interface {

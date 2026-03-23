@@ -282,6 +282,10 @@ func scanProfileTicketRows(rows pgx.Rows) ([]profileTicketResponse, error) {
 }
 
 func (s *Server) canAccessProfile(ctx context.Context, requesterID pgtype.UUID, targetID pgtype.UUID) (bool, error) {
+	if s.profileAccessCheck != nil {
+		return s.profileAccessCheck(ctx, requesterID, targetID)
+	}
+
 	if requesterID == targetID {
 		return true, nil
 	}
@@ -302,6 +306,27 @@ func (s *Server) canAccessProfile(ctx context.Context, requesterID pgtype.UUID, 
 	}
 
 	return allowed, nil
+}
+
+func (s *Server) updateAccountDisabled(ctx context.Context, userID pgtype.UUID, disabled bool) (bool, error) {
+	if s.accountDisabledUpdater != nil {
+		return s.accountDisabledUpdater(ctx, userID, disabled)
+	}
+
+	if s.db == nil {
+		return false, errors.New("database not configured")
+	}
+
+	result, err := s.db.Exec(ctx, `
+		UPDATE accounts
+		SET disabled = $2
+		WHERE user_id = $1
+	`, userID, disabled)
+	if err != nil {
+		return false, err
+	}
+
+	return result.RowsAffected() > 0, nil
 }
 
 type sqlExecutor interface {
@@ -998,6 +1023,7 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 	type profileResponse struct {
 		UserID             string                     `json:"user_id"`
 		Username           string                     `json:"username"`
+		Disabled           bool                       `json:"disabled"`
 		Name               string                     `json:"name"`
 		Email              string                     `json:"email"`
 		Phone              string                     `json:"phone"`
@@ -1037,28 +1063,12 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if r.Method != http.MethodGet {
+	if r.Method != http.MethodGet && r.Method != http.MethodPatch {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	claims, err := parseAuthorizationHeader(s.auth.jwtSecret, r.Header.Get("Authorization"))
-	if err != nil {
-		http.Error(w, "invalid access token", http.StatusUnauthorized)
-		return
-	}
-
-	if s.queries == nil {
-		http.Error(w, "database not configured", http.StatusServiceUnavailable)
-		return
-	}
-
 	requesterID := pgtype.UUID{}
-	if err := requesterID.Scan(claims.Subject); err != nil {
-		http.Error(w, "invalid access token", http.StatusUnauthorized)
-		return
-	}
-
 	targetID := requesterID
 	subresource := ""
 	if r.URL.Path != "/api/profile" {
@@ -1078,12 +1088,49 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 		case len(pathParts) == 1:
 		case len(pathParts) == 2 && pathParts[1] == "tickets":
 			subresource = "tickets"
+		case len(pathParts) == 2 && pathParts[1] == "disabled":
+			subresource = "disabled"
 		case len(pathParts) == 3 && pathParts[1] == "tickets" && pathParts[2] == "facets":
 			subresource = "tickets-facets"
 		default:
 			http.NotFound(w, r)
 			return
 		}
+	}
+
+	if r.Method == http.MethodPatch {
+		if subresource != "disabled" {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		s.handleProfileDisabled(w, r, targetID)
+		return
+	}
+
+	if subresource == "disabled" {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	claims, err := parseAuthorizationHeader(s.auth.jwtSecret, r.Header.Get("Authorization"))
+	if err != nil {
+		http.Error(w, "invalid access token", http.StatusUnauthorized)
+		return
+	}
+
+	if s.queries == nil {
+		http.Error(w, "database not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	if err := requesterID.Scan(claims.Subject); err != nil {
+		http.Error(w, "invalid access token", http.StatusUnauthorized)
+		return
+	}
+
+	if r.URL.Path == "/api/profile" {
+		targetID = requesterID
 	}
 
 	if s.db == nil {
@@ -1115,6 +1162,7 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, profileResponse{
 			UserID:             uuidToString(profile.UserID),
 			Username:           profile.Username,
+			Disabled:           false,
 			Name:               profile.Name,
 			Email:              profile.Email,
 			Phone:              "",
@@ -1303,6 +1351,7 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 		SELECT
 			a.user_id,
 			a.username,
+			a.disabled,
 			TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))) AS name,
 			COALESCE(u.email, ''),
 			COALESCE(u.phone, ''),
@@ -1324,6 +1373,7 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 	var (
 		profileUserID      pgtype.UUID
 		username           string
+		disabled           bool
 		name               string
 		email              string
 		phone              string
@@ -1337,6 +1387,7 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 	if err := row.Scan(
 		&profileUserID,
 		&username,
+		&disabled,
 		&name,
 		&email,
 		&phone,
@@ -1444,6 +1495,7 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, profileResponse{
 		UserID:             uuidToString(profileUserID),
 		Username:           username,
+		Disabled:           disabled,
 		Name:               name,
 		Email:              email,
 		Phone:              phone,
@@ -1454,6 +1506,83 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 		LatestTicketStatus: latestTicketStatus,
 		TicketStats:        stats,
 		ActiveTickets:      activeTickets,
+	})
+}
+
+func (s *Server) handleProfileDisabled(w http.ResponseWriter, r *http.Request, targetID pgtype.UUID) {
+	type profileDisabledInput struct {
+		Disabled *bool `json:"disabled"`
+	}
+
+	type profileDisabledResponse struct {
+		UserID   string `json:"user_id"`
+		Disabled bool   `json:"disabled"`
+	}
+
+	if r.Method != http.MethodPatch {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	requesterID, allowed := s.requireEditorAccess(w, r)
+	if !allowed {
+		return
+	}
+
+	if s.db == nil && (s.profileAccessCheck == nil || s.accountDisabledUpdater == nil) {
+		http.Error(w, "database not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+
+	var input profileDisabledInput
+	if err := decoder.Decode(&input); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if input.Disabled == nil {
+		http.Error(w, "disabled is required", http.StatusBadRequest)
+		return
+	}
+
+	if requesterID == targetID && *input.Disabled {
+		http.Error(w, "cannot disable yourself", http.StatusForbidden)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	canManageProfile, err := s.canAccessProfile(ctx, requesterID, targetID)
+	if err != nil {
+		log.Printf("check profile disabled access failed: %v", err)
+		http.Error(w, "failed to update profile", http.StatusInternalServerError)
+		return
+	}
+
+	if !canManageProfile {
+		http.Error(w, "profile not found", http.StatusNotFound)
+		return
+	}
+
+	updated, err := s.updateAccountDisabled(ctx, targetID, *input.Disabled)
+	if err != nil {
+		log.Printf("update account disabled flag failed: %v", err)
+		http.Error(w, "failed to update profile", http.StatusInternalServerError)
+		return
+	}
+
+	if !updated {
+		http.Error(w, "profile not found", http.StatusNotFound)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, profileDisabledResponse{
+		UserID:   uuidToString(targetID),
+		Disabled: *input.Disabled,
 	})
 }
 

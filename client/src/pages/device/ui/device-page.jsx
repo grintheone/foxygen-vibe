@@ -494,6 +494,7 @@ function DeviceCreateTicketSheet({ device, isOpen, isSubmitting, onClose, onSubm
     const serialNumber = device?.serialNumber?.trim() || "Не указано";
     const clientName = device?.clientName?.trim() || "Клиент не указан";
     const clientAddress = device?.clientAddress?.trim() || "Адрес не указан";
+    const activeDepartmentMembers = departmentMembers.filter((member) => !member.isDisabled);
 
     useEffect(() => {
         if (!isOpen) {
@@ -724,13 +725,15 @@ function DeviceCreateTicketSheet({ device, isOpen, isSubmitting, onClose, onSubm
                             <option value="">
                                 {isDepartmentMembersFetching
                                     ? "Загружаем исполнителей..."
-                                    : departmentMembers.length > 0
+                                    : activeDepartmentMembers.length > 0
                                       ? "Выберите исполнителя"
-                                      : "Сотрудники отдела не найдены"}
+                                      : "Доступные сотрудники не найдены"}
                             </option>
                             {departmentMembers.map((member) => (
-                                <option key={member.id} value={member.id}>
-                                    {member.name?.trim() || member.username}
+                                <option key={member.id} value={member.id} disabled={member.isDisabled}>
+                                    {member.isDisabled
+                                        ? `${member.name?.trim() || member.username} • отключен`
+                                        : member.name?.trim() || member.username}
                                 </option>
                             ))}
                         </SelectField>

@@ -1111,9 +1111,106 @@ func TestProfileEndpointReturnsProfile(t *testing.T) {
 	body := rec.Body.String()
 	for _, want := range []string{
 		`"username":"mobile.lead"`,
+		`"disabled":false`,
 		`"name":"Maya Hernandez"`,
 		`"email":"maya.hernandez@foxygen.dev"`,
 		`"department":"Mobile Engineering"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("expected response body to contain %q, got %s", want, body)
+		}
+	}
+}
+
+func TestProfileDisabledEndpointRejectsSelfDisable(t *testing.T) {
+	t.Parallel()
+
+	requesterID := mustUUID(t, "11111111-1111-1111-1111-111111111111")
+	srv := &Server{
+		auth: testAuthConfig(),
+		editorAccessCheck: func(_ http.ResponseWriter, _ *http.Request) (pgtype.UUID, bool) {
+			return requesterID, true
+		},
+		profileAccessCheck: func(_ context.Context, _, _ pgtype.UUID) (bool, error) {
+			return true, nil
+		},
+		accountDisabledUpdater: func(_ context.Context, _ pgtype.UUID, _ bool) (bool, error) {
+			t.Fatal("account disabled updater should not be called for self-disable")
+			return false, nil
+		},
+	}
+
+	req := httptest.NewRequest(
+		http.MethodPatch,
+		"/api/profile/11111111-1111-1111-1111-111111111111/disabled",
+		strings.NewReader(`{"disabled":true}`),
+	)
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "cannot disable yourself") {
+		t.Fatalf("expected self-disable error, got %q", body)
+	}
+}
+
+func TestProfileDisabledEndpointUpdatesAccountFlag(t *testing.T) {
+	t.Parallel()
+
+	requesterID := mustUUID(t, "11111111-1111-1111-1111-111111111111")
+	targetID := mustUUID(t, "22222222-2222-2222-2222-222222222222")
+
+	var (
+		gotTargetID pgtype.UUID
+		gotDisabled bool
+	)
+
+	srv := &Server{
+		auth: testAuthConfig(),
+		editorAccessCheck: func(_ http.ResponseWriter, _ *http.Request) (pgtype.UUID, bool) {
+			return requesterID, true
+		},
+		profileAccessCheck: func(_ context.Context, gotRequesterID, gotProfileID pgtype.UUID) (bool, error) {
+			if gotRequesterID != requesterID {
+				t.Fatalf("expected requester id %s, got %s", requesterID.String(), gotRequesterID.String())
+			}
+			if gotProfileID != targetID {
+				t.Fatalf("expected target id %s, got %s", targetID.String(), gotProfileID.String())
+			}
+			return true, nil
+		},
+		accountDisabledUpdater: func(_ context.Context, userID pgtype.UUID, disabled bool) (bool, error) {
+			gotTargetID = userID
+			gotDisabled = disabled
+			return true, nil
+		},
+	}
+
+	req := httptest.NewRequest(
+		http.MethodPatch,
+		"/api/profile/22222222-2222-2222-2222-222222222222/disabled",
+		strings.NewReader(`{"disabled":true}`),
+	)
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if gotTargetID != targetID {
+		t.Fatalf("expected disabled update for %s, got %s", targetID.String(), gotTargetID.String())
+	}
+	if !gotDisabled {
+		t.Fatal("expected disabled flag to be set to true")
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`"user_id":"22222222-2222-2222-2222-222222222222"`,
+		`"disabled":true`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("expected response body to contain %q, got %s", want, body)

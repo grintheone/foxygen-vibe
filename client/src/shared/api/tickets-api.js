@@ -108,6 +108,79 @@ export const ticketsApi = createApi({
       query: (userId) => `api/profile/${userId}`,
       providesTags: (_, __, userId) => [{ type: "Profile", id: userId }],
     }),
+    setProfileDisabled: builder.mutation({
+      query: ({ disabled, userId }) => ({
+        body: {
+          disabled,
+        },
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "PATCH",
+        url: `api/profile/${userId}/disabled`,
+      }),
+      async onQueryStarted({ disabled, userId }, { dispatch, queryFulfilled }) {
+        const profilePatch = dispatch(
+          ticketsApi.util.updateQueryData("getProfileById", userId, (draft) => {
+            if (!draft) {
+              return;
+            }
+
+            draft.disabled = disabled;
+          }),
+        );
+        const departmentMembersPatch = dispatch(
+          ticketsApi.util.updateQueryData("getDepartmentMembers", undefined, (draft) => {
+            if (!Array.isArray(draft)) {
+              return;
+            }
+
+            const targetMember = draft.find((member) => member.id === userId);
+            if (!targetMember) {
+              return;
+            }
+
+            targetMember.isDisabled = disabled;
+          }),
+        );
+
+        try {
+          const { data } = await queryFulfilled;
+
+          dispatch(
+            ticketsApi.util.updateQueryData("getProfileById", userId, (draft) => {
+              if (!draft) {
+                return;
+              }
+
+              draft.disabled = Boolean(data?.disabled);
+            }),
+          );
+          dispatch(
+            ticketsApi.util.updateQueryData("getDepartmentMembers", undefined, (draft) => {
+              if (!Array.isArray(draft)) {
+                return;
+              }
+
+              const targetMember = draft.find((member) => member.id === userId);
+              if (!targetMember) {
+                return;
+              }
+
+              targetMember.isDisabled = Boolean(data?.disabled);
+            }),
+          );
+        } catch {
+          profilePatch.undo();
+          departmentMembersPatch.undo();
+        }
+      },
+      invalidatesTags: (_, __, { userId }) => [
+        "DepartmentMember",
+        "Profile",
+        { type: "Profile", id: userId },
+      ],
+    }),
     changePassword: builder.mutation({
       query: (payload) => ({
         body: payload,
@@ -438,6 +511,7 @@ export const {
   useGetProfileByIdQuery,
   useGetProfileTicketArchiveFacetsQuery,
   useGetProfileTicketsPageQuery,
+  useSetProfileDisabledMutation,
   useGetTicketByIdQuery,
   useGetTicketReasonsQuery,
   useCreateTicketMutation,

@@ -109,6 +109,9 @@ export function TicketAssignmentSheet({
     ticketReasons.find((reason) => reason.id === ticketReasonId) || null;
   const selectedContact =
     clientContacts.find((contact) => contact.id === contactId) || null;
+  const activeDepartmentMembers = departmentMembers.filter(
+    (member) => !member.isDisabled,
+  );
 
   useEffect(() => {
     if (!isOpen) {
@@ -319,13 +322,15 @@ export function TicketAssignmentSheet({
               <option value="">
                 {isDepartmentMembersFetching
                   ? "Загружаем исполнителей..."
-                  : departmentMembers.length > 0
+                  : activeDepartmentMembers.length > 0
                     ? "Выберите исполнителя"
-                    : "Сотрудники отдела не найдены"}
+                    : "Доступные сотрудники не найдены"}
               </option>
               {departmentMembers.map((member) => (
-                <option key={member.id} value={member.id}>
-                  {member.name?.trim() || member.username}
+                <option key={member.id} value={member.id} disabled={member.isDisabled}>
+                  {member.isDisabled
+                    ? `${member.name?.trim() || member.username} • отключен`
+                    : member.name?.trim() || member.username}
                 </option>
               ))}
             </SelectField>
