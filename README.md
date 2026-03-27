@@ -31,8 +31,9 @@ Setup:
    `POSTGRES_PASSWORD`
    `JWT_SECRET`
    `IMPORT_DEFAULT_PASSWORD`
-4. Fill in the object-storage settings with the values provided by your infrastructure team.
-5. Start the stack:
+4. Set `DOCKER_NETWORK_SUBNET` to a narrow subnet that does not overlap with any company LAN, VPN, or service network routes reachable from the host.
+5. Fill in the object-storage settings with the values provided by your infrastructure team.
+6. Start the stack:
    `docker compose --env-file deploy/production/.env -f docker-compose.production.yml up -d --build`
 
 The object-storage section should use environment-specific values, for example:
@@ -51,6 +52,10 @@ If you want to run your own MinIO container instead of an external S3/MinIO endp
 Useful notes:
 
 - The frontend is exposed on `PUBLIC_HTTP_PORT` from the env file and proxies `/api/*` to the backend container.
+- The production stack now uses `DOCKER_NETWORK_SUBNET` for its Docker bridge network instead of letting Docker auto-pick a subnet.
+- Keep that subnet narrow, such as `/24`, and make sure it does not overlap with any office, VPN, or service ranges like `192.168.101.0/24`.
+- If Docker gets a subnet that overlaps a reachable LAN, containers can stop reaching external services on that LAN because the route is captured by the Docker bridge.
+- If you change `DOCKER_NETWORK_SUBNET` for an existing deployment, recreate the compose network with `docker compose --env-file deploy/production/.env -f docker-compose.production.yml down` and then start it again so Docker does not keep the old bridge.
 - PostgreSQL stays on the internal Docker network by default, which is safer for a company server.
 - For object storage, set `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET`, and either `MINIO_REGION` or `MINIO_LOCATION`.
 - `MINIO_ENDPOINT` can be a bare hostname. Bootstrap will default to port `443` when `MINIO_USE_SSL=true`, otherwise `80`.
@@ -58,6 +63,7 @@ Useful notes:
 - Imported users receive the temporary password from `IMPORT_DEFAULT_PASSWORD`.
 - If the database already contains app data, the bootstrap step skips the import and starts the API normally.
 - Use the local `with-minio` profile only when you are not connecting to an existing S3-compatible storage service.
+- Before deployment, ask infrastructure which RFC1918 ranges are already in use on that host and pick a Docker subnet outside them.
 
 ## Run the server
 

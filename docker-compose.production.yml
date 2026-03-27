@@ -81,3 +81,10 @@ services:
 volumes:
     postgres-data:
     minio-data:
+
+networks:
+    default:
+        driver: bridge
+        ipam:
+            config:
+                - subnet: ${DOCKER_NETWORK_SUBNET:-172.30.240.0/24}
