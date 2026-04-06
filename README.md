@@ -9,19 +9,7 @@ Minimal fullstack starter:
 
 ## Run the production stack with Docker
 
-The production compose file builds and runs:
-
-- the React frontend behind Nginx
-- the Go API
-- PostgreSQL
-- an optional MinIO container profile for local/self-hosted object storage
-
-On container startup the API bootstrap step:
-
-- waits for PostgreSQL
-- applies every SQL file in `server/db/schema/`
-- waits for MinIO when storage is configured
-- runs `server/cmd/import-dump` only if the database is still empty
+The production compose file runs the frontend, API, PostgreSQL, and an optional MinIO profile. On startup, the API bootstrap waits for its dependencies, applies `server/db/schema/*.sql`, and imports the legacy dump only when the database is still empty.
 
 Setup:
 
@@ -33,32 +21,34 @@ Setup:
    `IMPORT_DEFAULT_PASSWORD`
 4. Set `DOCKER_NETWORK_SUBNET` to a narrow subnet that does not overlap with any company LAN, VPN, or service network routes reachable from the host.
 5. Fill in the object-storage settings with the values provided by your infrastructure team.
-6. Start the stack:
-   `docker compose --env-file deploy/production/.env -f docker-compose.production.yml up -d --build`
+6. Start the stack with the first command your host supports:
 
-The object-storage section should use environment-specific values, for example:
+```sh
+docker compose --env-file deploy/production/.env -f docker-compose.production.yml up -d --build
+```
 
-`MINIO_ENDPOINT=<storage-endpoint>`
-`MINIO_ACCESS_KEY=<storage-access-key>`
-`MINIO_SECRET_KEY=<storage-secret-key>`
-`MINIO_BUCKET=<storage-bucket>`
-`MINIO_USE_SSL=true`
-`MINIO_LOCATION=<storage-region>`
+```sh
+set -a
+. deploy/production/.env
+set +a
+docker compose -f docker-compose.production.yml up -d --build
+```
 
-If you want to run your own MinIO container instead of an external S3/MinIO endpoint, start with:
+```sh
+set -a
+. deploy/production/.env
+set +a
+docker-compose -f docker-compose.production.yml up -d --build
+```
 
-`docker compose --profile with-minio --env-file deploy/production/.env -f docker-compose.production.yml up -d --build`
+If you want a local MinIO container instead of external S3-compatible storage, add `--profile with-minio` to the same command.
 
 Useful notes:
 
 - The frontend is exposed on `PUBLIC_HTTP_PORT` from the env file and proxies `/api/*` to the backend container.
-- The production stack now uses `DOCKER_NETWORK_SUBNET` for its Docker bridge network instead of letting Docker auto-pick a subnet.
-- Keep that subnet narrow, such as `/24`, and make sure it does not overlap with any office, VPN, or service ranges like `192.168.101.0/24`.
-- If Docker gets a subnet that overlaps a reachable LAN, containers can stop reaching external services on that LAN because the route is captured by the Docker bridge.
-- If you change `DOCKER_NETWORK_SUBNET` for an existing deployment, recreate the compose network with `docker compose --env-file deploy/production/.env -f docker-compose.production.yml down` and then start it again so Docker does not keep the old bridge.
+- Set `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET`, and either `MINIO_REGION` or `MINIO_LOCATION` when using external object storage. `MINIO_ENDPOINT` may be a bare hostname; bootstrap uses port `443` when `MINIO_USE_SSL=true`, otherwise `80`.
+- Keep `DOCKER_NETWORK_SUBNET` narrow, such as `/24`, and outside any office, VPN, or service range reachable from the host. If you change it later, bring the stack down first and then start it again so Docker recreates the bridge network.
 - PostgreSQL stays on the internal Docker network by default, which is safer for a company server.
-- For object storage, set `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET`, and either `MINIO_REGION` or `MINIO_LOCATION`.
-- `MINIO_ENDPOINT` can be a bare hostname. Bootstrap will default to port `443` when `MINIO_USE_SSL=true`, otherwise `80`.
 - The first-start import is controlled by `BOOTSTRAP_IMPORT_ENABLED=true|false`.
 - Imported users receive the temporary password from `IMPORT_DEFAULT_PASSWORD`.
 - If the database already contains app data, the bootstrap step skips the import and starts the API normally.
@@ -145,235 +135,69 @@ The backend now includes `sqlc` input files under `server/db/`.
 
 Generated files will be written to `server/internal/db/`.
 
-## Import the full legacy dump
-
-If you want to run the whole legacy import flow in one command, place the dump at `server/dump.json` and run the orchestrator from the `server/` directory:
-
-`go run ./cmd/import-dump -default-password "<temporary-password>"`
-
-Notes:
-
-- The command defaults to `dump.json`, so it will pick up `server/dump.json` automatically when run from `server/`.
-- It runs the existing importers in dependency order: regions, clients, contacts, research types, manufacturers, classificators, devices, ticket metadata, users, tickets, attachments, then agreements.
-- Use `-only users,tickets` to run a subset, `-dry-run` to validate without writes, and `-keep-going` if you want later steps to continue after a failure.
-- `server/dump.json` is now ignored by git, but if it was already tracked in your local clone you still need to untrack it once with `git rm --cached server/dump.json`.
-
-## Import legacy users
-
-If you have a legacy CouchDB `_all_docs` export, you can import the `user_*` records into the current PostgreSQL schema:
-
-1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
-2. Run the importer from the `server/` directory:
-   `go run ./cmd/import-dump -source "/absolute/path/to/_all_docs.json" -only users -default-password "<temporary-password>"`
-
-Notes:
-
-- The legacy dump does not contain passwords, so the importer assigns the temporary password you provide to every imported account.
-- Imported usernames are assigned deterministically from the legacy real names as `lastname.firstname` using Latin transliteration. Duplicate names receive a numeric suffix such as `smith.alex-2`.
-- The command is safe to rerun. If a username already exists, that user is skipped.
-- Use `-dry-run` first if you want to inspect the planned usernames before writing to the database.
-
-## Import legacy regions
-
-If you have the same legacy CouchDB `_all_docs` export, you can import the `region_*` records into PostgreSQL:
-
-1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
-2. Run the importer from the `server/` directory:
-   `go run ./cmd/import-dump -source "/absolute/path/to/_all_docs.json" -only regions`
-
-Notes:
-
-- The importer creates the `regions` table if it does not exist yet.
-- Legacy region UUIDs are preserved, which keeps later imports compatible with the old references.
-- The command is safe to rerun. Existing region IDs are updated in place.
-- Use `-dry-run` first if you want to inspect the planned region records before writing to the database.
-
-## Import legacy clients
-
-If you have the same legacy CouchDB `_all_docs` export, you can import the `client_*` records into PostgreSQL:
-
-1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
-2. Import regions first so client region references can be resolved.
-3. Run the importer from the `server/` directory:
-   `go run ./cmd/import-dump -source "/absolute/path/to/_all_docs.json" -only clients`
-
-Notes:
-
-- The importer creates the `clients` table if it does not exist yet.
-- Legacy client UUIDs are preserved.
-- The importer carries over the legacy `region` UUID only when that region already exists in PostgreSQL; otherwise it stores `NULL` and logs the mismatch.
-- The command is safe to rerun. Existing client IDs are updated in place.
-- Use `-dry-run` first if you want to inspect the planned client records before writing to the database.
-
-## Import legacy contacts
-
-If you have the same legacy CouchDB `_all_docs` export, you can import the `contact_*` records into PostgreSQL:
-
-1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
-2. Import clients first so contact client references can be resolved.
-3. Run the importer from the `server/` directory:
-   `go run ./cmd/import-dump -source "/absolute/path/to/_all_docs.json" -only contacts`
-
-Notes:
-
-- The importer creates the `contacts` table if it does not exist yet.
-- Legacy contact UUIDs are preserved.
-- The importer maps each contact `ref` to the imported `clients.id`; if the client is missing it stores `NULL` and logs the mismatch.
-- The command is safe to rerun. Existing contact IDs are updated in place.
-- Use `-dry-run` first if you want to inspect the planned contact records before writing to the database.
-
-## Import legacy research types
-
-If you have the same legacy CouchDB `_all_docs` export, you can import the `researchType_*` records into PostgreSQL:
-
-1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
-2. Run the importer from the `server/` directory:
-   `go run ./cmd/import-dump -source "/absolute/path/to/_all_docs.json" -only research-types`
-
-Notes:
-
-- The importer creates the `research_type` table if it does not exist yet.
-- Legacy research type UUIDs are preserved.
-- The command is safe to rerun. Existing rows are updated in place by `id`.
-
-## Import legacy manufacturers
-
-If you have the same legacy CouchDB `_all_docs` export, you can import the `manufacturer_*` records into PostgreSQL:
-
-1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
-2. Run the importer from the `server/` directory:
-   `go run ./cmd/import-dump -source "/absolute/path/to/_all_docs.json" -only manufacturers`
-
-Notes:
-
-- The importer creates the `manufacturers` table if it does not exist yet.
-- Legacy manufacturer UUIDs are preserved.
-- Manufacturer titles are not forced unique, matching the legacy schema.
-- The command is safe to rerun. Existing rows are updated in place by `id`.
-
-## Import legacy classificators
-
-If you have the same legacy CouchDB `_all_docs` export, you can import the `classificator_*` records into PostgreSQL:
-
-1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
-2. Import `research_type` and `manufacturers` first so classificator references can be resolved.
-3. Run the importer from the `server/` directory:
-   `go run ./cmd/import-dump -source "/absolute/path/to/_all_docs.json" -only classificators`
-
-Notes:
-
-- The importer creates the `classificators` table if it does not exist yet.
-- Legacy classificator UUIDs are preserved.
-- The importer maps `manufacturer` and `researchType` to the imported PostgreSQL rows when present; missing legacy references are stored as `NULL` and logged.
-- `registration_certificate` and `maintenance_regulations` are preserved as JSONB, and `attachments` and `images` are imported as text arrays.
-- The command is safe to rerun. Existing rows are updated in place by `id`.
-
-## Import legacy devices
-
-If you have the same legacy CouchDB `_all_docs` export, you can import the `device_*` records into PostgreSQL:
-
-1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
-2. Import `classificators` first so device classificator references can be resolved.
-3. Run the importer from the `server/` directory:
-   `go run ./cmd/import-dump -source "/absolute/path/to/_all_docs.json" -only devices`
-
-Notes:
-
-- The importer creates the `devices` table if it does not exist yet.
-- Legacy device UUIDs are preserved.
-- The importer maps `classificator` to the imported PostgreSQL row when present; missing legacy references are stored as `NULL` and logged.
-- `properties` is preserved as JSONB; `connected_to_lis` and `is_used` are imported as booleans.
-- The command is safe to rerun. Existing rows are updated in place by `id`.
-
-## Import legacy ticket statuses
-
-If you have the same legacy CouchDB `_all_docs` export, you can import ticket statuses into PostgreSQL:
-
-1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
-2. Run the importer from the `server/` directory:
-   `go run ./cmd/import-dump -source "/absolute/path/to/_all_docs.json" -only ticket-statuses`
-
-Notes:
-
-- This importer enforces the canonical status set: `created`, `assigned`, `inWork`, `worksDone`, `closed`, `cancelled`.
-- Titles are seeded as: `создан`, `назначен`, `в работе`, `работы завершены`, `закрыт`, `отменен`.
-- Any other existing status rows are removed.
-
-## Import legacy ticket types
-
-If you have the same legacy CouchDB `_all_docs` export, you can import ticket types into PostgreSQL:
-
-1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
-2. Run the importer from the `server/` directory:
-   `go run ./cmd/import-dump -source "/absolute/path/to/_all_docs.json" -only ticket-types`
-
-Notes:
-
-- This importer enforces the canonical type set: `internal`, `external`.
-- Titles are seeded as: `внутренний`, `внешний`.
-- Any other existing type rows are removed.
-
-## Import legacy ticket reasons
-
-If you have the same legacy CouchDB `_all_docs` export, you can import the `ticketReason_*` records into PostgreSQL:
-
-1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
-2. Run the importer from the `server/` directory:
-   `go run ./cmd/import-dump -source "/absolute/path/to/_all_docs.json" -only ticket-reasons`
-
-Notes:
-
-- The importer creates the `ticket_reasons` table if it does not exist yet.
-- Legacy reason ids are preserved.
-- The command is safe to rerun. Existing rows are updated in place by `id`.
-
-## Import legacy tickets
-
-If you have the same legacy CouchDB `_all_docs` export, you can import the `ticket_*` records into PostgreSQL:
-
-1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
-2. Import clients, devices, users/accounts, departments, contacts, ticket statuses, ticket types, and ticket reasons first.
-3. Run the importer from the `server/` directory:
-   `go run ./cmd/import-dump -source "/absolute/path/to/_all_docs.json" -only tickets`
-
-Notes:
-
-- The importer creates the `tickets` table if it does not exist yet.
-- Legacy ticket UUIDs are preserved.
-- Legacy statuses and reasons are normalized to the current schema: `finished -> worksDone`, `repairs -> repair`, `maintenance/mainenance -> maintanence`, and `fast -> internal`.
-- Missing foreign keys are stored as `NULL` and counted in the import summary.
-- Legacy ticket numbers are preserved when present; blank numbers are generated by PostgreSQL and the identity sequence is advanced to the current max.
-
-## Import legacy attachments
-
-If you have the same legacy CouchDB `_all_docs` export, you can import the attachment objects embedded in `ticket_*` records into PostgreSQL:
-
-1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
-2. Import tickets first so attachment `ref_id` values can resolve.
-3. Run the importer from the `server/` directory:
-   `go run ./cmd/import-dump -source "/absolute/path/to/_all_docs.json" -only attachments`
-
-Notes:
-
-- The importer creates the `attachments` table if it does not exist yet.
-- Attachment `id`, `name`, `media_type`, and `ext` are copied directly from the ticket payload.
-- `ref_id` is set to the imported legacy ticket UUID.
-- If a referenced ticket is missing, that attachment is skipped and counted.
-
-## Import legacy agreements
-
-If you have the same legacy CouchDB `_all_docs` export, you can translate device `bindings` into `agreements` rows in PostgreSQL:
-
-1. Make sure PostgreSQL is running and `server/.env` contains your database settings.
-2. Import clients and devices first so binding references can resolve.
-3. Run the importer from the `server/` directory:
-   `go run ./cmd/import-dump -source "/absolute/path/to/_all_docs.json" -only agreements`
-
-Notes:
-
-- Each device binding produces one agreement with a deterministic synthetic UUID based on `device_id + client_id`, so reruns remain idempotent.
-- `actual_client` is set from the binding client, `device` is set from the device, `distributor` is left `NULL`.
-- Because bindings do not include dates or warranty flags, the importer defaults `assigned_at`/`finished_at` to `NULL`, `is_active` to `TRUE`, and `on_warranty` to `TRUE`.
+## Import legacy data
+
+The README used to document every legacy import step separately, but most of that content repeated the same setup and command shape. The short version is:
+
+1. Make sure PostgreSQL is running and `server/.env` contains the database settings.
+2. Use a legacy CouchDB `_all_docs` export, or place it at `server/dump.json`.
+3. Run the orchestrator from `server/`.
+
+Import the whole dump:
+
+```sh
+cd server
+go run ./cmd/import-dump -default-password "<temporary-password>"
+```
+
+Import only selected steps:
+
+```sh
+cd server
+go run ./cmd/import-dump -source "/absolute/path/to/_all_docs.json" -only users,tickets -default-password "<temporary-password>"
+```
+
+List the available step names:
+
+```sh
+cd server
+go run ./cmd/import-dump -list
+```
+
+Available steps:
+
+- `regions`
+- `clients`
+- `contacts`
+- `research-types`
+- `manufacturers`
+- `classificators`
+- `devices`
+- `ticket-statuses`
+- `ticket-types`
+- `ticket-reasons`
+- `users`
+- `external-users`
+- `tickets`
+- `attachments`
+- `agreements`
+
+Useful flags:
+
+- `-only step1,step2` runs a subset in the order defined by the importer.
+- `-dry-run` validates and prints the plan without writing to PostgreSQL.
+- `-keep-going` continues after a failed step.
+- `-default-password` is required when the selection includes `users`.
+- `-timeout` overrides the per-step timeout.
+- `-per-user-timeout` only affects the `users` step.
+
+Useful notes:
+
+- If no `-source` is provided, the importer looks for `dump.json` and then `server/dump.json`.
+- The full import keeps dependency order for you, so running multiple related steps together is safer than invoking them one by one.
+- The importers are designed to be rerunnable; most steps update existing rows in place.
+- `ticket-statuses` and `ticket-types` seed the canonical app values rather than preserving arbitrary legacy rows.
+- `server/dump.json` is ignored by git, but if it was already tracked locally you still need to untrack it once with `git rm --cached server/dump.json`.
 
 ## Run the client
 

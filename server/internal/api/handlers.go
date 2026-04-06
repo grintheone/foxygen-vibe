@@ -3,7 +3,9 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -3191,6 +3193,16 @@ func syncSecretMatches(expected string, provided string) bool {
 	return subtle.ConstantTimeCompare([]byte(expected), []byte(provided)) == 1
 }
 
+func syncSecretFingerprint(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return "empty"
+	}
+
+	digest := sha256.Sum256([]byte(trimmed))
+	return hex.EncodeToString(digest[:4])
+}
+
 func normalizeTicketSyncMetadata(source string, key string) (string, string) {
 	source = strings.TrimSpace(source)
 	key = strings.TrimSpace(key)
@@ -3251,8 +3263,23 @@ func (s *Server) handleTicketSync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !syncSecretMatches(s.sync.sharedSecret, r.Header.Get("X-Sync-Secret")) {
-		log.Printf("ticket sync rejected: invalid secret remote=%q", r.RemoteAddr)
+	providedSyncSecret := r.Header.Get("X-Sync-Secret")
+	log.Printf(
+		"ticket sync auth received remote=%q provided_secret_sha=%s provided_secret_len=%d",
+		r.RemoteAddr,
+		syncSecretFingerprint(providedSyncSecret),
+		len(strings.TrimSpace(providedSyncSecret)),
+	)
+
+	if !syncSecretMatches(s.sync.sharedSecret, providedSyncSecret) {
+		log.Printf(
+			"ticket sync rejected: invalid secret remote=%q provided_secret_sha=%s provided_secret_len=%d configured_secret_sha=%s configured_secret_len=%d",
+			r.RemoteAddr,
+			syncSecretFingerprint(providedSyncSecret),
+			len(strings.TrimSpace(providedSyncSecret)),
+			syncSecretFingerprint(s.sync.sharedSecret),
+			len(strings.TrimSpace(s.sync.sharedSecret)),
+		)
 		http.Error(w, "invalid sync secret", http.StatusUnauthorized)
 		return
 	}
