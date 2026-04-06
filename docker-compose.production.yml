@@ -41,6 +41,7 @@ services:
             DB_NAME: ${POSTGRES_DB:-foxygendb}
             DB_SSLMODE: ${DB_SSLMODE:-disable}
             JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+            TICKET_SYNC_SECRET: ${TICKET_SYNC_SECRET:-}
             ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL:-15m}
             REFRESH_TOKEN_TTL: ${REFRESH_TOKEN_TTL:-168h}
             MINIO_ENDPOINT: ${MINIO_ENDPOINT:-}

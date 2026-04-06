@@ -3246,6 +3246,7 @@ func (s *Server) handleTicketSync(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !s.sync.Enabled() {
+		log.Printf("ticket sync rejected: handler not configured remote=%q", r.RemoteAddr)
 		http.Error(w, "ticket sync is not configured", http.StatusServiceUnavailable)
 		return
 	}
@@ -3257,6 +3258,7 @@ func (s *Server) handleTicketSync(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if s.db == nil {
+		log.Printf("ticket sync rejected: database not configured remote=%q", r.RemoteAddr)
 		http.Error(w, "database not configured", http.StatusServiceUnavailable)
 		return
 	}
