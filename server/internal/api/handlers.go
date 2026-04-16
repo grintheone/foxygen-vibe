@@ -3,11 +3,13 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -31,6 +33,8 @@ const (
 	defaultTicketSyncSource    = "external-sync"
 	maxTicketListLimit         = 100
 	maxProfileAvatarUploadSize = 10 << 20
+	maxTicketSyncBodyLogBytes  = 2048
+	syncDeviceAgreementNS      = "foxygen-vibe/device-binding-agreements"
 )
 
 var supportedProfileAvatarMediaTypes = map[string]struct{}{
@@ -90,6 +94,108 @@ type profileTicketStatsResponse struct {
 	Closed          int `json:"closed"`
 	Overdue         int `json:"overdue"`
 	ClosedThisMonth int `json:"closedThisMonth"`
+}
+
+type syncTicketRequest struct {
+	Author              string `json:"author"`
+	AuthorTitle         string `json:"author_title"`
+	Client              string `json:"client"`
+	ContactPerson       string `json:"contact_person"`
+	Department          string `json:"department"`
+	Description         string `json:"description"`
+	Device              string `json:"device"`
+	ExternalAuthorID    string `json:"external_author_id"`
+	ExternalAuthorTitle string `json:"external_author_title"`
+	Reason              string `json:"reason"`
+	Source              string `json:"source"`
+	SyncKey             string `json:"sync_key"`
+	TicketType          string `json:"ticket_type"`
+	Urgent              bool   `json:"urgent"`
+}
+
+type syncTicketResponse struct {
+	Author     *string `json:"author,omitempty"`
+	Department string  `json:"department"`
+	Duplicate  bool    `json:"duplicate"`
+	ID         string  `json:"id"`
+	Number     int32   `json:"number"`
+	Source     string  `json:"source,omitempty"`
+	Status     string  `json:"status"`
+	SyncKey    string  `json:"sync_key,omitempty"`
+}
+
+type syncTicketBatchResponse struct {
+	Type string               `json:"type"`
+	Data []syncTicketResponse `json:"data"`
+}
+
+type syncEnvelopeRequest struct {
+	Type string          `json:"type"`
+	Data json.RawMessage `json:"data"`
+}
+
+type syncEnvelopeRef struct {
+	ID string `json:"id"`
+}
+
+type syncEnvelopeNamedRef struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+}
+
+type syncEnvelopeUser struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+}
+
+type syncEnvelopeTicket struct {
+	ID            string                `json:"id"`
+	TicketType    string                `json:"ticketType"`
+	Author        *syncEnvelopeUser     `json:"author"`
+	Client        *syncEnvelopeRef      `json:"client"`
+	ContactPerson *syncEnvelopeRef      `json:"contactPerson"`
+	Department    *syncEnvelopeNamedRef `json:"department"`
+	Description   string                `json:"description"`
+	Device        *syncEnvelopeRef      `json:"device"`
+	Reason        string                `json:"reason"`
+	Urgent        bool                  `json:"urgent"`
+}
+
+type syncRequestError struct {
+	StatusCode int
+	Message    string
+}
+
+func (e *syncRequestError) Error() string {
+	return e.Message
+}
+
+type syncDeviceBinding struct {
+	Client string `json:"client"`
+}
+
+type syncDeviceRequest struct {
+	ID             string              `json:"id"`
+	Ref            string              `json:"ref"`
+	SerialNumber   string              `json:"serialNumber"`
+	Bindings       []syncDeviceBinding `json:"bindings"`
+	Properties     json.RawMessage     `json:"properties"`
+	ConnectedToLis bool                `json:"connectedToLis"`
+}
+
+type syncDeviceResponse struct {
+	AgreementIDs   []string `json:"agreementIds,omitempty"`
+	ClientIDs      []string `json:"clientIds,omitempty"`
+	ConnectedToLis bool     `json:"connectedToLis"`
+	Created        bool     `json:"created"`
+	Deactivated    int64    `json:"deactivatedAgreementCount,omitempty"`
+	ID             string   `json:"id"`
+	SerialNumber   string   `json:"serialNumber"`
+}
+
+type syncDeviceEnvelopeResponse struct {
+	Type string             `json:"type"`
+	Data syncDeviceResponse `json:"data"`
 }
 
 func parseTicketListPagination(r *http.Request) (int, int, error) {
@@ -3223,83 +3329,376 @@ func normalizeTicketSyncAuthor(author string, authorTitle string, legacyAuthor s
 	return strings.TrimSpace(legacyAuthor), strings.TrimSpace(legacyAuthorTitle)
 }
 
-func (s *Server) handleTicketSync(w http.ResponseWriter, r *http.Request) {
-	type syncTicketRequest struct {
-		Author              string `json:"author"`
-		AuthorTitle         string `json:"author_title"`
-		Client              string `json:"client"`
-		ContactPerson       string `json:"contact_person"`
-		Department          string `json:"department"`
-		Description         string `json:"description"`
-		Device              string `json:"device"`
-		ExternalAuthorID    string `json:"external_author_id"`
-		ExternalAuthorTitle string `json:"external_author_title"`
-		Reason              string `json:"reason"`
-		Source              string `json:"source"`
-		SyncKey             string `json:"sync_key"`
-		TicketType          string `json:"ticket_type"`
-		Urgent              bool   `json:"urgent"`
-	}
+func ticketSyncRequestSummary(input syncTicketRequest) string {
+	return strconv.Quote(
+		strings.Join([]string{
+			"source=" + input.Source,
+			"sync_key=" + input.SyncKey,
+			"client=" + input.Client,
+			"device=" + input.Device,
+			"contact_person=" + input.ContactPerson,
+			"department=" + input.Department,
+			"reason=" + input.Reason,
+			"ticket_type=" + input.TicketType,
+			"author=" + input.Author,
+			"author_title_present=" + strconv.FormatBool(input.AuthorTitle != ""),
+			"description_len=" + strconv.Itoa(len(input.Description)),
+			"urgent=" + strconv.FormatBool(input.Urgent),
+		}, " "),
+	)
+}
 
-	type syncTicketResponse struct {
-		Author     *string `json:"author,omitempty"`
-		Department string  `json:"department"`
-		Duplicate  bool    `json:"duplicate"`
-		ID         string  `json:"id"`
-		Number     int32   `json:"number"`
-		Source     string  `json:"source,omitempty"`
-		Status     string  `json:"status"`
-		SyncKey    string  `json:"sync_key,omitempty"`
-	}
-
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	if !s.sync.Enabled() {
-		log.Printf("ticket sync rejected: handler not configured remote=%q", r.RemoteAddr)
-		http.Error(w, "ticket sync is not configured", http.StatusServiceUnavailable)
-		return
-	}
-
-	providedSyncSecret := r.Header.Get("X-Sync-Secret")
+func logTicketSyncBadRequest(remoteAddr string, input syncTicketRequest, format string, args ...any) {
 	log.Printf(
-		"ticket sync auth received remote=%q provided_secret_sha=%s provided_secret_len=%d",
-		r.RemoteAddr,
-		syncSecretFingerprint(providedSyncSecret),
-		len(strings.TrimSpace(providedSyncSecret)),
+		"ticket sync rejected: "+format+" remote=%q request=%s",
+		append(args, remoteAddr, ticketSyncRequestSummary(input))...,
+	)
+}
+
+func decodeTicketSyncEnvelopeData(raw json.RawMessage) ([]syncEnvelopeTicket, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return nil, errors.New("tickets data is required")
+	}
+
+	if trimmed[0] == '[' {
+		var items []syncEnvelopeTicket
+		if err := json.Unmarshal(trimmed, &items); err != nil {
+			return nil, err
+		}
+		return items, nil
+	}
+
+	var item syncEnvelopeTicket
+	if err := json.Unmarshal(trimmed, &item); err != nil {
+		return nil, err
+	}
+
+	return []syncEnvelopeTicket{item}, nil
+}
+
+func mapEnvelopeTicketToSyncRequest(item syncEnvelopeTicket) syncTicketRequest {
+	var (
+		authorID    string
+		authorTitle string
+		clientID    string
+		contactID   string
+		department  string
+		deviceID    string
 	)
 
-	if !syncSecretMatches(s.sync.sharedSecret, providedSyncSecret) {
-		log.Printf(
-			"ticket sync rejected: invalid secret remote=%q provided_secret_sha=%s provided_secret_len=%d configured_secret_sha=%s configured_secret_len=%d",
-			r.RemoteAddr,
-			syncSecretFingerprint(providedSyncSecret),
-			len(strings.TrimSpace(providedSyncSecret)),
-			syncSecretFingerprint(s.sync.sharedSecret),
-			len(strings.TrimSpace(s.sync.sharedSecret)),
-		)
-		http.Error(w, "invalid sync secret", http.StatusUnauthorized)
-		return
+	if item.Author != nil {
+		authorID = strings.TrimSpace(item.Author.ID)
+		authorTitle = strings.TrimSpace(item.Author.Title)
+	}
+	if item.Client != nil {
+		clientID = strings.TrimSpace(item.Client.ID)
+	}
+	if item.ContactPerson != nil {
+		contactID = strings.TrimSpace(item.ContactPerson.ID)
+	}
+	if item.Department != nil {
+		department = strings.TrimSpace(item.Department.ID)
+		if department == "" {
+			department = strings.TrimSpace(item.Department.Title)
+		}
+	}
+	if item.Device != nil {
+		deviceID = strings.TrimSpace(item.Device.ID)
 	}
 
-	if s.db == nil {
-		log.Printf("ticket sync rejected: database not configured remote=%q", r.RemoteAddr)
-		http.Error(w, "database not configured", http.StatusServiceUnavailable)
-		return
+	return syncTicketRequest{
+		Author:        authorID,
+		AuthorTitle:   authorTitle,
+		Client:        clientID,
+		ContactPerson: contactID,
+		Department:    department,
+		Description:   strings.TrimSpace(item.Description),
+		Device:        deviceID,
+		Reason:        strings.TrimSpace(item.Reason),
+		Source:        "tickets",
+		SyncKey:       strings.TrimSpace(item.ID),
+		TicketType:    strings.TrimSpace(item.TicketType),
+		Urgent:        item.Urgent,
+	}
+}
+
+func decodeTicketSyncRequests(body []byte) ([]syncTicketRequest, bool, error) {
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) == 0 {
+		return nil, false, errors.New("request body is required")
 	}
 
-	defer r.Body.Close()
+	var envelope syncEnvelopeRequest
+	if err := json.Unmarshal(trimmed, &envelope); err == nil && strings.TrimSpace(envelope.Type) != "" {
+		syncType := strings.ToLower(strings.TrimSpace(envelope.Type))
+		if syncType != "tickets" {
+			return nil, true, errors.New("unsupported sync type " + strconv.Quote(strings.TrimSpace(envelope.Type)))
+		}
+
+		items, err := decodeTicketSyncEnvelopeData(envelope.Data)
+		if err != nil {
+			return nil, true, err
+		}
+		if len(items) == 0 {
+			return nil, true, errors.New("tickets data is required")
+		}
+
+		requests := make([]syncTicketRequest, 0, len(items))
+		for _, item := range items {
+			requests = append(requests, mapEnvelopeTicketToSyncRequest(item))
+		}
+		return requests, true, nil
+	}
+
+	decoder := json.NewDecoder(bytes.NewReader(trimmed))
+	decoder.DisallowUnknownFields()
 
 	var input syncTicketRequest
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&input); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
-		return
+		return nil, false, err
 	}
 
+	return []syncTicketRequest{input}, false, nil
+}
+
+func deviceSyncRequestSummary(input syncDeviceRequest) string {
+	return strconv.Quote(
+		strings.Join([]string{
+			"id=" + input.ID,
+			"ref=" + input.Ref,
+			"serial_number=" + input.SerialNumber,
+			"binding_count=" + strconv.Itoa(len(input.Bindings)),
+			"properties_len=" + strconv.Itoa(len(input.Properties)),
+			"connected_to_lis=" + strconv.FormatBool(input.ConnectedToLis),
+		}, " "),
+	)
+}
+
+func logDeviceSyncBadRequest(remoteAddr string, input syncDeviceRequest, format string, args ...any) {
+	log.Printf(
+		"device sync rejected: "+format+" remote=%q request=%s",
+		append(args, remoteAddr, deviceSyncRequestSummary(input))...,
+	)
+}
+
+func decodeDeviceSyncEnvelopeData(raw json.RawMessage) (syncDeviceRequest, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return syncDeviceRequest{}, errors.New("device data is required")
+	}
+
+	var input syncDeviceRequest
+	if err := json.Unmarshal(trimmed, &input); err != nil {
+		return syncDeviceRequest{}, err
+	}
+
+	return input, nil
+}
+
+func deterministicSyncAgreementID(deviceID, clientID string) string {
+	sum := sha1.Sum([]byte(syncDeviceAgreementNS + ":" + deviceID + ":" + clientID))
+	b := sum[:16]
+	b[6] = (b[6] & 0x0f) | 0x50
+	b[8] = (b[8] & 0x3f) | 0x80
+
+	return fmt.Sprintf(
+		"%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+		b[0], b[1], b[2], b[3],
+		b[4], b[5],
+		b[6], b[7],
+		b[8], b[9],
+		b[10], b[11], b[12], b[13], b[14], b[15],
+	)
+}
+
+func (s *Server) processDeviceSyncRequest(ctx context.Context, remoteAddr string, input syncDeviceRequest) (int, syncDeviceResponse, error) {
+	input.ID = strings.TrimSpace(input.ID)
+	input.Ref = strings.TrimSpace(input.Ref)
+	input.SerialNumber = strings.TrimSpace(input.SerialNumber)
+
+	rawProperties := bytes.TrimSpace(input.Properties)
+	if len(rawProperties) == 0 || bytes.Equal(rawProperties, []byte("null")) {
+		rawProperties = json.RawMessage(`{}`)
+	}
+	if !json.Valid(rawProperties) {
+		logDeviceSyncBadRequest(remoteAddr, input, "properties must be valid JSON")
+		return 0, syncDeviceResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "properties must be valid JSON"}
+	}
+	input.Properties = rawProperties
+
+	log.Printf(
+		"device sync received remote=%q id=%q ref=%q serial_number=%q binding_count=%d connected_to_lis=%t",
+		remoteAddr,
+		input.ID,
+		input.Ref,
+		input.SerialNumber,
+		len(input.Bindings),
+		input.ConnectedToLis,
+	)
+
+	if input.ID == "" {
+		logDeviceSyncBadRequest(remoteAddr, input, "id is required")
+		return 0, syncDeviceResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "id is required"}
+	}
+
+	var deviceID pgtype.UUID
+	if err := deviceID.Scan(input.ID); err != nil {
+		logDeviceSyncBadRequest(remoteAddr, input, "id must be a valid UUID parse_err=%q", err.Error())
+		return 0, syncDeviceResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "id must be a valid UUID"}
+	}
+
+	normalizedClientIDs := make([]pgtype.UUID, 0, len(input.Bindings))
+	clientIDsForResponse := make([]string, 0, len(input.Bindings))
+	seenClients := make(map[string]struct{}, len(input.Bindings))
+	for index, binding := range input.Bindings {
+		clientValue := strings.TrimSpace(binding.Client)
+		if clientValue == "" {
+			logDeviceSyncBadRequest(remoteAddr, input, "bindings[%d].client is required", index)
+			return 0, syncDeviceResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "bindings.client is required"}
+		}
+
+		if _, exists := seenClients[clientValue]; exists {
+			continue
+		}
+
+		var clientID pgtype.UUID
+		if err := clientID.Scan(clientValue); err != nil {
+			logDeviceSyncBadRequest(remoteAddr, input, "bindings[%d].client must be a valid UUID parse_err=%q", index, err.Error())
+			return 0, syncDeviceResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "bindings.client must be a valid UUID"}
+		}
+
+		seenClients[clientValue] = struct{}{}
+		normalizedClientIDs = append(normalizedClientIDs, clientID)
+		clientIDsForResponse = append(clientIDsForResponse, clientValue)
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	deviceExists, err := s.editorDeviceExistsByID(ctx, deviceID)
+	if err != nil {
+		log.Printf("validate device sync device failed: %v", err)
+		return 0, syncDeviceResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to sync device"}
+	}
+
+	for index, clientID := range normalizedClientIDs {
+		clientExists, err := s.editorClientExistsByID(ctx, clientID)
+		if err != nil {
+			log.Printf("validate device sync binding client failed: %v", err)
+			return 0, syncDeviceResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to sync device"}
+		}
+		if !clientExists {
+			logDeviceSyncBadRequest(remoteAddr, input, "bindings[%d].client not found client=%s", index, uuidToString(clientID))
+			return 0, syncDeviceResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "bindings.client not found"}
+		}
+	}
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		log.Printf("begin device sync transaction failed: %v", err)
+		return 0, syncDeviceResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to sync device"}
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO devices (
+			id,
+			classificator,
+			serial_number,
+			properties,
+			connected_to_lis
+		)
+		VALUES (
+			$1,
+			NULL,
+			$2,
+			$3,
+			$4
+		)
+		ON CONFLICT (id) DO UPDATE
+		SET serial_number = EXCLUDED.serial_number,
+			properties = EXCLUDED.properties,
+			connected_to_lis = EXCLUDED.connected_to_lis
+	`, deviceID, input.SerialNumber, input.Properties, input.ConnectedToLis); err != nil {
+		log.Printf("upsert synced device failed: %v", err)
+		return 0, syncDeviceResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to sync device"}
+	}
+
+	agreementIDs := make([]string, 0, len(normalizedClientIDs))
+	for _, clientID := range normalizedClientIDs {
+		agreementID := deterministicSyncAgreementID(uuidToString(deviceID), uuidToString(clientID))
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO agreements (
+				id,
+				actual_client,
+				distributor,
+				device,
+				assigned_at,
+				finished_at,
+				is_active,
+				on_warranty
+			)
+			VALUES ($1, $2, NULL, $3, NULL, NULL, TRUE, TRUE)
+			ON CONFLICT (id) DO UPDATE
+			SET actual_client = EXCLUDED.actual_client,
+				distributor = EXCLUDED.distributor,
+				device = EXCLUDED.device,
+				assigned_at = EXCLUDED.assigned_at,
+				finished_at = EXCLUDED.finished_at,
+				is_active = EXCLUDED.is_active,
+				on_warranty = EXCLUDED.on_warranty
+		`, agreementID, clientID, deviceID); err != nil {
+			log.Printf("upsert synced device agreement failed: %v", err)
+			return 0, syncDeviceResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to sync device"}
+		}
+		agreementIDs = append(agreementIDs, agreementID)
+	}
+
+	staleAgreementTag, err := tx.Exec(ctx, `
+		UPDATE agreements
+		SET is_active = FALSE,
+			finished_at = COALESCE(finished_at, NOW() AT TIME ZONE 'UTC')
+		WHERE device = $1
+		  AND COALESCE(is_active, FALSE) = TRUE
+		  AND NOT (id::text = ANY($2::text[]))
+	`, deviceID, agreementIDs)
+	if err != nil {
+		log.Printf("deactivate stale synced device agreements failed: %v", err)
+		return 0, syncDeviceResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to sync device"}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		log.Printf("commit device sync transaction failed: %v", err)
+		return 0, syncDeviceResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to sync device"}
+	}
+
+	log.Printf(
+		"device sync upserted remote=%q id=%q created=%t agreement_count=%d deactivated_agreement_count=%d",
+		remoteAddr,
+		input.ID,
+		!deviceExists,
+		len(agreementIDs),
+		staleAgreementTag.RowsAffected(),
+	)
+
+	statusCode := http.StatusCreated
+	if deviceExists {
+		statusCode = http.StatusOK
+	}
+
+	return statusCode, syncDeviceResponse{
+		AgreementIDs:   agreementIDs,
+		ClientIDs:      clientIDsForResponse,
+		ConnectedToLis: input.ConnectedToLis,
+		Created:        !deviceExists,
+		Deactivated:    staleAgreementTag.RowsAffected(),
+		ID:             input.ID,
+		SerialNumber:   input.SerialNumber,
+	}, nil
+}
+
+func (s *Server) processTicketSyncRequest(ctx context.Context, remoteAddr string, input syncTicketRequest) (int, syncTicketResponse, error) {
 	input.Author, input.AuthorTitle = normalizeTicketSyncAuthor(input.Author, input.AuthorTitle, input.ExternalAuthorID, input.ExternalAuthorTitle)
 	input.Client = strings.TrimSpace(input.Client)
 	input.ContactPerson = strings.TrimSpace(input.ContactPerson)
@@ -3312,7 +3711,7 @@ func (s *Server) handleTicketSync(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf(
 		"ticket sync received remote=%q source=%q sync_key=%q client=%q device=%q department=%q author=%q urgent=%t",
-		r.RemoteAddr,
+		remoteAddr,
 		input.Source,
 		input.SyncKey,
 		input.Client,
@@ -3324,26 +3723,26 @@ func (s *Server) handleTicketSync(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case input.Device == "":
-		http.Error(w, "device is required", http.StatusBadRequest)
-		return
+		logTicketSyncBadRequest(remoteAddr, input, "device is required")
+		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "device is required"}
 	case input.Client == "":
-		http.Error(w, "client is required", http.StatusBadRequest)
-		return
+		logTicketSyncBadRequest(remoteAddr, input, "client is required")
+		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "client is required"}
 	case input.Reason == "":
-		http.Error(w, "reason is required", http.StatusBadRequest)
-		return
+		logTicketSyncBadRequest(remoteAddr, input, "reason is required")
+		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "reason is required"}
 	case input.Description == "":
-		http.Error(w, "description is required", http.StatusBadRequest)
-		return
+		logTicketSyncBadRequest(remoteAddr, input, "description is required")
+		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "description is required"}
 	case input.ContactPerson == "":
-		http.Error(w, "contact_person is required", http.StatusBadRequest)
-		return
+		logTicketSyncBadRequest(remoteAddr, input, "contact_person is required")
+		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "contact_person is required"}
 	case input.Department == "":
-		http.Error(w, "department is required", http.StatusBadRequest)
-		return
+		logTicketSyncBadRequest(remoteAddr, input, "department is required")
+		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "department is required"}
 	case input.AuthorTitle != "" && input.Author == "":
-		http.Error(w, "author is required when author_title is provided", http.StatusBadRequest)
-		return
+		logTicketSyncBadRequest(remoteAddr, input, "author is required when author_title is provided")
+		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "author is required when author_title is provided"}
 	}
 
 	var (
@@ -3355,25 +3754,25 @@ func (s *Server) handleTicketSync(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err := clientID.Scan(input.Client); err != nil {
-		http.Error(w, "client must be a valid UUID", http.StatusBadRequest)
-		return
+		logTicketSyncBadRequest(remoteAddr, input, "client must be a valid UUID parse_err=%q", err.Error())
+		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "client must be a valid UUID"}
 	}
 	if err := contactID.Scan(input.ContactPerson); err != nil {
-		http.Error(w, "contact_person must be a valid UUID", http.StatusBadRequest)
-		return
+		logTicketSyncBadRequest(remoteAddr, input, "contact_person must be a valid UUID parse_err=%q", err.Error())
+		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "contact_person must be a valid UUID"}
 	}
 	if err := deviceID.Scan(input.Device); err != nil {
-		http.Error(w, "device must be a valid UUID", http.StatusBadRequest)
-		return
+		logTicketSyncBadRequest(remoteAddr, input, "device must be a valid UUID parse_err=%q", err.Error())
+		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "device must be a valid UUID"}
 	}
 	if input.Author != "" {
 		if err := externalAuthorID.Scan(input.Author); err != nil {
-			http.Error(w, "author must be a valid UUID", http.StatusBadRequest)
-			return
+			logTicketSyncBadRequest(remoteAddr, input, "author must be a valid UUID parse_err=%q", err.Error())
+			return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "author must be a valid UUID"}
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
 	if input.Source != "" && input.SyncKey != "" {
@@ -3404,13 +3803,13 @@ func (s *Server) handleTicketSync(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			log.Printf(
 				"ticket sync duplicate remote=%q source=%q sync_key=%q ticket_id=%s ticket_number=%d",
-				r.RemoteAddr,
+				remoteAddr,
 				input.Source,
 				input.SyncKey,
 				uuidToString(existingTicketID),
 				existingTicketNo,
 			)
-			writeJSON(w, http.StatusOK, syncTicketResponse{
+			return http.StatusOK, syncTicketResponse{
 				Author:     nullableUUIDToString(existingExternalAuthor),
 				Department: uuidToString(existingDepartmentID),
 				Duplicate:  true,
@@ -3419,13 +3818,11 @@ func (s *Server) handleTicketSync(w http.ResponseWriter, r *http.Request) {
 				Source:     input.Source,
 				Status:     existingStatus,
 				SyncKey:    input.SyncKey,
-			})
-			return
+			}, nil
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
 			log.Printf("load existing synced ticket failed: %v", err)
-			http.Error(w, "failed to create ticket", http.StatusInternalServerError)
-			return
+			return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to create ticket"}
 		}
 	}
 
@@ -3436,48 +3833,44 @@ func (s *Server) handleTicketSync(w http.ResponseWriter, r *http.Request) {
 			WHERE LOWER(title) = LOWER($1)
 		`, input.Department).Scan(&departmentID); queryErr != nil {
 			if errors.Is(queryErr, pgx.ErrNoRows) {
-				http.Error(w, "department not found", http.StatusBadRequest)
-				return
+				logTicketSyncBadRequest(remoteAddr, input, "department not found")
+				return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "department not found"}
 			}
 
 			log.Printf("resolve ticket sync department failed: %v", queryErr)
-			http.Error(w, "failed to create ticket", http.StatusInternalServerError)
-			return
+			return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to create ticket"}
 		}
 	}
 
 	var departmentExists bool
 	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM departments WHERE id = $1)`, departmentID).Scan(&departmentExists); err != nil {
 		log.Printf("validate ticket sync department failed: %v", err)
-		http.Error(w, "failed to create ticket", http.StatusInternalServerError)
-		return
+		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to create ticket"}
 	}
 	if !departmentExists {
-		http.Error(w, "department not found", http.StatusBadRequest)
-		return
+		logTicketSyncBadRequest(remoteAddr, input, "department not found resolved_department_id=%s", uuidToString(departmentID))
+		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "department not found"}
 	}
 
 	var reasonExists bool
 	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM ticket_reasons WHERE id = $1)`, input.Reason).Scan(&reasonExists); err != nil {
 		log.Printf("validate ticket sync reason failed: %v", err)
-		http.Error(w, "failed to create ticket", http.StatusInternalServerError)
-		return
+		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to create ticket"}
 	}
 	if !reasonExists {
-		http.Error(w, "reason not found", http.StatusBadRequest)
-		return
+		logTicketSyncBadRequest(remoteAddr, input, "reason not found")
+		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "reason not found"}
 	}
 
 	if input.TicketType != "" {
 		var ticketTypeExists bool
 		if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM ticket_types WHERE type = $1)`, input.TicketType).Scan(&ticketTypeExists); err != nil {
 			log.Printf("validate ticket sync ticket type failed: %v", err)
-			http.Error(w, "failed to create ticket", http.StatusInternalServerError)
-			return
+			return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to create ticket"}
 		}
 		if !ticketTypeExists {
-			http.Error(w, "ticket_type not found", http.StatusBadRequest)
-			return
+			logTicketSyncBadRequest(remoteAddr, input, "ticket_type not found")
+			return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "ticket_type not found"}
 		}
 	}
 
@@ -3495,21 +3888,20 @@ func (s *Server) handleTicketSync(w http.ResponseWriter, r *http.Request) {
 		WHERE d.id = $1
 	`, deviceID).Scan(&resolvedClientID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			http.Error(w, "device not found", http.StatusNotFound)
-			return
+			logTicketSyncBadRequest(remoteAddr, input, "device not found")
+			return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusNotFound, Message: "device not found"}
 		}
 
 		log.Printf("load ticket sync device client failed: %v", err)
-		http.Error(w, "failed to create ticket", http.StatusInternalServerError)
-		return
+		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to create ticket"}
 	}
 	if !resolvedClientID.Valid {
-		http.Error(w, "device has no client", http.StatusBadRequest)
-		return
+		logTicketSyncBadRequest(remoteAddr, input, "device has no client")
+		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "device has no client"}
 	}
 	if resolvedClientID != clientID {
-		http.Error(w, "client does not match device", http.StatusBadRequest)
-		return
+		logTicketSyncBadRequest(remoteAddr, input, "client does not match device resolved_client=%s", uuidToString(resolvedClientID))
+		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "client does not match device"}
 	}
 
 	var contactExists bool
@@ -3522,38 +3914,29 @@ func (s *Server) handleTicketSync(w http.ResponseWriter, r *http.Request) {
 		)
 	`, contactID, clientID).Scan(&contactExists); err != nil {
 		log.Printf("validate ticket sync contact failed: %v", err)
-		http.Error(w, "failed to create ticket", http.StatusInternalServerError)
-		return
+		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to create ticket"}
 	}
 	if !contactExists {
-		http.Error(w, "contact_person not found", http.StatusBadRequest)
-		return
+		logTicketSyncBadRequest(remoteAddr, input, "contact_person not found for client=%s", uuidToString(clientID))
+		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "contact_person not found"}
 	}
 
 	if input.Author != "" && input.AuthorTitle == "" {
 		var externalAuthorExists bool
 		if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM external_users WHERE id = $1)`, externalAuthorID).Scan(&externalAuthorExists); err != nil {
 			log.Printf("validate ticket sync external author failed: %v", err)
-			http.Error(w, "failed to create ticket", http.StatusInternalServerError)
-			return
+			return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to create ticket"}
 		}
 		if !externalAuthorExists {
-			log.Printf(
-				"ticket sync rejected: unknown author source=%q sync_key=%q author=%q",
-				input.Source,
-				input.SyncKey,
-				input.Author,
-			)
-			http.Error(w, "author not found; provide author_title to create it", http.StatusBadRequest)
-			return
+			logTicketSyncBadRequest(remoteAddr, input, "author not found; provide author_title to create it")
+			return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "author not found; provide author_title to create it"}
 		}
 	}
 
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		log.Printf("begin ticket sync transaction failed: %v", err)
-		http.Error(w, "failed to create ticket", http.StatusInternalServerError)
-		return
+		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to create ticket"}
 	}
 	defer tx.Rollback(ctx)
 
@@ -3565,8 +3948,7 @@ func (s *Server) handleTicketSync(w http.ResponseWriter, r *http.Request) {
 			SET title = EXCLUDED.title
 		`, externalAuthorID, input.AuthorTitle); err != nil {
 			log.Printf("upsert ticket sync external author failed: %v", err)
-			http.Error(w, "failed to create ticket", http.StatusInternalServerError)
-			return
+			return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to create ticket"}
 		}
 
 		log.Printf(
@@ -3631,14 +4013,12 @@ func (s *Server) handleTicketSync(w http.ResponseWriter, r *http.Request) {
 				  AND sync_key = $2
 			`, input.Source, input.SyncKey).Scan(&createdTicketID, &createdTicketNo, &createdStatus, &existingDepartmentID, &existingExternalAuthor); err != nil {
 				log.Printf("load duplicate synced ticket failed: %v", err)
-				http.Error(w, "failed to create ticket", http.StatusInternalServerError)
-				return
+				return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to create ticket"}
 			}
 
 			if err := tx.Commit(ctx); err != nil {
 				log.Printf("commit duplicate ticket sync transaction failed: %v", err)
-				http.Error(w, "failed to create ticket", http.StatusInternalServerError)
-				return
+				return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to create ticket"}
 			}
 
 			log.Printf(
@@ -3649,7 +4029,7 @@ func (s *Server) handleTicketSync(w http.ResponseWriter, r *http.Request) {
 				createdTicketNo,
 			)
 
-			writeJSON(w, http.StatusOK, syncTicketResponse{
+			return http.StatusOK, syncTicketResponse{
 				Author:     nullableUUIDToString(existingExternalAuthor),
 				Department: uuidToString(existingDepartmentID),
 				Duplicate:  true,
@@ -3658,19 +4038,16 @@ func (s *Server) handleTicketSync(w http.ResponseWriter, r *http.Request) {
 				Source:     input.Source,
 				Status:     createdStatus,
 				SyncKey:    input.SyncKey,
-			})
-			return
+			}, nil
 		}
 
 		log.Printf("create synced ticket failed: %v", err)
-		http.Error(w, "failed to create ticket", http.StatusInternalServerError)
-		return
+		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to create ticket"}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
 		log.Printf("commit ticket sync transaction failed: %v", err)
-		http.Error(w, "failed to create ticket", http.StatusInternalServerError)
-		return
+		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to create ticket"}
 	}
 
 	log.Printf(
@@ -3683,7 +4060,7 @@ func (s *Server) handleTicketSync(w http.ResponseWriter, r *http.Request) {
 		input.Author,
 	)
 
-	writeJSON(w, http.StatusCreated, syncTicketResponse{
+	return http.StatusCreated, syncTicketResponse{
 		Author:     nullableUUIDToString(externalAuthorID),
 		Department: uuidToString(departmentID),
 		Duplicate:  false,
@@ -3692,7 +4069,165 @@ func (s *Server) handleTicketSync(w http.ResponseWriter, r *http.Request) {
 		Source:     input.Source,
 		Status:     createdStatus,
 		SyncKey:    input.SyncKey,
-	})
+	}, nil
+}
+
+func (s *Server) handleTicketSync(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if !s.sync.Enabled() {
+		log.Printf("ticket sync rejected: handler not configured remote=%q", r.RemoteAddr)
+		http.Error(w, "ticket sync is not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	providedSyncSecret := r.Header.Get("X-Sync-Secret")
+	log.Printf(
+		"ticket sync auth received remote=%q provided_secret_sha=%s provided_secret_len=%d",
+		r.RemoteAddr,
+		syncSecretFingerprint(providedSyncSecret),
+		len(strings.TrimSpace(providedSyncSecret)),
+	)
+
+	if !syncSecretMatches(s.sync.sharedSecret, providedSyncSecret) {
+		log.Printf(
+			"ticket sync rejected: invalid secret remote=%q provided_secret_sha=%s provided_secret_len=%d configured_secret_sha=%s configured_secret_len=%d",
+			r.RemoteAddr,
+			syncSecretFingerprint(providedSyncSecret),
+			len(strings.TrimSpace(providedSyncSecret)),
+			syncSecretFingerprint(s.sync.sharedSecret),
+			len(strings.TrimSpace(s.sync.sharedSecret)),
+		)
+		http.Error(w, "invalid sync secret", http.StatusUnauthorized)
+		return
+	}
+
+	if s.db == nil {
+		log.Printf("ticket sync rejected: database not configured remote=%q", r.RemoteAddr)
+		http.Error(w, "database not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	defer r.Body.Close()
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("ticket sync rejected: read request body failed remote=%q err=%q", r.RemoteAddr, err.Error())
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	trimmedBody := bytes.TrimSpace(body)
+	var envelope syncEnvelopeRequest
+	if err := json.Unmarshal(trimmedBody, &envelope); err == nil && strings.TrimSpace(envelope.Type) != "" {
+		switch strings.ToLower(strings.TrimSpace(envelope.Type)) {
+		case "device":
+			input, err := decodeDeviceSyncEnvelopeData(envelope.Data)
+			if err != nil {
+				preview := strings.TrimSpace(string(body))
+				if len(preview) > maxTicketSyncBodyLogBytes {
+					preview = preview[:maxTicketSyncBodyLogBytes] + "...(truncated)"
+				}
+				log.Printf(
+					"ticket sync rejected: invalid request body remote=%q content_type=%q content_length=%d decode_err=%q body_preview=%s",
+					r.RemoteAddr,
+					r.Header.Get("Content-Type"),
+					r.ContentLength,
+					err.Error(),
+					strconv.Quote(preview),
+				)
+				http.Error(w, "invalid request body", http.StatusBadRequest)
+				return
+			}
+
+			statusCode, response, err := s.processDeviceSyncRequest(r.Context(), r.RemoteAddr, input)
+			if err != nil {
+				var requestErr *syncRequestError
+				if errors.As(err, &requestErr) {
+					http.Error(w, requestErr.Message, requestErr.StatusCode)
+					return
+				}
+
+				log.Printf("device sync failed remote=%q err=%v", r.RemoteAddr, err)
+				http.Error(w, "failed to sync device", http.StatusInternalServerError)
+				return
+			}
+
+			writeJSON(w, statusCode, syncDeviceEnvelopeResponse{
+				Type: "device",
+				Data: response,
+			})
+			return
+		}
+	}
+
+	requests, wrappedTickets, err := decodeTicketSyncRequests(body)
+	if err != nil {
+		preview := strings.TrimSpace(string(body))
+		if len(preview) > maxTicketSyncBodyLogBytes {
+			preview = preview[:maxTicketSyncBodyLogBytes] + "...(truncated)"
+		}
+		log.Printf(
+			"ticket sync rejected: invalid request body remote=%q content_type=%q content_length=%d decode_err=%q body_preview=%s",
+			r.RemoteAddr,
+			r.Header.Get("Content-Type"),
+			r.ContentLength,
+			err.Error(),
+			strconv.Quote(preview),
+		)
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if wrappedTickets {
+		log.Printf("ticket sync envelope received remote=%q type=%q ticket_count=%d", r.RemoteAddr, "tickets", len(requests))
+	}
+
+	statusCode := http.StatusCreated
+	responses := make([]syncTicketResponse, 0, len(requests))
+	for index, input := range requests {
+		itemStatus, response, err := s.processTicketSyncRequest(r.Context(), r.RemoteAddr, input)
+		if err != nil {
+			var requestErr *syncRequestError
+			if errors.As(err, &requestErr) {
+				if wrappedTickets {
+					log.Printf(
+						"ticket sync envelope aborted remote=%q type=%q ticket_index=%d sync_key=%q status=%d message=%q",
+						r.RemoteAddr,
+						"tickets",
+						index,
+						input.SyncKey,
+						requestErr.StatusCode,
+						requestErr.Message,
+					)
+				}
+				http.Error(w, requestErr.Message, requestErr.StatusCode)
+				return
+			}
+
+			log.Printf("ticket sync failed remote=%q err=%v", r.RemoteAddr, err)
+			http.Error(w, "failed to create ticket", http.StatusInternalServerError)
+			return
+		}
+
+		if itemStatus == http.StatusOK {
+			statusCode = http.StatusOK
+		}
+		responses = append(responses, response)
+	}
+
+	if wrappedTickets {
+		writeJSON(w, statusCode, syncTicketBatchResponse{
+			Type: "tickets",
+			Data: responses,
+		})
+		return
+	}
+
+	writeJSON(w, statusCode, responses[0])
 }
 
 func (s *Server) handleTickets(w http.ResponseWriter, r *http.Request) {

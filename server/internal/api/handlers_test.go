@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -316,6 +317,120 @@ func TestNormalizeTicketSyncAuthorFallsBackToLegacyFields(t *testing.T) {
 	}
 	if title != "Legacy Dispatcher" {
 		t.Fatalf("expected legacy author title to be used, got %q", title)
+	}
+}
+
+func TestDecodeTicketSyncRequestsSupportsTicketEnvelope(t *testing.T) {
+	t.Parallel()
+
+	requests, wrapped, err := decodeTicketSyncRequests([]byte(`{
+		"type":"tickets",
+		"data":[
+			{
+				"id":"ticket-123",
+				"ticketType":"internal",
+				"author":{"id":"user-1","title":"Dispatcher","login":"ignored"},
+				"client":{"id":"client-1","title":"ignored"},
+				"contactPerson":{"id":"contact-1","firstName":"ignored"},
+				"department":{"id":"department-1","title":"Service Department"},
+				"description":"  Needs diagnostics  ",
+				"device":{"id":"device-1","serialNumber":"SN-42"},
+				"reason":"diagnostic",
+				"urgent":true
+			}
+		]
+	}`))
+	if err != nil {
+		t.Fatalf("decode envelope: %v", err)
+	}
+	if !wrapped {
+		t.Fatal("expected wrapped tickets payload")
+	}
+	if len(requests) != 1 {
+		t.Fatalf("expected one request, got %d", len(requests))
+	}
+
+	got := requests[0]
+	if got.SyncKey != "ticket-123" {
+		t.Fatalf("expected sync key from ticket id, got %q", got.SyncKey)
+	}
+	if got.Source != "tickets" {
+		t.Fatalf("expected source tickets, got %q", got.Source)
+	}
+	if got.Client != "client-1" || got.Device != "device-1" || got.ContactPerson != "contact-1" {
+		t.Fatalf("expected ids copied from nested refs, got %+v", got)
+	}
+	if got.Department != "department-1" {
+		t.Fatalf("expected department id preferred, got %q", got.Department)
+	}
+	if got.Author != "user-1" || got.AuthorTitle != "Dispatcher" {
+		t.Fatalf("expected author mapped, got %+v", got)
+	}
+	if got.Description != "Needs diagnostics" {
+		t.Fatalf("expected trimmed description, got %q", got.Description)
+	}
+	if got.Reason != "diagnostic" || got.TicketType != "internal" {
+		t.Fatalf("expected ticket metadata mapped, got %+v", got)
+	}
+	if !got.Urgent {
+		t.Fatal("expected urgent flag preserved")
+	}
+}
+
+func TestDecodeTicketSyncRequestsRejectsUnsupportedEnvelopeType(t *testing.T) {
+	t.Parallel()
+
+	_, wrapped, err := decodeTicketSyncRequests([]byte(`{"type":"device","data":{"id":"device-1"}}`))
+	if err == nil {
+		t.Fatal("expected unsupported type error")
+	}
+	if !wrapped {
+		t.Fatal("expected typed envelope to be detected as wrapped")
+	}
+	if !strings.Contains(err.Error(), `unsupported sync type "device"`) {
+		t.Fatalf("expected unsupported type error, got %q", err.Error())
+	}
+}
+
+func TestDecodeDeviceSyncEnvelopeData(t *testing.T) {
+	t.Parallel()
+
+	input, err := decodeDeviceSyncEnvelopeData(json.RawMessage(`{
+		"id":"device-123",
+		"ref":"legacy-ref-1",
+		"serialNumber":"SN-42",
+		"bindings":[{"client":"client-1"}],
+		"properties":{"rack":2},
+		"connectedToLis":true
+	}`))
+	if err != nil {
+		t.Fatalf("decode device envelope: %v", err)
+	}
+	if input.ID != "device-123" || input.Ref != "legacy-ref-1" || input.SerialNumber != "SN-42" {
+		t.Fatalf("expected identifiers to be decoded, got %+v", input)
+	}
+	if len(input.Bindings) != 1 || input.Bindings[0].Client != "client-1" {
+		t.Fatalf("expected bindings to be decoded, got %+v", input.Bindings)
+	}
+	if !input.ConnectedToLis {
+		t.Fatal("expected connectedToLis to be preserved")
+	}
+	if string(input.Properties) != `{"rack":2}` {
+		t.Fatalf("expected properties raw json preserved, got %s", string(input.Properties))
+	}
+}
+
+func TestDeterministicSyncAgreementIDIsStable(t *testing.T) {
+	t.Parallel()
+
+	first := deterministicSyncAgreementID("device-1", "client-1")
+	second := deterministicSyncAgreementID("device-1", "client-1")
+	other := deterministicSyncAgreementID("device-1", "client-2")
+	if first != second {
+		t.Fatalf("expected deterministic id, got %q and %q", first, second)
+	}
+	if first == other {
+		t.Fatalf("expected different client to change id, got %q", first)
 	}
 }
 
