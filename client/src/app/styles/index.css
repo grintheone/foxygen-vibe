@@ -8,9 +8,21 @@
     font-family: "Segoe UI", sans-serif;
 }
 
+html {
+    min-height: 100%;
+    background-color: #020617;
+}
+
 body {
     margin: 0;
     min-width: 320px;
+    min-height: 100dvh;
+    background-color: #020617;
+    overscroll-behavior-y: contain;
+}
+
+#root {
+    min-height: 100dvh;
 }
 
 * {
