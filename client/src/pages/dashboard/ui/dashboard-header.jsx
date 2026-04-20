@@ -8,8 +8,7 @@ export function DashboardHeader({ onOpenProfile }) {
     <header className="rounded-3xl border border-white/10 bg-slate-950/35 p-6 shadow-xl shadow-black/20 backdrop-blur">
       <div className="flex justify-between items-center gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Дэшборд</p>
-          <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">Сегодня {today}</h1>
+          <h1 className="text-base font-semibold tracking-[0.2em] text-slate-300 uppercase sm:text-lg">Сегодня {today}</h1>
         </div>
         <button
           type="button"

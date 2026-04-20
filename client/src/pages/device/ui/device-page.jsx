@@ -183,7 +183,7 @@ function DeviceOverviewSection({ device, propertyEntries }) {
 
             <div className="grid gap-3 sm:grid-cols-3">
                 <DeviceStatCard label="Серийный номер" value={device?.serialNumber || "Не указано"} />
-                <DeviceStatCard label="LIS" value={device?.connectedToLis ? "Подключено" : "Не подключено"} />
+                <DeviceStatCard label="ЛИС" value={device?.connectedToLis ? "Подключено" : "Не подключено"} />
                 <DeviceStatCard label="Б/У" value={device?.isUsed ? "Да" : "Нет"} />
             </div>
 

@@ -1,5 +1,5 @@
 export function DashboardOverview({ isMemberProfile = false, session }) {
-  const eyebrow = isMemberProfile ? "Engineer Profile" : "Mobile Engineer V3";
+  const eyebrow = isMemberProfile ? "Engineer Profile" : "Mobile Engineer";
   const description = isMemberProfile
     ? "Карточка сотрудника загружается из защищенного API и показывает основные данные инженера."
     : "Ваша сессия активна. Эта страница профиля получает защищенные данные учетной записи по access token, а ротация refresh token доступна без перехода на другие страницы.";
