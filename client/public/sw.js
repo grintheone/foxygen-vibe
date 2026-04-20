@@ -1,5 +1,5 @@
-const STATIC_CACHE = "foxygen-static-v2";
-const RUNTIME_CACHE = "foxygen-runtime-v2";
+const STATIC_CACHE = "foxygen-static-v3";
+const RUNTIME_CACHE = "foxygen-runtime-v3";
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -58,7 +58,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (isStaticAssetRequest(request, url)) {
-    event.respondWith(handleStaticAssetRequest(request));
+    event.respondWith(handleStaticAssetRequest(request, url));
   }
 });
 
@@ -87,21 +87,39 @@ async function handleNavigationRequest(request) {
   }
 }
 
-async function handleStaticAssetRequest(request) {
+async function handleStaticAssetRequest(request, url) {
+  if (shouldPreferFreshAsset(request, url)) {
+    return fetchAndCache(request);
+  }
+
   const cachedResponse = await caches.match(request);
 
   if (cachedResponse) {
     return cachedResponse;
   }
 
-  const response = await fetch(request);
+  return fetchAndCache(request);
+}
 
-  if (response.ok) {
-    const cache = await caches.open(RUNTIME_CACHE);
-    cache.put(request, response.clone());
+async function fetchAndCache(request) {
+  try {
+    const response = await fetch(request);
+
+    if (response.ok) {
+      const cache = await caches.open(RUNTIME_CACHE);
+      cache.put(request, response.clone());
+    }
+
+    return response;
+  } catch (error) {
+    const cachedResponse = await caches.match(request);
+
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+
+    throw error;
   }
-
-  return response;
 }
 
 function isStaticAssetRequest(request, url) {
@@ -110,6 +128,14 @@ function isStaticAssetRequest(request, url) {
     request.destination === "style" ||
     request.destination === "image" ||
     request.destination === "font" ||
+    url.pathname.startsWith("/assets/")
+  );
+}
+
+function shouldPreferFreshAsset(request, url) {
+  return (
+    request.destination === "script" ||
+    request.destination === "style" ||
     url.pathname.startsWith("/assets/")
   );
 }
