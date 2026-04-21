@@ -3734,9 +3734,6 @@ func (s *Server) processTicketSyncRequest(ctx context.Context, remoteAddr string
 	case input.Description == "":
 		logTicketSyncBadRequest(remoteAddr, input, "description is required")
 		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "description is required"}
-	case input.ContactPerson == "":
-		logTicketSyncBadRequest(remoteAddr, input, "contact_person is required")
-		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "contact_person is required"}
 	case input.Department == "":
 		logTicketSyncBadRequest(remoteAddr, input, "department is required")
 		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "department is required"}
@@ -3757,10 +3754,12 @@ func (s *Server) processTicketSyncRequest(ctx context.Context, remoteAddr string
 		logTicketSyncBadRequest(remoteAddr, input, "client must be a valid UUID parse_err=%q", err.Error())
 		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "client must be a valid UUID"}
 	}
-	if err := contactID.Scan(input.ContactPerson); err != nil {
-		logTicketSyncBadRequest(remoteAddr, input, "contact_person must be a valid UUID parse_err=%q", err.Error())
+	parsedContactID, parseErr := parseOptionalUUID(input.ContactPerson)
+	if parseErr != nil {
+		logTicketSyncBadRequest(remoteAddr, input, "contact_person must be a valid UUID parse_err=%q", parseErr.Error())
 		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "contact_person must be a valid UUID"}
 	}
+	contactID = parsedContactID
 	if err := deviceID.Scan(input.Device); err != nil {
 		logTicketSyncBadRequest(remoteAddr, input, "device must be a valid UUID parse_err=%q", err.Error())
 		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "device must be a valid UUID"}
@@ -3904,21 +3903,23 @@ func (s *Server) processTicketSyncRequest(ctx context.Context, remoteAddr string
 		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "client does not match device"}
 	}
 
-	var contactExists bool
-	if err := s.db.QueryRow(ctx, `
-		SELECT EXISTS(
-			SELECT 1
-			FROM contacts
-			WHERE id = $1
-			  AND client_id = $2
-		)
-	`, contactID, clientID).Scan(&contactExists); err != nil {
-		log.Printf("validate ticket sync contact failed: %v", err)
-		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to create ticket"}
-	}
-	if !contactExists {
-		logTicketSyncBadRequest(remoteAddr, input, "contact_person not found for client=%s", uuidToString(clientID))
-		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "contact_person not found"}
+	if contactID.Valid {
+		var contactExists bool
+		if err := s.db.QueryRow(ctx, `
+			SELECT EXISTS(
+				SELECT 1
+				FROM contacts
+				WHERE id = $1
+				  AND client_id = $2
+			)
+		`, contactID, clientID).Scan(&contactExists); err != nil {
+			log.Printf("validate ticket sync contact failed: %v", err)
+			return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to create ticket"}
+		}
+		if !contactExists {
+			logTicketSyncBadRequest(remoteAddr, input, "contact_person not found for client=%s", uuidToString(clientID))
+			return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "contact_person not found"}
+		}
 	}
 
 	if input.Author != "" && input.AuthorTitle == "" {
@@ -3998,7 +3999,7 @@ func (s *Server) processTicketSyncRequest(ctx context.Context, remoteAddr string
 		WHERE sync_source IS NOT NULL AND sync_key IS NOT NULL
 		DO NOTHING
 		RETURNING id, number, COALESCE(status, '')
-	`, clientID, deviceID, input.TicketType, nullableUUID(externalAuthorID), departmentID, input.Reason, input.Description, contactID, input.Urgent, input.Source, input.SyncKey).Scan(
+	`, clientID, deviceID, input.TicketType, nullableUUID(externalAuthorID), departmentID, input.Reason, input.Description, nullableUUID(contactID), input.Urgent, input.Source, input.SyncKey).Scan(
 		&createdTicketID,
 		&createdTicketNo,
 		&createdStatus,
@@ -4458,9 +4459,6 @@ func (s *Server) handleTicketsCreate(w http.ResponseWriter, r *http.Request, req
 	case input.Description == "":
 		http.Error(w, "description is required", http.StatusBadRequest)
 		return
-	case input.ContactPerson == "":
-		http.Error(w, "contact_person is required", http.StatusBadRequest)
-		return
 	case input.Executor == "":
 		http.Error(w, "executor is required", http.StatusBadRequest)
 		return
@@ -4505,10 +4503,12 @@ func (s *Server) handleTicketsCreate(w http.ResponseWriter, r *http.Request, req
 		http.Error(w, "client must be a valid UUID", http.StatusBadRequest)
 		return
 	}
-	if err := contactID.Scan(input.ContactPerson); err != nil {
+	parsedContactID, parseErr := parseOptionalUUID(input.ContactPerson)
+	if parseErr != nil {
 		http.Error(w, "contact_person must be a valid UUID", http.StatusBadRequest)
 		return
 	}
+	contactID = parsedContactID
 	if err := deviceID.Scan(input.Device); err != nil {
 		http.Error(w, "device must be a valid UUID", http.StatusBadRequest)
 		return
@@ -4595,22 +4595,24 @@ func (s *Server) handleTicketsCreate(w http.ResponseWriter, r *http.Request, req
 		return
 	}
 
-	var contactExists bool
-	if err := s.db.QueryRow(ctx, `
-		SELECT EXISTS(
-			SELECT 1
-			FROM contacts
-			WHERE id = $1
-			  AND client_id = $2
-		)
-	`, contactID, clientID).Scan(&contactExists); err != nil {
-		log.Printf("validate contact failed: %v", err)
-		http.Error(w, "failed to create ticket", http.StatusInternalServerError)
-		return
-	}
-	if !contactExists {
-		http.Error(w, "contact_person not found", http.StatusBadRequest)
-		return
+	if contactID.Valid {
+		var contactExists bool
+		if err := s.db.QueryRow(ctx, `
+			SELECT EXISTS(
+				SELECT 1
+				FROM contacts
+				WHERE id = $1
+				  AND client_id = $2
+			)
+		`, contactID, clientID).Scan(&contactExists); err != nil {
+			log.Printf("validate contact failed: %v", err)
+			http.Error(w, "failed to create ticket", http.StatusInternalServerError)
+			return
+		}
+		if !contactExists {
+			http.Error(w, "contact_person not found", http.StatusBadRequest)
+			return
+		}
 	}
 
 	var executorExists bool
@@ -4684,7 +4686,7 @@ func (s *Server) handleTicketsCreate(w http.ResponseWriter, r *http.Request, req
 			'assigned'
 		)
 		RETURNING id, number, COALESCE(status, ''), assigned_at, assigned_start, assigned_end
-	`, assignedStart, assignedEnd, input.Urgent, clientID, deviceID, requesterID, requesterDepartment, requesterID, input.Reason, input.Description, contactID, executorID).Scan(
+	`, assignedStart, assignedEnd, input.Urgent, clientID, deviceID, requesterID, requesterDepartment, requesterID, input.Reason, input.Description, nullableUUID(contactID), executorID).Scan(
 		&createdTicketID,
 		&createdTicketNo,
 		&createdTicketState,
@@ -5207,10 +5209,6 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 			http.Error(w, "reason is required", http.StatusBadRequest)
 			return
 		}
-		if input.ContactPerson == "" {
-			http.Error(w, "contact_person is required", http.StatusBadRequest)
-			return
-		}
 		if input.Executor == "" {
 			http.Error(w, "executor is required", http.StatusBadRequest)
 			return
@@ -5246,11 +5244,12 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 			http.Error(w, "executor must be a valid UUID", http.StatusBadRequest)
 			return
 		}
-		var contactPersonID pgtype.UUID
-		if err := contactPersonID.Scan(input.ContactPerson); err != nil {
+		contactPersonID, parseErr := parseOptionalUUID(input.ContactPerson)
+		if parseErr != nil {
 			http.Error(w, "contact_person must be a valid UUID", http.StatusBadRequest)
 			return
 		}
+		contactPersonValue := nullableUUID(contactPersonID)
 
 		var (
 			requesterDepartment pgtype.UUID
@@ -5295,23 +5294,25 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 			return
 		}
 
-		var contactExists bool
-		if err := s.db.QueryRow(ctx, `
-			SELECT EXISTS(
-				SELECT 1
-				FROM tickets t
-				JOIN contacts c ON c.client_id = t.client
-				WHERE t.id = $1
-				  AND c.id = $2
-			)
-		`, ticketID, contactPersonID).Scan(&contactExists); err != nil {
-			log.Printf("validate contact failed: %v", err)
-			http.Error(w, "failed to update ticket", http.StatusInternalServerError)
-			return
-		}
-		if !contactExists {
-			http.Error(w, "contact_person not found", http.StatusBadRequest)
-			return
+		if contactPersonID.Valid {
+			var contactExists bool
+			if err := s.db.QueryRow(ctx, `
+				SELECT EXISTS(
+					SELECT 1
+					FROM tickets t
+					JOIN contacts c ON c.client_id = t.client
+					WHERE t.id = $1
+					  AND c.id = $2
+				)
+			`, ticketID, contactPersonID).Scan(&contactExists); err != nil {
+				log.Printf("validate contact failed: %v", err)
+				http.Error(w, "failed to update ticket", http.StatusInternalServerError)
+				return
+			}
+			if !contactExists {
+				http.Error(w, "contact_person not found", http.StatusBadRequest)
+				return
+			}
 		}
 
 		var executorExists bool
@@ -5351,7 +5352,7 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 			WHERE id = $10
 			  AND department = $11
 			  AND status = $12
-		`, input.Status, input.Description, input.Reason, contactPersonID, executorID, input.Urgent, userID, assignedStart, assignedEnd, ticketID, requesterDepartment, expectedCurrentStatus)
+		`, input.Status, input.Description, input.Reason, contactPersonValue, executorID, input.Urgent, userID, assignedStart, assignedEnd, ticketID, requesterDepartment, expectedCurrentStatus)
 		if err == nil {
 			latestTicketUserID = &executorID
 			formattedAssignedAt := time.Now().UTC().Format(time.RFC3339)
@@ -5360,7 +5361,9 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 			response.AssignedAt = &formattedAssignedAt
 			response.AssignedStart = &formattedAssignedStart
 			response.AssignedEnd = &formattedAssignedEnd
-			response.ContactPerson = &input.ContactPerson
+			if input.ContactPerson != "" {
+				response.ContactPerson = &input.ContactPerson
+			}
 			response.Description = input.Description
 			response.Executor = &input.Executor
 			response.Reason = input.Reason
@@ -5814,6 +5817,19 @@ func nullableUUID(value pgtype.UUID) any {
 	}
 
 	return value
+}
+
+func parseOptionalUUID(value string) (pgtype.UUID, error) {
+	var parsed pgtype.UUID
+	if value == "" {
+		return parsed, nil
+	}
+
+	if err := parsed.Scan(value); err != nil {
+		return pgtype.UUID{}, err
+	}
+
+	return parsed, nil
 }
 
 func nullableTextToString(value pgtype.Text) *string {

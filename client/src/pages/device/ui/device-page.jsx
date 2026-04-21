@@ -542,7 +542,6 @@ function DeviceCreateTicketSheet({ device, isOpen, isSubmitting, onClose, onSubm
         device?.client &&
         ticketReasonId &&
         trimmedDescription &&
-        contactId &&
         executorId &&
         assignedStartValue &&
         assignedEndValue,
@@ -691,7 +690,7 @@ function DeviceCreateTicketSheet({ device, isOpen, isSubmitting, onClose, onSubm
                                     : isClientContactsFetching
                                       ? "Загружаем контакты..."
                                       : clientContacts.length > 0
-                                        ? "Выберите контакт"
+                                        ? "Выберите контакт или оставьте пустым"
                                         : "Контакты не найдены"}
                             </option>
                             {clientContacts.map((contact) => (
@@ -703,6 +702,8 @@ function DeviceCreateTicketSheet({ device, isOpen, isSubmitting, onClose, onSubm
 
                         {isClientContactsError ? (
                             <p className="text-sm text-rose-200">Не удалось загрузить контакты клиента.</p>
+                        ) : clientContacts.length > 0 ? (
+                            <p className="text-sm text-slate-400">Контакт можно не указывать.</p>
                         ) : null}
                     </div>
 

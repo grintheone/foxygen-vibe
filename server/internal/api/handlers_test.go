@@ -320,6 +320,26 @@ func TestNormalizeTicketSyncAuthorFallsBackToLegacyFields(t *testing.T) {
 	}
 }
 
+func TestParseOptionalUUIDAllowsEmptyValue(t *testing.T) {
+	t.Parallel()
+
+	value, err := parseOptionalUUID("")
+	if err != nil {
+		t.Fatalf("parse empty optional uuid: %v", err)
+	}
+	if value.Valid {
+		t.Fatal("expected empty optional uuid to stay invalid")
+	}
+}
+
+func TestParseOptionalUUIDRejectsInvalidValue(t *testing.T) {
+	t.Parallel()
+
+	if _, err := parseOptionalUUID("not-a-uuid"); err == nil {
+		t.Fatal("expected invalid uuid error")
+	}
+}
+
 func TestDecodeTicketSyncRequestsSupportsTicketEnvelope(t *testing.T) {
 	t.Parallel()
 

@@ -99,7 +99,6 @@ export function TicketAssignmentSheet({
     ticket?.id &&
       ticketReasonId &&
       trimmedDescription &&
-      contactId &&
       executorId &&
       assignedStartValue &&
       assignedEndValue,
@@ -282,7 +281,7 @@ export function TicketAssignmentSheet({
                   : isClientContactsFetching
                     ? "Загружаем контакты..."
                     : clientContacts.length > 0
-                      ? "Выберите контакт"
+                      ? "Выберите контакт или оставьте пустым"
                       : "Контакты не найдены"}
               </option>
               {contactId && !selectedContact ? (
@@ -300,6 +299,8 @@ export function TicketAssignmentSheet({
             ) : null}
             {isClientContactsError ? (
               <p className="text-sm text-rose-200">Не удалось загрузить контакты клиента.</p>
+            ) : clientContacts.length > 0 ? (
+              <p className="text-sm text-slate-400">Контакт можно не указывать.</p>
             ) : null}
           </div>
 

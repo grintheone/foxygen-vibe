@@ -79,7 +79,6 @@ The backend now exposes a webhook-style endpoint at `/api/v1/sync` for server-to
      "author_title": "External Dispatcher",
      "client": "00000000-0000-0000-0000-000000000001",
      "device": "00000000-0000-0000-0000-000000000002",
-     "contact_person": "00000000-0000-0000-0000-000000000003",
      "department": "Service Department",
      "reason": "maintenance",
      "description": "Analyzer stopped sending results after reboot.",
@@ -94,7 +93,8 @@ Notes:
 - The webhook creates a new ticket in `created` status so a coordinator can triage and assign it later.
 - `department` accepts either the department UUID or the unique department title.
 - `reason` must match an existing `ticket_reasons.id`.
-- `client`, `device`, and `contact_person` must already exist in PostgreSQL and must be consistent with each other.
+- `client` and `device` must already exist in PostgreSQL and must be consistent with each other.
+- `contact_person` is optional. When provided, it must already exist in PostgreSQL and belong to the same client.
 - `author` should contain the external user UUID for the incoming ticket.
 - If you send `sync_key`, the API treats repeated deliveries from the same `source` as the same ticket and returns the existing ticket instead of creating a duplicate.
 - If `sync_key` is present and `source` is omitted, the API uses `external-sync` automatically.

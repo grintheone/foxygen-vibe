@@ -65,9 +65,6 @@ export function TicketPage() {
     const [patchTicket, { isLoading: isPatching }] = usePatchTicketMutation();
     const [uploadTicketAttachment, { isLoading: isUploadingAttachment }] = useUploadTicketAttachmentMutation();
     const hasWorkResult = Boolean(ticket?.result?.trim());
-    const hasContactData = Boolean(
-        ticket?.contactName?.trim() || ticket?.contactPosition?.trim() || phoneHref || emailHref,
-    );
 
     const actionState = resolveTicketActionState({
         currentUserDepartment: session?.department || "",
@@ -274,14 +271,12 @@ export function TicketPage() {
                                 value={ticket.clientName}
                                 subtitle={ticket.clientAddress}
                             />
-                            {hasContactData ? (
-                                <TicketContactCard
-                                    contactName={ticket.contactName}
-                                    contactPosition={ticket.contactPosition}
-                                    phoneHref={phoneHref}
-                                    emailHref={emailHref}
-                                />
-                            ) : null}
+                            <TicketContactCard
+                                contactName={ticket.contactName}
+                                contactPosition={ticket.contactPosition}
+                                phoneHref={phoneHref}
+                                emailHref={emailHref}
+                            />
                         </section>
 
                         {hasWorkResult ? (

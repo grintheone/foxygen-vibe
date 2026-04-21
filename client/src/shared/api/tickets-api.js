@@ -90,8 +90,11 @@ function applyTicketPatchToDraft(draft, patch, response) {
   }
 
   if (Object.prototype.hasOwnProperty.call(patch, "contact_person")) {
-    draft.contactPerson =
-      response?.contact_person || response?.contactPerson || patch.contact_person || draft.contactPerson;
+    draft.contactPerson = response?.contact_person ?? response?.contactPerson ?? patch.contact_person ?? "";
+    draft.contactName = response?.contact_name ?? response?.contactName ?? "";
+    draft.contactPosition = response?.contact_position ?? response?.contactPosition ?? "";
+    draft.contactPhone = response?.contact_phone ?? response?.contactPhone ?? "";
+    draft.contactEmail = response?.contact_email ?? response?.contactEmail ?? "";
   }
 }
 
