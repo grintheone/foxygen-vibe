@@ -53,6 +53,8 @@ type Server struct {
 	editorTicketUpdater             func(context.Context, pgtype.UUID, any, any, any, any, any, any, any, string, string, string, bool, bool, any, any, any, any, any) (int64, error)
 	profileAccessCheck              func(context.Context, pgtype.UUID, pgtype.UUID) (bool, error)
 	accountDisabledUpdater          func(context.Context, pgtype.UUID, bool) (bool, error)
+	syncClientExists                func(context.Context, pgtype.UUID) (bool, error)
+	syncContactUpserter             func(context.Context, pgtype.UUID, string, string, string, string, pgtype.UUID) (bool, error)
 }
 
 type accountStore interface {
@@ -84,6 +86,11 @@ func New() (*Server, error) {
 	}
 
 	sync, err := resolveSyncConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	importDefaultPassword, err := resolveImportDefaultPassword()
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +128,11 @@ func New() (*Server, error) {
 
 	api.db = db
 	api.queries = appdb.New(db)
-	if err := dbinit.EnsureSchema(ctx, db, "db/schema/*.sql"); err != nil {
+	schemaSettings := map[string]string{}
+	if importDefaultPassword != "" {
+		schemaSettings["foxygen.import_default_password"] = importDefaultPassword
+	}
+	if err := dbinit.EnsureSchemaWithSessionSettings(ctx, db, "db/schema/*.sql", schemaSettings); err != nil {
 		db.Close()
 		return nil, err
 	}

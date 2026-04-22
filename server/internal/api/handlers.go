@@ -183,6 +183,31 @@ type syncDeviceRequest struct {
 	ConnectedToLis bool                `json:"connectedToLis"`
 }
 
+type syncContactRequest struct {
+	ID                   string `json:"id"`
+	Ref                  string `json:"ref"`
+	FirstName            string `json:"firstName"`
+	MiddleName           string `json:"middleName"`
+	LastName             string `json:"lastName"`
+	Position             string `json:"position"`
+	Phone                string `json:"phone"`
+	Email                string `json:"email"`
+	DisableNotification  bool   `json:"disableNotification"`
+	SendAllNotifications bool   `json:"sendAllNotifications"`
+}
+
+type syncContactResponse struct {
+	Client  string `json:"client"`
+	Created bool   `json:"created"`
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+}
+
+type syncContactEnvelopeResponse struct {
+	Type string              `json:"type"`
+	Data syncContactResponse `json:"data"`
+}
+
 type syncDeviceResponse struct {
 	AgreementIDs   []string `json:"agreementIds,omitempty"`
 	ClientIDs      []string `json:"clientIds,omitempty"`
@@ -3496,6 +3521,51 @@ func decodeDeviceSyncEnvelopeData(raw json.RawMessage) (syncDeviceRequest, error
 	return input, nil
 }
 
+func contactSyncRequestSummary(input syncContactRequest) string {
+	return strconv.Quote(
+		strings.Join([]string{
+			"id=" + input.ID,
+			"ref=" + input.Ref,
+			"name=" + buildSyncContactName(input),
+			"position=" + strings.TrimSpace(input.Position),
+			"phone=" + strings.TrimSpace(input.Phone),
+			"email=" + strings.TrimSpace(input.Email),
+		}, " "),
+	)
+}
+
+func logContactSyncBadRequest(remoteAddr string, input syncContactRequest, format string, args ...any) {
+	log.Printf(
+		"contact sync rejected: "+format+" remote=%q request=%s",
+		append(args, remoteAddr, contactSyncRequestSummary(input))...,
+	)
+}
+
+func decodeContactSyncEnvelopeData(raw json.RawMessage) (syncContactRequest, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return syncContactRequest{}, errors.New("contact data is required")
+	}
+
+	decoder := json.NewDecoder(bytes.NewReader(trimmed))
+	decoder.DisallowUnknownFields()
+
+	var input syncContactRequest
+	if err := decoder.Decode(&input); err != nil {
+		return syncContactRequest{}, err
+	}
+
+	return input, nil
+}
+
+func buildSyncContactName(input syncContactRequest) string {
+	return strings.Join(strings.Fields(strings.Join([]string{
+		strings.TrimSpace(input.FirstName),
+		strings.TrimSpace(input.MiddleName),
+		strings.TrimSpace(input.LastName),
+	}, " ")), " ")
+}
+
 func deterministicSyncAgreementID(deviceID, clientID string) string {
 	sum := sha1.Sum([]byte(syncDeviceAgreementNS + ":" + deviceID + ":" + clientID))
 	b := sum[:16]
@@ -3695,6 +3765,127 @@ func (s *Server) processDeviceSyncRequest(ctx context.Context, remoteAddr string
 		Deactivated:    staleAgreementTag.RowsAffected(),
 		ID:             input.ID,
 		SerialNumber:   input.SerialNumber,
+	}, nil
+}
+
+func (s *Server) syncClientExistsByID(ctx context.Context, clientID pgtype.UUID) (bool, error) {
+	if s.syncClientExists != nil {
+		return s.syncClientExists(ctx, clientID)
+	}
+
+	var exists bool
+	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM clients WHERE id = $1)`, clientID).Scan(&exists); err != nil {
+		return false, err
+	}
+
+	return exists, nil
+}
+
+func (s *Server) upsertSyncContactRecord(ctx context.Context, contactID pgtype.UUID, name string, position string, phone string, email string, clientID pgtype.UUID) (bool, error) {
+	if s.syncContactUpserter != nil {
+		return s.syncContactUpserter(ctx, contactID, name, position, phone, email, clientID)
+	}
+
+	var exists bool
+	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM contacts WHERE id = $1)`, contactID).Scan(&exists); err != nil {
+		return false, err
+	}
+
+	if _, err := s.db.Exec(ctx, `
+		INSERT INTO contacts (id, name, position, phone, email, client_id)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (id) DO UPDATE
+		SET name = EXCLUDED.name,
+			position = EXCLUDED.position,
+			phone = EXCLUDED.phone,
+			email = EXCLUDED.email,
+			client_id = EXCLUDED.client_id
+	`, contactID, name, position, phone, email, clientID); err != nil {
+		return false, err
+	}
+
+	return !exists, nil
+}
+
+func (s *Server) processContactSyncRequest(ctx context.Context, remoteAddr string, input syncContactRequest) (int, syncContactResponse, error) {
+	input.ID = strings.TrimSpace(input.ID)
+	input.Ref = strings.TrimSpace(input.Ref)
+	input.Position = strings.TrimSpace(input.Position)
+	input.Phone = strings.TrimSpace(input.Phone)
+	input.Email = strings.TrimSpace(strings.ToLower(input.Email))
+
+	name := buildSyncContactName(input)
+
+	log.Printf(
+		"contact sync received remote=%q id=%q client=%q name=%q",
+		remoteAddr,
+		input.ID,
+		input.Ref,
+		name,
+	)
+
+	switch {
+	case input.ID == "":
+		logContactSyncBadRequest(remoteAddr, input, "id is required")
+		return 0, syncContactResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "id is required"}
+	case input.Ref == "":
+		logContactSyncBadRequest(remoteAddr, input, "ref is required")
+		return 0, syncContactResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "ref is required"}
+	case name == "":
+		logContactSyncBadRequest(remoteAddr, input, "name is required")
+		return 0, syncContactResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "name is required"}
+	}
+
+	var (
+		contactID pgtype.UUID
+		clientID  pgtype.UUID
+	)
+	if err := contactID.Scan(input.ID); err != nil {
+		logContactSyncBadRequest(remoteAddr, input, "id must be a valid UUID parse_err=%q", err.Error())
+		return 0, syncContactResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "id must be a valid UUID"}
+	}
+	if err := clientID.Scan(input.Ref); err != nil {
+		logContactSyncBadRequest(remoteAddr, input, "ref must be a valid UUID parse_err=%q", err.Error())
+		return 0, syncContactResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "ref must be a valid UUID"}
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	clientExists, err := s.syncClientExistsByID(ctx, clientID)
+	if err != nil {
+		log.Printf("validate contact sync client failed: %v", err)
+		return 0, syncContactResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to sync contact"}
+	}
+	if !clientExists {
+		logContactSyncBadRequest(remoteAddr, input, "client not found")
+		return 0, syncContactResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "client not found"}
+	}
+
+	created, err := s.upsertSyncContactRecord(ctx, contactID, name, input.Position, input.Phone, input.Email, clientID)
+	if err != nil {
+		log.Printf("upsert synced contact failed: %v", err)
+		return 0, syncContactResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to sync contact"}
+	}
+
+	statusCode := http.StatusOK
+	if created {
+		statusCode = http.StatusCreated
+	}
+
+	log.Printf(
+		"contact sync upserted remote=%q id=%s client=%s created=%t",
+		remoteAddr,
+		uuidToString(contactID),
+		uuidToString(clientID),
+		created,
+	)
+
+	return statusCode, syncContactResponse{
+		Client:  uuidToString(clientID),
+		Created: created,
+		ID:      uuidToString(contactID),
+		Name:    name,
 	}, nil
 }
 
@@ -4159,6 +4350,43 @@ func (s *Server) handleTicketSync(w http.ResponseWriter, r *http.Request) {
 
 			writeJSON(w, statusCode, syncDeviceEnvelopeResponse{
 				Type: "device",
+				Data: response,
+			})
+			return
+		case "contact":
+			input, err := decodeContactSyncEnvelopeData(envelope.Data)
+			if err != nil {
+				preview := strings.TrimSpace(string(body))
+				if len(preview) > maxTicketSyncBodyLogBytes {
+					preview = preview[:maxTicketSyncBodyLogBytes] + "...(truncated)"
+				}
+				log.Printf(
+					"ticket sync rejected: invalid request body remote=%q content_type=%q content_length=%d decode_err=%q body_preview=%s",
+					r.RemoteAddr,
+					r.Header.Get("Content-Type"),
+					r.ContentLength,
+					err.Error(),
+					strconv.Quote(preview),
+				)
+				http.Error(w, "invalid request body", http.StatusBadRequest)
+				return
+			}
+
+			statusCode, response, err := s.processContactSyncRequest(r.Context(), r.RemoteAddr, input)
+			if err != nil {
+				var requestErr *syncRequestError
+				if errors.As(err, &requestErr) {
+					http.Error(w, requestErr.Message, requestErr.StatusCode)
+					return
+				}
+
+				log.Printf("contact sync failed remote=%q err=%v", r.RemoteAddr, err)
+				http.Error(w, "failed to sync contact", http.StatusInternalServerError)
+				return
+			}
+
+			writeJSON(w, statusCode, syncContactEnvelopeResponse{
+				Type: "contact",
 				Data: response,
 			})
 			return

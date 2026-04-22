@@ -171,6 +171,20 @@ func resolveSyncConfig() (syncConfig, error) {
 	}, nil
 }
 
+func resolveImportDefaultPassword() (string, error) {
+	fileEnv, err := loadDotEnv(".env")
+	if err != nil {
+		return "", err
+	}
+
+	password := getConfigValue(fileEnv, "IMPORT_DEFAULT_PASSWORD")
+	if password == "" {
+		password = getConfigValue(fileEnv, "BOOTSTRAP_IMPORT_DEFAULT_PASSWORD")
+	}
+
+	return password, nil
+}
+
 func resolveDuration(fileEnv map[string]string, key string, fallback time.Duration) (time.Duration, error) {
 	value := getConfigValue(fileEnv, key)
 	if value == "" {

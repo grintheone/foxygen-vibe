@@ -32,7 +32,12 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	if err := dbinit.EnsureSchema(ctx, db, "db/schema/*.sql"); err != nil {
+	schemaSettings := map[string]string{}
+	if options.ImportDefaultPassword != "" {
+		schemaSettings["foxygen.import_default_password"] = options.ImportDefaultPassword
+	}
+
+	if err := dbinit.EnsureSchemaWithSessionSettings(ctx, db, "db/schema/*.sql", schemaSettings); err != nil {
 		log.Fatal(err)
 	}
 
@@ -126,8 +131,11 @@ func loadOptions() (options, error) {
 	}
 
 	importDefaultPassword := strings.TrimSpace(os.Getenv("BOOTSTRAP_IMPORT_DEFAULT_PASSWORD"))
+	if importDefaultPassword == "" {
+		importDefaultPassword = strings.TrimSpace(os.Getenv("IMPORT_DEFAULT_PASSWORD"))
+	}
 	if importEnabled && importDefaultPassword == "" {
-		return options{}, fmt.Errorf("BOOTSTRAP_IMPORT_DEFAULT_PASSWORD is required when BOOTSTRAP_IMPORT_ENABLED=true")
+		return options{}, fmt.Errorf("BOOTSTRAP_IMPORT_DEFAULT_PASSWORD or IMPORT_DEFAULT_PASSWORD is required when BOOTSTRAP_IMPORT_ENABLED=true")
 	}
 
 	if importEnabled {

@@ -440,6 +440,103 @@ func TestDecodeDeviceSyncEnvelopeData(t *testing.T) {
 	}
 }
 
+func TestDecodeContactSyncEnvelopeData(t *testing.T) {
+	t.Parallel()
+
+	input, err := decodeContactSyncEnvelopeData(json.RawMessage(`{
+		"id":"ab55b2b2-3d63-11f1-814b-40b0765b1e01",
+		"ref":"de7a4716-169c-11e6-a438-001a64d22812",
+		"firstName":"Арина",
+		"middleName":" ",
+		"lastName":"Иванова",
+		"position":"Врач",
+		"phone":"89883969704",
+		"email":"ARINA@example.com",
+		"disableNotification":true,
+		"sendAllNotifications":false
+	}`))
+	if err != nil {
+		t.Fatalf("decode contact envelope: %v", err)
+	}
+	if input.ID != "ab55b2b2-3d63-11f1-814b-40b0765b1e01" || input.Ref != "de7a4716-169c-11e6-a438-001a64d22812" {
+		t.Fatalf("expected identifiers to be decoded, got %+v", input)
+	}
+	if input.FirstName != "Арина" || input.LastName != "Иванова" {
+		t.Fatalf("expected name fields to be decoded, got %+v", input)
+	}
+	if input.Position != "Врач" || input.Phone != "89883969704" || input.Email != "ARINA@example.com" {
+		t.Fatalf("expected contact details to be decoded, got %+v", input)
+	}
+	if !input.DisableNotification || input.SendAllNotifications {
+		t.Fatalf("expected sync flags to be preserved, got %+v", input)
+	}
+}
+
+func TestProcessContactSyncRequestCreatesContact(t *testing.T) {
+	t.Parallel()
+
+	contactID := mustUUID(t, "ab55b2b2-3d63-11f1-814b-40b0765b1e01")
+	clientID := mustUUID(t, "de7a4716-169c-11e6-a438-001a64d22812")
+
+	var (
+		gotContactID pgtype.UUID
+		gotName      string
+		gotPosition  string
+		gotPhone     string
+		gotEmail     string
+		gotClientID  pgtype.UUID
+	)
+
+	srv := &Server{
+		syncClientExists: func(_ context.Context, id pgtype.UUID) (bool, error) {
+			if id != clientID {
+				t.Fatalf("expected client lookup id %s, got %s", clientID.String(), id.String())
+			}
+			return true, nil
+		},
+		syncContactUpserter: func(_ context.Context, id pgtype.UUID, name string, position string, phone string, email string, linkedClientID pgtype.UUID) (bool, error) {
+			gotContactID = id
+			gotName = name
+			gotPosition = position
+			gotPhone = phone
+			gotEmail = email
+			gotClientID = linkedClientID
+			return true, nil
+		},
+	}
+
+	statusCode, response, err := srv.processContactSyncRequest(context.Background(), "172.30.240.4:49232", syncContactRequest{
+		ID:        contactID.String(),
+		Ref:       clientID.String(),
+		FirstName: " Арина ",
+		LastName:  " Иванова ",
+		Position:  " Врач ",
+		Phone:     " 89883969704 ",
+		Email:     " ARINA@example.com ",
+	})
+	if err != nil {
+		t.Fatalf("process contact sync: %v", err)
+	}
+	if statusCode != http.StatusCreated {
+		t.Fatalf("expected status %d, got %d", http.StatusCreated, statusCode)
+	}
+	if gotContactID != contactID || gotClientID != clientID {
+		t.Fatal("expected upserter to receive contact and client ids")
+	}
+	if gotName != "Арина Иванова" {
+		t.Fatalf("expected normalized contact name, got %q", gotName)
+	}
+	if gotPosition != "Врач" || gotPhone != "89883969704" || gotEmail != "arina@example.com" {
+		t.Fatalf("expected trimmed normalized fields, got %q / %q / %q", gotPosition, gotPhone, gotEmail)
+	}
+	if response.ID != contactID.String() || response.Client != clientID.String() {
+		t.Fatalf("expected response identifiers, got %+v", response)
+	}
+	if !response.Created || response.Name != "Арина Иванова" {
+		t.Fatalf("expected created response with normalized name, got %+v", response)
+	}
+}
+
 func TestDeterministicSyncAgreementIDIsStable(t *testing.T) {
 	t.Parallel()
 
