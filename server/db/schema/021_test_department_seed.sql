@@ -1,8 +1,9 @@
 DO $$
 DECLARE
-  test_department_title CONSTANT TEXT := 'Test Department';
-  coordinator_username CONSTANT TEXT := 'test.department.coordinator';
-  regular_username CONSTANT TEXT := 'test.department.user';
+  legacy_department_title CONSTANT TEXT := 'Test Department';
+  test_department_title CONSTANT TEXT := 'Тестовый отдел';
+  coordinator_username CONSTANT TEXT := 'ivanova.anna.01';
+  regular_username CONSTANT TEXT := 'petrov.ivan.02';
   coordinator_user_id CONSTANT UUID := 'f4307c83-df42-4c4f-9367-39cf2f761b19';
   regular_user_id CONSTANT UUID := '56b02761-a0f3-4871-a2fd-8474fdb463df';
   created_ticket_id CONSTANT UUID := 'ac7cdd11-46c8-4474-8522-5dd140ab77fe';
@@ -11,6 +12,7 @@ DECLARE
   configured_default_password TEXT := NULLIF(current_setting('foxygen.import_default_password', true), '');
   seed_password_hash TEXT;
   test_department_id UUID;
+  legacy_department_id UUID;
   coordinator_role_id INT;
   regular_role_id INT;
   ticket_client_id UUID;
@@ -22,11 +24,45 @@ DECLARE
   inwork_status_id VARCHAR(128);
   closed_status_id VARCHAR(128);
 BEGIN
-  INSERT INTO departments (title)
-  VALUES (test_department_title)
-  ON CONFLICT (title) DO UPDATE
-  SET title = EXCLUDED.title
-  RETURNING id INTO test_department_id;
+  SELECT id
+  INTO legacy_department_id
+  FROM departments
+  WHERE title = legacy_department_title
+  ORDER BY id
+  LIMIT 1;
+
+  SELECT id
+  INTO test_department_id
+  FROM departments
+  WHERE title = test_department_title
+  ORDER BY id
+  LIMIT 1;
+
+  IF legacy_department_id IS NOT NULL AND test_department_id IS NULL THEN
+    UPDATE departments
+    SET title = test_department_title
+    WHERE id = legacy_department_id
+    RETURNING id INTO test_department_id;
+  ELSIF legacy_department_id IS NOT NULL AND test_department_id IS NOT NULL AND legacy_department_id <> test_department_id THEN
+    UPDATE users
+    SET department = test_department_id
+    WHERE department = legacy_department_id;
+
+    UPDATE tickets
+    SET department = test_department_id
+    WHERE department = legacy_department_id;
+
+    DELETE FROM departments
+    WHERE id = legacy_department_id;
+  END IF;
+
+  IF test_department_id IS NULL THEN
+    INSERT INTO departments (title)
+    VALUES (test_department_title)
+    ON CONFLICT (title) DO UPDATE
+    SET title = EXCLUDED.title
+    RETURNING id INTO test_department_id;
+  END IF;
 
   INSERT INTO roles (id, name, description)
   SELECT 2, 'coordinator', ''
@@ -92,11 +128,11 @@ BEGIN
     INSERT INTO users (user_id, first_name, last_name, department, email, phone, logo, latest_ticket)
     VALUES (
       coordinator_user_id,
-      'Test',
-      'Coordinator',
+      'Анна',
+      'Иванова',
       test_department_id,
-      'test.coordinator@foxygen.local',
-      '+10000000001',
+      'anna.ivanova@foxygen.local',
+      '+79000000001',
       '',
       created_ticket_id
     )
@@ -119,11 +155,11 @@ BEGIN
     INSERT INTO users (user_id, first_name, last_name, department, email, phone, logo, latest_ticket)
     VALUES (
       regular_user_id,
-      'Test',
-      'User',
+      'Иван',
+      'Петров',
       test_department_id,
-      'test.user@foxygen.local',
-      '+10000000002',
+      'ivan.petrov@foxygen.local',
+      '+79000000002',
       '',
       created_ticket_id
     )
@@ -227,7 +263,7 @@ BEGIN
     regular_user_id,
     test_department_id,
     ticket_reason_id,
-    'Seeded test ticket: urgent intake created by the regular test user for coordinator triage.',
+    'Тестовая заявка: срочное обращение, созданное тестовым пользователем для распределения координатором.',
     ticket_contact_id,
     created_status_id,
     '',
@@ -289,11 +325,11 @@ BEGIN
     test_department_id,
     coordinator_user_id,
     ticket_reason_id,
-    'Seeded test ticket: coordinator assigned follow-up work to the regular user and it is currently in progress.',
+    'Тестовая заявка: координатор назначил работу тестовому пользователю, и сейчас она находится в работе.',
     ticket_contact_id,
     regular_user_id,
     inwork_status_id,
-    'Diagnostics are in progress and the client has been contacted.',
+    'Диагностика выполняется, клиент уведомлен.',
     FALSE
   )
   ON CONFLICT (id) DO UPDATE
@@ -364,11 +400,11 @@ BEGIN
     test_department_id,
     coordinator_user_id,
     ticket_reason_id,
-    'Seeded test ticket: completed service visit for the test department workflow.',
+    'Тестовая заявка: завершенный сервисный выезд для проверки сценария работы тестового отдела.',
     ticket_contact_id,
     regular_user_id,
     closed_status_id,
-    'Service completed successfully. Device checked, cleaned, and returned to operation.',
+    'Работы успешно завершены. Прибор проверен, обслужен и возвращен в эксплуатацию.',
     FALSE
   )
   ON CONFLICT (id) DO UPDATE
