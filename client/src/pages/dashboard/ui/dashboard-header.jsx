@@ -8,7 +8,7 @@ export function DashboardHeader({ department, onOpenProfile }) {
     <header className="bg-transparent px-1 pt-2">
       <div className="flex items-start justify-between gap-4 sm:gap-6 lg:gap-8">
         <div className="min-w-0">
-          <p className="text-sm font-semibold tracking-[0.18em] text-slate-300 uppercase sm:text-base lg:text-lg xl:text-xl">
+          <p className="text-sm font-semibold tracking-[0.18em] text-[#94A3B8] uppercase sm:text-base lg:text-lg xl:text-xl">
             {today}
           </p>
           <h1 className="mt-2 truncate text-[32px] font-semibold leading-none text-white sm:text-[36px] lg:text-[44px] xl:text-[52px]">
