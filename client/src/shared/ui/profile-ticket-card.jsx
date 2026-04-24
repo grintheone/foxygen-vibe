@@ -100,18 +100,20 @@ export function ProfileTicketCard({ ticket, onOpenTicket }) {
         </div>
       </div>
 
-      <div className="mt-3 grid gap-1.5 border-t border-slate-400/10 pt-3 text-sm text-slate-300">
-        <p>{ticket?.clientName || "Клиент не указан"}</p>
-        {ticket?.clientAddress ? <p className="text-slate-200/80">{ticket.clientAddress}</p> : null}
-      </div>
+      <div className="mt-3 flex items-end justify-between gap-3 border-t border-slate-400/10 pt-3">
+        <div className="min-w-0 space-y-1.5 text-sm text-slate-300">
+          <p className="truncate">{ticket?.clientName || "Клиент не указан"}</p>
+          {ticket?.clientAddress ? <p className="truncate text-slate-200/80">{ticket.clientAddress}</p> : null}
+        </div>
 
-      {ticket?.urgent ? (
-        <span
-          className={`absolute right-4 bottom-4 rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] ${urgencyBadgeClassName}`}
-        >
-          Срочно
-        </span>
-      ) : null}
+        {ticket?.urgent ? (
+          <span
+            className={`shrink-0 rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] ${urgencyBadgeClassName}`}
+          >
+            Срочно
+          </span>
+        ) : null}
+      </div>
 
       {shouldShowGradient ? (
         <span

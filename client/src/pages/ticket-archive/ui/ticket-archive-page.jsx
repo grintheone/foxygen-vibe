@@ -80,17 +80,17 @@ function BackButton({ onClick }) {
             type="button"
             onClick={onClick}
             aria-label="Назад"
-            className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[#6A3BF2] text-white transition hover:bg-[#7C52F5]"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#2F3545] text-[#94A3B8] transition hover:bg-[#394055] sm:h-12 sm:w-12 lg:h-14 lg:w-14"
         >
             <svg
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth="2.5"
+                strokeWidth="1.8"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className="h-5 w-5"
+                className="h-5 w-5 sm:h-6 sm:w-6 lg:h-7 lg:w-7"
                 aria-hidden="true"
             >
                 <path d="M15 18l-6-6 6-6" />
@@ -101,15 +101,28 @@ function BackButton({ onClick }) {
 
 function ArchiveHeader({ entityMeta, entityTitle, onBack }) {
     return (
-        <header className="rounded-3xl border border-white/10 bg-slate-950/35 p-6 shadow-xl shadow-black/20 backdrop-blur">
-            <BackButton onClick={onBack} />
-
-            <div className="mt-5">
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Архив</p>
-                <p className="mt-4 text-2xl font-semibold tracking-tight text-slate-100 sm:text-3xl">{entityTitle}</p>
-                {entityMeta ? <p className="mt-3 text-base text-slate-300 sm:text-lg">{entityMeta}</p> : null}
+        <header className="bg-transparent px-1 pt-2">
+            <div className="grid grid-cols-[auto_1fr_auto] items-center gap-4 sm:gap-6 lg:gap-8">
+                <BackButton onClick={onBack} />
+                <p className="justify-self-center text-center text-sm font-semibold tracking-[0.18em] text-[#94A3B8] sm:text-base lg:text-lg xl:text-xl">
+                    Тикеты
+                </p>
+                <div className="h-11 w-11 shrink-0 sm:h-12 sm:w-12 lg:h-14 lg:w-14" aria-hidden="true" />
             </div>
         </header>
+    );
+}
+
+function ArchiveEntityInfo({ entityMeta, entityTitle }) {
+    return (
+        <section className="px-1">
+            <div className="min-w-0">
+                <p className="text-[32px] font-semibold leading-none tracking-tight text-white sm:text-[36px] lg:text-[44px] xl:text-[52px]">
+                    {entityTitle}
+                </p>
+                {entityMeta ? <p className="mt-3 text-base text-slate-300 sm:text-lg">{entityMeta}</p> : null}
+            </div>
+        </section>
     );
 }
 
@@ -118,10 +131,10 @@ function ArchiveTabButton({ isActive, label, onClick }) {
         <button
             type="button"
             onClick={onClick}
-            className={`rounded-2xl border px-4 py-2 text-sm font-semibold transition sm:text-base ${
+            className={`min-h-12 rounded-[1rem] border px-5 py-3 text-sm font-semibold shadow-lg shadow-black/15 transition sm:min-h-14 sm:text-base ${
                 isActive
-                    ? "border-[#9B7BFF]/70 bg-[#9B7BFF]/20 text-[#E7DEFF]"
-                    : "border-white/10 bg-white/5 text-slate-300 hover:border-white/20 hover:bg-white/10 hover:text-slate-100"
+                    ? "border-[#8C63FF] bg-gradient-to-r from-[#6E3EF2] to-[#8B4DFF] text-white shadow-[#6E3EF2]/35 hover:from-[#7649F4] hover:to-[#955EFF]"
+                    : "border-slate-400/20 bg-[#343c4d] text-slate-100 hover:border-slate-300/30 hover:bg-[#3b4456] hover:text-white"
             }`}
         >
             {label}
@@ -135,7 +148,7 @@ function ArchiveFilterButton({ onClick }) {
             type="button"
             onClick={onClick}
             aria-label="Открыть фильтры"
-            className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-slate-200 transition hover:border-white/20 hover:bg-white/10 hover:text-white"
+            className="inline-flex h-12 w-12 items-center justify-center rounded-[1rem] border border-slate-400/20 bg-[#343c4d] text-slate-100 shadow-lg shadow-black/15 transition hover:border-slate-300/30 hover:bg-[#3b4456] hover:text-white sm:h-14 sm:w-14"
         >
             <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -145,7 +158,7 @@ function ArchiveFilterButton({ onClick }) {
                 strokeWidth="1.9"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className="h-5 w-5"
+                className="h-5 w-5 sm:h-6 sm:w-6"
                 aria-hidden="true"
             >
                 <path d="M4 5h16l-6 7v5l-4 2v-7L4 5Z" />
@@ -584,10 +597,8 @@ function ArchiveTicketsSection({
 
     return (
         <section className="space-y-4">
-            <h2 className="text-2xl font-bold tracking-tight text-slate-50 sm:text-3xl">{ticketsHeading}</h2>
-
             {!isLoading && !isError ? (
-                <p className="text-sm text-slate-300">
+                <p className="hidden text-sm text-slate-300 sm:block">
                     На странице после фильтров: <span className="font-semibold text-slate-100">{tickets.length}</span>
                     <span className="mx-2 text-slate-500">•</span>
                     Всего в архиве: <span className="font-semibold text-slate-100">{pagination.total}</span>
@@ -598,7 +609,7 @@ function ArchiveTicketsSection({
                 </p>
             ) : null}
 
-            <div className="flex items-center justify-between gap-3 rounded-3xl border border-white/10 bg-slate-950/25 p-4 shadow-lg shadow-black/10 backdrop-blur">
+            <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pr-2">
                     {archiveTabs.map((tab) => (
                         <ArchiveTabButton
@@ -636,18 +647,21 @@ function ArchiveTicketsSection({
                                     type="button"
                                     onClick={() => handleToggleGroup(group.label)}
                                     aria-expanded={expandedGroups.has(group.label)}
-                                    className="w-full rounded-2xl border border-white/10 bg-slate-950/85 px-4 py-3 text-left shadow-lg shadow-black/20 backdrop-blur transition hover:border-white/20 hover:bg-slate-950"
+                                    className={`w-full rounded-[0.95rem] border px-4 py-3.5 text-left shadow-xl shadow-black/20 transition sm:px-5 ${
+                                        expandedGroups.has(group.label)
+                                            ? "border-slate-300/25 bg-[#3a4355] hover:bg-[#40495d]"
+                                            : "border-slate-400/20 bg-[#31394a] hover:border-slate-300/30 hover:bg-[#374052]"
+                                    }`}
                                 >
                                     <div className="flex items-center justify-between gap-4">
                                         <div className="min-w-0">
-                                            <p className="text-sm font-semibold text-slate-200 sm:text-base">{group.label}</p>
-                                            <p className="mt-1 text-xs text-slate-400">
-                                                {expandedGroups.has(group.label) ? "Скрыть записи" : "Показать записи"}
+                                            <p className="text-sm font-semibold text-slate-100 sm:text-base">
+                                                {group.label}
                                             </p>
                                         </div>
 
                                         <div className="flex shrink-0 items-center gap-3">
-                                            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-300">
+                                            <span className="text-sm font-semibold text-slate-300">
                                                 {group.items.length}
                                             </span>
                                             <svg
@@ -701,8 +715,8 @@ function ArchiveTicketsSection({
             ) : null}
 
             {!isLoading && !isError && totalPages > 1 ? (
-                <div className="flex flex-col gap-3 rounded-3xl border border-white/10 bg-slate-950/25 p-4 shadow-lg shadow-black/10 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
-                    <div className="space-y-1">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="hidden space-y-1 sm:block">
                         <p className="text-sm font-semibold text-slate-100">
                             Страница {currentPage} из {totalPages}
                         </p>
@@ -1012,7 +1026,8 @@ export function TicketArchivePage({ entityType }) {
     return (
         <PageShell>
             <section className="w-full space-y-6">
-                <ArchiveHeader entityMeta={entityMeta} entityTitle={entityTitle} onBack={handleBack} />
+                <ArchiveHeader onBack={handleBack} />
+                <ArchiveEntityInfo entityMeta={entityMeta} entityTitle={entityTitle} />
 
                 {isEntityLoading ? (
                     <div className="app-subtle-notice">

@@ -75,33 +75,35 @@ export function TicketCardWithExecutor({ ticket, executor, onOpenTicket }) {
             </div>
 
             <div className="border-t border-slate-400/10 bg-[#3f485a] px-4 py-3">
-                <div className="flex items-center gap-3">
-                    <UserAvatar
-                        avatarUrl={executor?.avatarUrl}
-                        userId={executor?.id}
-                        name={executor?.name}
-                        className="h-10 w-10"
-                        stopPropagation
-                    />
+                <div className="flex items-end justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                        <UserAvatar
+                            avatarUrl={executor?.avatarUrl}
+                            userId={executor?.id}
+                            name={executor?.name}
+                            className="h-10 w-10"
+                            stopPropagation
+                        />
 
-                    <div className="min-w-0">
-                        <p className="truncate text-base font-semibold text-slate-100">
-                            {executor?.name || "Исполнитель не назначен"}
-                        </p>
-                        <p className="truncate text-sm text-slate-200/80">
-                            {executor?.department || "Отдел не указан"}
-                        </p>
+                        <div className="min-w-0">
+                            <p className="truncate text-base font-semibold text-slate-100">
+                                {executor?.name || "Исполнитель не назначен"}
+                            </p>
+                            <p className="truncate text-sm text-slate-200/80">
+                                {executor?.department || "Отдел не указан"}
+                            </p>
+                        </div>
                     </div>
+
+                    {shouldShowUrgencyBadge ? (
+                        <span
+                            className={`shrink-0 rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] ${urgencyBadgeClassName}`}
+                        >
+                            Срочно
+                        </span>
+                    ) : null}
                 </div>
             </div>
-
-            {shouldShowUrgencyBadge ? (
-                <span
-                    className={`absolute right-4 bottom-4 rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] ${urgencyBadgeClassName}`}
-                >
-                    Срочно
-                </span>
-            ) : null}
 
             {shouldShowGradient ? (
                 <span
