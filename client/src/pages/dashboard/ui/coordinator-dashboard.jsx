@@ -257,6 +257,34 @@ export function CoordinatorDashboard({ department }) {
     return (
         <section className="space-y-6">
             <section className="space-y-3">
+                {isDepartmentMembersLoading || isDepartmentMembersFetching ? (
+                    <div className="app-subtle-notice">
+                        Загружаем сотрудников...
+                    </div>
+                ) : isDepartmentMembersError ? (
+                    <div className="rounded-2xl border border-rose-300/30 bg-rose-500/10 p-4 text-sm text-rose-100">
+                        Не удалось загрузить сотрудников отдела.
+                    </div>
+                ) : departmentMembers.length > 0 ? (
+                    <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pt-1 scroll-px-1">
+                        {departmentMembers.map((member) => (
+                            <MemberCard
+                                key={member.id}
+                                latestClientAddress={latestClientAddressByMemberId[member.id]}
+                                member={member}
+                                to={routePaths.profileById(member.id)}
+                                totalTickets={ticketsByExecutor[member.id] || 0}
+                            />
+                        ))}
+                    </div>
+                ) : (
+                    <div className="app-subtle-notice">
+                        В этом отделе пока нет сотрудников.
+                    </div>
+                )}
+            </section>
+
+            <section className="space-y-3">
                 <h2 className="text-base font-semibold tracking-[0.02em] text-slate-200">{`Ждут распределения (${unassignedTickets.length})`}</h2>
                 {isLoading || isFetching ? (
                     <div className="app-subtle-notice">
@@ -275,37 +303,6 @@ export function CoordinatorDashboard({ department }) {
                 ) : (
                     <div className="app-subtle-notice">
                         Нет тикетов к распределению
-                    </div>
-                )}
-            </section>
-
-            <section className="space-y-3">
-                <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
-                    {`Отдел (${departmentMembers.length})`}
-                </h2>
-                {isDepartmentMembersLoading || isDepartmentMembersFetching ? (
-                    <div className="app-subtle-notice">
-                        Загружаем сотрудников...
-                    </div>
-                ) : isDepartmentMembersError ? (
-                    <div className="rounded-2xl border border-rose-300/30 bg-rose-500/10 p-4 text-sm text-rose-100">
-                        Не удалось загрузить сотрудников отдела.
-                    </div>
-                ) : departmentMembers.length > 0 ? (
-                    <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pt-1 pb-5 scroll-px-3">
-                        {departmentMembers.map((member) => (
-                            <MemberCard
-                                key={member.id}
-                                latestClientAddress={latestClientAddressByMemberId[member.id]}
-                                member={member}
-                                to={routePaths.profileById(member.id)}
-                                totalTickets={ticketsByExecutor[member.id] || 0}
-                            />
-                        ))}
-                    </div>
-                ) : (
-                    <div className="app-subtle-notice">
-                        В этом отделе пока нет сотрудников.
                     </div>
                 )}
             </section>

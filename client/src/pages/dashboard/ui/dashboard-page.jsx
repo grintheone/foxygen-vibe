@@ -30,7 +30,7 @@ export function DashboardPage() {
   return (
     <PageShell>
       <section className="w-full space-y-6">
-        <DashboardHeader onOpenProfile={() => navigate(routePaths.profile)} />
+        <DashboardHeader department={session?.department} onOpenProfile={() => navigate(routePaths.profile)} />
         <Suspense
           fallback={
             <section className="app-subtle-notice">
