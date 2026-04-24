@@ -22,12 +22,18 @@
             line-height: 1.75rem;
         }
     }
+
+    .app-font-secondary {
+        font-family: var(--font-family-secondary);
+    }
 }
 
 :root {
+    --font-family-primary: "Segoe UI", sans-serif;
+    --font-family-secondary: Georgia, "Times New Roman", serif;
     color: #f8fafc;
     background-color: #020617;
-    font-family: "Segoe UI", sans-serif;
+    font-family: var(--font-family-primary);
 }
 
 html {

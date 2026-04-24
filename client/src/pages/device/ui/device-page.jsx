@@ -121,17 +121,17 @@ function BackButton({ onClick }) {
             type="button"
             onClick={onClick}
             aria-label="Назад"
-            className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[#6A3BF2] text-white transition hover:bg-[#7C52F5]"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#2F3545] text-[#94A3B8] transition hover:bg-[#394055] sm:h-12 sm:w-12 lg:h-14 lg:w-14"
         >
             <svg
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth="2.5"
+                strokeWidth="1.8"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className="h-5 w-5"
+                className="h-5 w-5 sm:h-6 sm:w-6 lg:h-7 lg:w-7"
                 aria-hidden="true"
             >
                 <path d="M15 18l-6-6 6-6" />
@@ -140,73 +140,102 @@ function BackButton({ onClick }) {
     );
 }
 
-function DeviceHeader({ serialNumber, title, onBack }) {
+function DeviceHeader({ onBack }) {
     return (
-        <header className="rounded-3xl border border-white/10 bg-slate-950/35 p-6 shadow-xl shadow-black/20 backdrop-blur">
-            <BackButton onClick={onBack} />
-            <div className="mt-5 text-left">
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Оборудование</p>
-                <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-50 sm:text-4xl">
-                    {title || "Устройство"}
-                </h1>
-                <p className="mt-3 text-base text-slate-300 sm:text-lg">
-                    С/Н: <span className="font-semibold text-slate-100">{serialNumber || "Не указано"}</span>
+        <header className="bg-transparent px-1 pt-2">
+            <div className="grid grid-cols-[auto_1fr_auto] items-center gap-4 sm:gap-6 lg:gap-8">
+                <BackButton onClick={onBack} />
+                <p className="justify-self-center text-center text-sm font-semibold tracking-[0.18em] text-[#94A3B8] sm:text-base lg:text-lg xl:text-xl">
+                    Оборудование
                 </p>
+                <div className="h-11 w-11 shrink-0 sm:h-12 sm:w-12 lg:h-14 lg:w-14" aria-hidden="true" />
             </div>
         </header>
     );
 }
 
-function DeviceStatCard({ label, value }) {
+function DeviceInfoSection({ serialNumber, title }) {
     return (
-        <article className="rounded-3xl border border-white/10 bg-slate-950/35 p-5 shadow-xl shadow-black/20 backdrop-blur">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">{label}</p>
-            <p className="mt-3 text-xl font-semibold tracking-tight text-slate-50 sm:text-2xl">
-                {value || "Не указано"}
-            </p>
-        </article>
+        <section className="px-1">
+            <div className="min-w-0">
+                <h1 className="text-[24px] font-semibold leading-tight tracking-tight text-white sm:text-[28px] lg:text-[32px] xl:text-[36px]">
+                    {title || "Устройство"}
+                </h1>
+                <p className="mt-3 text-[18px] text-slate-300 sm:text-[20px] lg:text-[22px]">
+                    С/Н: <span className="font-semibold text-slate-100">{serialNumber || "Не указано"}</span>
+                </p>
+            </div>
+        </section>
     );
 }
 
-function DeviceOverviewSection({ device, propertyEntries }) {
-    const agreementLabel = device?.agreementNumber ? `Договор #${device.agreementNumber}` : "Договор не найден";
-    const agreementMeta = [
-        device?.agreement ? (device.isActiveAgreement ? "Активный" : "Неактивный") : "",
-        device?.agreement ? (device.onWarranty ? "Гарантия" : "Без гарантии") : "",
-    ]
-        .filter(Boolean)
-        .join(" • ");
+function DeviceDataRow({ label, value, isLast = false, labelClassName = "", valueClassName = "" }) {
+    return (
+        <div className={isLast ? "" : "border-b border-white/15"}>
+            <div className="flex flex-col gap-2 py-4 sm:py-5">
+                <p className={`tracking-tight text-slate-50 ${labelClassName || "text-xl font-semibold sm:text-2xl"}`}>
+                    {label}
+                </p>
+                <div className={`text-slate-200 ${valueClassName || "text-lg sm:text-xl"}`}>{value || "Не указано"}</div>
+            </div>
+        </div>
+    );
+}
+
+function DeviceStatsSection({ device, propertyEntries, serialNumber }) {
+    const parametersValue =
+        propertyEntries.length > 0 ? (
+            <div className="space-y-1">
+                {propertyEntries.map((entry) => (
+                    <p key={entry.label}>
+                        {entry.label}: {entry.value}
+                    </p>
+                ))}
+            </div>
+        ) : (
+            "-"
+        );
+
+    const stats = [
+        {
+            label: "Серийный номер",
+            value: serialNumber || "Не указано",
+        },
+        {
+            label: "ЛИС",
+            value: device?.connectedToLis ? "Подключено" : "Не подключено",
+        },
+        {
+            label: "Б/У",
+            value: device?.isUsed ? "Да" : "Нет",
+        },
+        {
+            label: "Договор",
+            value: device?.agreementNumber ? `#${device.agreementNumber}` : "Не найден",
+        },
+        {
+            label: "Гарантия",
+            value: device?.agreement ? (device.onWarranty ? "Да" : "Нет") : "Не указано",
+        },
+        {
+            label: "Параметры",
+            value: parametersValue,
+        },
+    ];
 
     return (
-        <section className="space-y-4">
-            <h2 className="text-2xl font-bold tracking-tight text-slate-50 sm:text-3xl">Сведения</h2>
-
-            <div className="grid gap-3 sm:grid-cols-3">
-                <DeviceStatCard label="Серийный номер" value={device?.serialNumber || "Не указано"} />
-                <DeviceStatCard label="ЛИС" value={device?.connectedToLis ? "Подключено" : "Не подключено"} />
-                <DeviceStatCard label="Б/У" value={device?.isUsed ? "Да" : "Нет"} />
-            </div>
-
-            <div className="rounded-3xl border border-white/10 bg-slate-950/35 p-6 shadow-xl shadow-black/20 backdrop-blur">
-                <h3 className="text-lg font-semibold tracking-tight text-slate-100 sm:text-2xl">Параметры</h3>
-
-                {propertyEntries.length > 0 ? (
-                    <div className="mt-5 grid gap-3">
-                        {propertyEntries.map((entry) => (
-                            <div
-                                key={entry.label}
-                                className="flex flex-col gap-1 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
-                            >
-                                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">
-                                    {entry.label}
-                                </p>
-                                <p className="text-base text-slate-100 sm:text-right">{entry.value}</p>
-                            </div>
-                        ))}
-                    </div>
-                ) : (
-                    <p className="mt-4 text-sm text-slate-300">Дополнительные параметры не указаны.</p>
-                )}
+        <section className="px-1">
+            <div>
+                {stats.map((entry, index) => (
+                    <DeviceDataRow
+                        key={entry.label}
+                        label={entry.label}
+                        value={entry.value}
+                        isLast={index === stats.length - 1}
+                        labelClassName="text-[16px] font-semibold"
+                        valueClassName="text-[16px]"
+                    />
+                ))}
             </div>
         </section>
     );
@@ -215,7 +244,9 @@ function DeviceOverviewSection({ device, propertyEntries }) {
 function DeviceServiceSection({ agreement, isError, isLoading, onOpenClient, onOpenExpiredAgreements }) {
     return (
         <section className="space-y-4">
-            <h2 className="text-2xl font-bold tracking-tight text-slate-50 sm:text-3xl">Сервисные условия</h2>
+            <h2 className="text-[16px] font-semibold tracking-tight text-[#BCC2CA] sm:text-[18px] lg:text-[20px]">
+                Сервисные условия
+            </h2>
 
             {isLoading ? (
                 <div className="app-subtle-notice">
@@ -249,7 +280,7 @@ function DeviceServiceSection({ agreement, isError, isLoading, onOpenClient, onO
                     <button
                         type="button"
                         onClick={() => onOpenExpiredAgreements(agreement.client)}
-                        className="inline-flex items-center gap-3 rounded-2xl px-2 py-1 text-lg font-semibold text-[#8B5CFF] transition hover:text-[#A27BFF]"
+                        className="inline-flex items-center gap-3 rounded-2xl py-1 text-[16px] font-semibold text-[#8B5CFF] transition hover:text-[#A27BFF] sm:text-[18px] lg:text-[20px]"
                     >
                         <span>Истекшие сервисные условия</span>
                         <svg
@@ -283,7 +314,9 @@ function DeviceServiceSection({ agreement, isError, isLoading, onOpenClient, onO
 function DeviceLatestTicketsSection({ deviceId, isError, isLoading, onOpenArchive, onOpenTicket, tickets }) {
     return (
         <section className="space-y-4">
-            <h2 className="text-2xl font-bold tracking-tight text-slate-50 sm:text-3xl">Последние выезды</h2>
+            <h2 className="text-[16px] font-semibold tracking-tight text-[#BCC2CA] sm:text-[18px] lg:text-[20px]">
+                Последние выезды
+            </h2>
 
             {isLoading ? (
                 <div className="app-subtle-notice">
@@ -322,7 +355,7 @@ function DeviceLatestTicketsSection({ deviceId, isError, isLoading, onOpenArchiv
             <button
                 type="button"
                 onClick={() => onOpenArchive(deviceId)}
-                className="inline-flex items-center gap-3 rounded-2xl px-2 py-1 text-lg font-semibold text-[#9B7BFF] transition hover:text-[#B49CFF]"
+                className="inline-flex items-center gap-3 rounded-2xl py-1 text-[16px] font-semibold text-[#9B7BFF] transition hover:text-[#B49CFF] sm:text-[18px] lg:text-[20px]"
             >
                 <span>Все выезды</span>
                 <svg
@@ -356,7 +389,9 @@ function DeviceCommentsSection({
 }) {
     return (
         <section className="space-y-4">
-            <h2 className="text-2xl font-bold tracking-tight text-slate-50 sm:text-3xl">Комментарии</h2>
+            <h2 className="text-[16px] font-semibold tracking-tight text-[#BCC2CA] sm:text-[18px] lg:text-[20px]">
+                Комментарии
+            </h2>
 
             {isLoading ? (
                 <div className="app-subtle-notice">
@@ -973,7 +1008,7 @@ export function DevicePage() {
                     isCreateTicketSheetOpen ? "brightness-75" : ""
                 }`}
             >
-                <DeviceHeader title={pageTitle} serialNumber={serialNumber} onBack={() => navigate(-1)} />
+                <DeviceHeader onBack={() => navigate(-1)} />
 
                 {isLoading || isFetching ? (
                     <div className="app-subtle-notice">
@@ -989,6 +1024,12 @@ export function DevicePage() {
 
                 {!isLoading && !isFetching && !isError && device ? (
                     <>
+                        <DeviceInfoSection title={pageTitle} serialNumber={serialNumber} />
+                        <DeviceStatsSection
+                            device={device}
+                            propertyEntries={propertyEntries}
+                            serialNumber={serialNumber}
+                        />
                         <DeviceServiceSection
                             agreement={activeAgreement}
                             isError={isAgreementsError}
@@ -998,7 +1039,6 @@ export function DevicePage() {
                                 navigate(routePaths.clientAgreementsById(clientIdValue))
                             }
                         />
-                        <DeviceOverviewSection device={device} propertyEntries={propertyEntries} />
                         <DeviceLatestTicketsSection
                             deviceId={deviceId}
                             tickets={tickets}
