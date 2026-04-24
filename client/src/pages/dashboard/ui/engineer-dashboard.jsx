@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
+import ticketDoneIcon from "../../../assets/icons/ticket-done.svg";
+import ticketInWorkIcon from "../../../assets/icons/ticket-inwork.svg";
 import { routePaths } from "../../../shared/config/routes";
 import { ProfileTicketCard } from "../../../shared/ui/profile-ticket-card";
 import { formatWorkDuration, resolveTicketReason } from "../lib/dashboard-formatters";
@@ -63,7 +65,7 @@ export function EngineerDashboard({ executorId }) {
   return (
     <section className="space-y-6">
       {isLoading ? (
-        <section className="rounded-3xl border border-white/10 bg-white/5 p-6">
+        <section className="app-subtle-notice">
           <p className="text-sm text-slate-300">Загружаем тикеты...</p>
         </section>
       ) : null}
@@ -92,47 +94,35 @@ export function EngineerDashboard({ executorId }) {
                 const isInWorkValue = isInWork
                   ? "В процессе"
                   : formatWorkDuration(ticket.workstarted_at, ticket.workfinished_at);
-                const cardClassName = isInWork
-                  ? "border-emerald-300/30 bg-emerald-500/20"
-                  : "border-fuchsia-300/30 bg-fuchsia-500/20";
-                const toneBlockClass = isInWork
-                  ? "border-emerald-200/30 bg-emerald-200/20"
-                  : "border-fuchsia-200/30 bg-fuchsia-200/20";
+                const statusIcon = isInWork ? ticketInWorkIcon : ticketDoneIcon;
 
                 return (
                   <article key={ticket.id} className="min-w-full px-1">
                     <button
                       type="button"
                       onClick={() => handleOpenTicket(ticket.id)}
-                      className={`w-full rounded-3xl border p-6 text-left shadow-xl backdrop-blur transition hover:border-white/50 ${cardClassName}`}
+                      className="w-full overflow-hidden rounded-lg border border-slate-400/20 bg-[#2f3748] text-left shadow-xl shadow-black/20 transition hover:border-slate-300/35 hover:bg-[#333c4f]"
                     >
-                      <div className="flex items-center gap-2">
-                        <p className={`rounded-xl border px-3 py-1.5 text-sm font-semibold text-white ${toneBlockClass}`}>
-                          {reasonValue || "Не указано"}
-                        </p>
-                        {isInWork ? (
-                          <p className="inline-flex items-center gap-2 text-sm font-semibold text-white">
-                            <span className="relative flex h-2.5 w-2.5">
-                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-100 opacity-80" />
-                              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-50" />
-                            </span>
-                            {isInWorkValue}
-                          </p>
-                        ) : (
-                          <p className="text-sm font-semibold text-white">{isInWorkValue}</p>
-                        )}
-                        <p className="ml-auto text-sm font-semibold text-white">#{ticket.number}</p>
+                      <div className="grid grid-cols-[1fr_auto] gap-3 px-4 py-3.5">
+                        <div className="min-w-0 space-y-1.5">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <img src={statusIcon} alt="" className="h-5 w-5 shrink-0" />
+                            <p className="truncate text-sm font-semibold text-slate-100">{reasonValue || "Не указано"}</p>
+                          </div>
+                          <p className="text-base font-semibold text-white">{ticket.deviceName}</p>
+                          <p className="text-sm text-slate-300">С/Н {ticket.deviceSerialNumber}</p>
+                        </div>
+
+                        <div className="flex flex-col items-end">
+                          <p className="text-sm font-semibold text-slate-200">{isInWorkValue}</p>
+                          <p className="text-sm font-semibold text-slate-200/80">#{ticket.number}</p>
+                        </div>
                       </div>
 
-                      <div className="mt-4 flex flex-col gap-1.5 text-white">
-                        <p className="text-base font-semibold">{ticket.deviceName}</p>
-                        <p className="text-sm text-slate-100/90">С/Н {ticket.deviceSerialNumber}</p>
-                      </div>
-
-                      <div className={`mt-4 rounded-2xl border p-4 ${toneBlockClass}`}>
-                        <div className="flex flex-col gap-1 text-white">
-                          <p className="text-sm font-semibold">{ticket.clientName}</p>
-                          <p className="text-sm text-slate-100/90">{ticket.clientAddress}</p>
+                      <div className="border-t border-slate-400/10 bg-[#3f485a] px-4 py-3">
+                        <div className="flex flex-col gap-1 text-slate-300">
+                          <p className="text-sm font-semibold text-slate-100">{ticket.clientName}</p>
+                          <p className="text-sm text-slate-200/80">{ticket.clientAddress}</p>
                         </div>
                       </div>
                     </button>
@@ -161,7 +151,7 @@ export function EngineerDashboard({ executorId }) {
           </div>
         </>
       ) : !isLoading && !isError ? (
-        <section className="rounded-3xl border border-white/10 bg-white/5 p-6">
+        <section className="app-subtle-notice">
           <p className="text-sm text-slate-300">Для текущего инженера нет тикетов в процессе.</p>
         </section>
       ) : null}
@@ -169,13 +159,13 @@ export function EngineerDashboard({ executorId }) {
       <section className="space-y-3">
         <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-300">Назначенные тикеты</h2>
         {!isLoading && !isError && assignedTickets.length > 0 ? (
-          <div className="grid gap-3">
+          <div className="grid gap-2">
             {assignedTickets.map((ticket) => (
               <ProfileTicketCard key={ticket.id} ticket={ticket} onOpenTicket={handleOpenTicket} />
             ))}
           </div>
         ) : !isLoading && !isError ? (
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+          <div className="app-subtle-notice">
             Нет назначенных тикетов.
           </div>
         ) : null}

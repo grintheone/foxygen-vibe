@@ -199,7 +199,7 @@ export function EditorSidebar({ footer, height, children }) {
     return (
         <aside
             style={height ? { height: `${height}px` } : undefined}
-            className="grid self-start min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-4 overflow-hidden rounded-[2rem] border border-white/10 bg-white/10 p-5 shadow-2xl shadow-[#6A3BF2]/15 backdrop-blur-xl"
+            className="grid self-start min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-4 overflow-hidden rounded-lg border border-white/10 bg-white/10 p-5 shadow-2xl shadow-[#6A3BF2]/15 backdrop-blur-xl"
         >
             {children}
             <p className="self-end text-xs text-slate-500">{footer}</p>
@@ -235,7 +235,7 @@ export function EditorPane({ editorPaneRef, children }) {
     return (
         <section
             ref={editorPaneRef}
-            className="self-start space-y-6 rounded-[2rem] border border-white/10 bg-slate-950/30 p-6 shadow-2xl shadow-black/20 backdrop-blur-xl"
+            className="self-start space-y-6 rounded-lg border border-white/10 bg-slate-950/30 p-6 shadow-2xl shadow-black/20 backdrop-blur-xl"
         >
             {children}
         </section>
@@ -339,7 +339,7 @@ export function EditorEntityCard({ badge, description, disabled = false, onClick
             type="button"
             onClick={onClick}
             disabled={disabled}
-            className={`rounded-[2rem] border p-6 text-left shadow-xl shadow-black/15 transition ${classes}`}
+            className={`rounded-lg border p-6 text-left shadow-xl shadow-black/15 transition ${classes}`}
         >
             <div className="flex items-start justify-between gap-4">
                 <div>

@@ -33,7 +33,7 @@ export function DashboardPage() {
         <DashboardHeader onOpenProfile={() => navigate(routePaths.profile)} />
         <Suspense
           fallback={
-            <section className="rounded-3xl border border-white/10 bg-white/5 p-6">
+            <section className="app-subtle-notice">
               <p className="text-sm text-slate-300">Загружаем панель...</p>
             </section>
           }

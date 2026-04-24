@@ -1,5 +1,21 @@
 import fireIcon from "../../../assets/icons/fire-icon.svg";
+import ticketAssignedIcon from "../../../assets/icons/ticket-assigned.svg";
+import ticketCanceledIcon from "../../../assets/icons/ticket-canceled.svg";
+import ticketClosedIcon from "../../../assets/icons/ticket-closed.svg";
+import ticketCreatedIcon from "../../../assets/icons/ticket-created.svg";
+import ticketDoneIcon from "../../../assets/icons/ticket-done.svg";
+import ticketInWorkIcon from "../../../assets/icons/ticket-inwork.svg";
 import { resolveTicketDeadlineDisplay, resolveTicketReason } from "../lib/dashboard-formatters";
+
+const statusIconByType = {
+  assigned: ticketAssignedIcon,
+  canceled: ticketCanceledIcon,
+  cancelled: ticketCanceledIcon,
+  closed: ticketClosedIcon,
+  created: ticketCreatedIcon,
+  inWork: ticketInWorkIcon,
+  worksDone: ticketDoneIcon,
+};
 
 export function TicketCardWithStatus({ ticket, onOpenTicket }) {
   const reasonValue = resolveTicketReason(ticket);
@@ -22,23 +38,27 @@ export function TicketCardWithStatus({ ticket, onOpenTicket }) {
   const gradientClassName = deadlineDisplay.isOverdue
     ? "from-rose-500/0 via-rose-400/80 to-rose-300/0"
     : "from-cyan-500/0 via-cyan-400/80 to-cyan-300/0";
+  const statusIcon = statusIconByType[ticket.status] || ticketAssignedIcon;
 
   return (
     <button
       type="button"
       onClick={() => onOpenTicket(ticket.id)}
-      className="relative w-full overflow-hidden rounded-2xl border border-cyan-200/25 bg-cyan-500/15 p-4 text-left shadow-lg transition hover:border-cyan-100/60"
+      className="relative w-full overflow-hidden rounded-lg border border-slate-400/20 bg-[#2f3748] px-4 py-3.5 text-left shadow-lg shadow-black/20 transition hover:border-slate-300/35 hover:bg-[#333c4f]"
     >
-      <div className="grid gap-3 grid-cols-[1fr_auto]">
-        <div className="space-y-1.5">
-          <p className="text-sm font-semibold text-white">{reasonValue}</p>
-          <p className="font-semibold text-slate-100">{ticket.deviceName}</p>
-          <p className="text-sm text-slate-200/90">{ticket.clientName}</p>
+      <div className="grid grid-cols-[1fr_auto] gap-3">
+        <div className="min-w-0 space-y-1.5">
+          <div className="flex min-w-0 items-center gap-2">
+            <img src={statusIcon} alt="" className="h-5 w-5 shrink-0" />
+            <p className="truncate text-sm font-semibold text-slate-100">{reasonValue}</p>
+          </div>
+          <p className="text-base font-semibold text-white">{ticket.deviceName}</p>
+          <p className="text-sm text-slate-300">{ticket.clientName}</p>
         </div>
-        <div className="flex flex-col justify-between">
-          <div className="flex flex-col items-end justify-start">
-            <p className="font-semibold text-white">{deadlineValue}</p>
-            <p className="text-sm text-white">#{ticket.number}</p>
+        <div className="flex flex-col items-end justify-between">
+          <div className="flex flex-col items-end">
+            <p className="text-sm font-semibold text-slate-200">{deadlineValue}</p>
+            <p className="text-sm font-semibold text-slate-200/80">#{ticket.number}</p>
           </div>
           {shouldShowBadge ? (
             <span

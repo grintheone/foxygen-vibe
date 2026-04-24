@@ -99,10 +99,10 @@ function ProfileAvatar({ canUpload = false, isUploading = false, logo, name, onU
         <img
             src={logo}
             alt={name || "Фото сотрудника"}
-            className="h-28 w-28 rounded-[2rem] border border-white/10 object-cover shadow-lg shadow-black/20 sm:h-32 sm:w-32"
+            className="h-28 w-28 rounded-lg border border-white/10 object-cover shadow-lg shadow-black/20 sm:h-32 sm:w-32"
         />
     ) : (
-        <div className="flex h-28 w-28 items-center justify-center rounded-[2rem] border border-white/10 bg-gradient-to-br from-cyan-400/25 via-[#6A3BF2]/30 to-emerald-400/25 text-white shadow-lg shadow-black/20 sm:h-32 sm:w-32">
+        <div className="flex h-28 w-28 items-center justify-center rounded-lg border border-white/10 bg-gradient-to-br from-cyan-400/25 via-[#6A3BF2]/30 to-emerald-400/25 text-white shadow-lg shadow-black/20 sm:h-32 sm:w-32">
             {initials ? (
                 <span className="text-3xl font-semibold tracking-[0.08em]">{initials}</span>
             ) : (
@@ -121,7 +121,7 @@ function ProfileAvatar({ canUpload = false, isUploading = false, logo, name, onU
             onClick={onUploadClick}
             disabled={isUploading}
             aria-label={isUploading ? "Загрузка фото профиля" : "Загрузить фото профиля"}
-            className="group relative inline-flex rounded-[2rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:cursor-wait"
+            className="group relative inline-flex rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:cursor-wait"
         >
             {avatarContent}
             <span className="absolute inset-x-2 bottom-2 inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950/75 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-white opacity-100 shadow-lg shadow-black/30 transition sm:opacity-0 sm:group-hover:opacity-100">
@@ -227,13 +227,13 @@ function ActiveTicketsSection({ archiveHref, isMemberProfile, onOpenArchive, onO
             <h2 className="text-2xl font-bold tracking-tight text-slate-50 sm:text-3xl">Активные выезды</h2>
 
             {tickets.length > 0 ? (
-                <div className="grid gap-3">
+                <div className="grid gap-2">
                     {tickets.map((ticket) => (
                         <ProfileTicketCard key={ticket.id} ticket={ticket} onOpenTicket={onOpenTicket} />
                     ))}
                 </div>
             ) : (
-                <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+                <div className="app-subtle-notice">
                     <p className="text-sm text-slate-300">
                         {isMemberProfile
                             ? "У этого сотрудника сейчас нет активных выездов."
@@ -534,7 +534,7 @@ export function ProfilePage() {
                 <ProfileHeader isMemberProfile={isMemberProfile} onBack={handleBack} />
 
                 {isLoading ? (
-                    <section className="rounded-3xl border border-white/10 bg-white/5 p-6">
+                    <section className="app-subtle-notice">
                         <p className="text-sm text-slate-300">
                             {isMemberProfile ? "Загружаем профиль сотрудника..." : "Загружаем профиль..."}
                         </p>
@@ -554,7 +554,7 @@ export function ProfilePage() {
                         />
 
                         <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-                            <article className="rounded-[2rem] border border-white/10 bg-white/10 p-6 shadow-2xl shadow-[#6A3BF2]/20 backdrop-blur-xl sm:p-8">
+                            <article className="rounded-lg border border-white/10 bg-white/10 p-6 shadow-2xl shadow-[#6A3BF2]/20 backdrop-blur-xl sm:p-8">
                                 <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
                                     <div className="flex items-start gap-4 sm:gap-5">
                                         <div className="space-y-3">

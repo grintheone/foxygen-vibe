@@ -82,30 +82,27 @@ export function ProfileTicketCard({ ticket, onOpenTicket }) {
     <button
       type="button"
       onClick={() => onOpenTicket(ticket.id)}
-      className="relative w-full overflow-hidden rounded-3xl border border-white/10 bg-slate-950/35 p-5 text-left shadow-xl shadow-black/20 transition hover:border-white/20 hover:bg-slate-950/45"
+      className="relative w-full overflow-hidden rounded-lg border border-slate-400/20 bg-[#2f3748] px-4 py-3.5 text-left shadow-xl shadow-black/20 transition hover:border-slate-300/35 hover:bg-[#333c4f]"
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1 space-y-2">
-          <p className="text-sm font-semibold text-cyan-100">{reasonValue}</p>
-          <p className="text-xl font-semibold tracking-tight text-white">{ticket?.deviceName || "Устройство не указано"}</p>
+      <div className="grid grid-cols-[1fr_auto] gap-3">
+        <div className="min-w-0 space-y-1.5">
+          <div className="flex min-w-0 items-center gap-2">
+            <img src={statusConfig.icon} alt="" className="h-5 w-5 shrink-0" />
+            <p className="truncate text-sm font-semibold text-slate-100">{reasonValue}</p>
+          </div>
+          <p className="text-base font-semibold text-white">{ticket?.deviceName || "Устройство не указано"}</p>
           <p className="text-sm text-slate-300">{detailsValue || "Описание не указано"}</p>
         </div>
 
-        <div className="flex flex-col items-end gap-2">
-          <span
-            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${statusConfig.toneClassName}`}
-          >
-            <img src={statusConfig.icon} alt="" className="h-4 w-4" />
-            <span>{statusConfig.label}</span>
-          </span>
-          <p className="text-sm font-semibold text-white">#{ticket?.number}</p>
+        <div className="flex flex-col items-end">
           <p className="text-sm font-semibold text-slate-200">{deadlineValue}</p>
+          <p className="text-sm font-semibold text-slate-200/80">#{ticket?.number}</p>
         </div>
       </div>
 
-      <div className="mt-4 grid gap-2 border-t border-white/10 pt-4 text-sm text-slate-300">
+      <div className="mt-3 grid gap-1.5 border-t border-slate-400/10 pt-3 text-sm text-slate-300">
         <p>{ticket?.clientName || "Клиент не указан"}</p>
-        {ticket?.clientAddress ? <p className="text-slate-400">{ticket.clientAddress}</p> : null}
+        {ticket?.clientAddress ? <p className="text-slate-200/80">{ticket.clientAddress}</p> : null}
       </div>
 
       {ticket?.urgent ? (

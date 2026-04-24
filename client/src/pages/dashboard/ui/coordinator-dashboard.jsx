@@ -43,14 +43,14 @@ function PersonIcon({ className }) {
 
 function DoneBadgeIcon() {
     return (
-        <span className="absolute -bottom-1 -right-1 inline-flex h-8 w-8 items-center justify-center rounded-full bg-emerald-400 text-emerald-950 shadow-md shadow-emerald-900/30">
+        <span className="absolute -bottom-1 -right-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-400 text-emerald-950 shadow-md shadow-emerald-900/30">
             <svg
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="2.4"
-                className="h-4.5 w-4.5"
+                className="h-3.5 w-3.5"
                 aria-hidden="true"
             >
                 <path d="M5 12.5l4.2 4.2L19 7.8" />
@@ -61,14 +61,14 @@ function DoneBadgeIcon() {
 
 function DisabledBadgeIcon() {
     return (
-        <span className="absolute -bottom-1 -right-1 inline-flex h-8 w-8 items-center justify-center rounded-full bg-rose-100 text-rose-700 shadow-md shadow-rose-950/30">
+        <span className="absolute -bottom-1 -right-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-rose-100 text-rose-700 shadow-md shadow-rose-950/30">
             <svg
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="2.2"
-                className="h-4.5 w-4.5"
+                className="h-3.5 w-3.5"
                 aria-hidden="true"
             >
                 <circle cx="12" cy="12" r="8" />
@@ -83,21 +83,7 @@ function MemberCard({ latestClientAddress, member, to, totalTickets }) {
     const isDisabled = member.isDisabled || status === "disabled";
     const isInWork = status === "inWork";
     const isDone = status === "worksDone";
-    const toneClass = isDisabled
-        ? "border-rose-300/25 bg-rose-500/10"
-        : isInWork
-        ? "border-[#9f85ff]/45 bg-[#6A3BF2]/24"
-        : isDone
-          ? "border-emerald-300/35 bg-emerald-500/18"
-          : "border-cyan-300/25 bg-cyan-500/10";
     const pulseClass = isInWork ? "bg-[#6A3BF2]/55" : "bg-emerald-400/35";
-    const cardClass = isDisabled
-        ? "border-rose-300/20 bg-rose-950/25"
-        : isInWork
-        ? "border-[#8d73ff]/45 bg-[#4b24c7]/32 shadow-[#6A3BF2]/30"
-        : isDone
-          ? "border-emerald-300/35 bg-emerald-950/30 shadow-emerald-500/20"
-          : "border-white/10 bg-slate-950/35";
     const statusTextClass = isDisabled
         ? "text-rose-200"
         : isInWork
@@ -109,14 +95,14 @@ function MemberCard({ latestClientAddress, member, to, totalTickets }) {
     return (
         <Link
             to={to}
-            className={`h-[19rem] w-[14rem] shrink-0 overflow-hidden rounded-[1.65rem] border p-3 text-slate-100 shadow-xl shadow-black/20 backdrop-blur ${cardClass}`}
+            className={`w-32 shrink-0 overflow-hidden rounded-lg border border-slate-400/20 bg-[#2f3748] p-2.5 text-slate-100 shadow-xl shadow-black/20 transition hover:border-slate-300/35 hover:bg-[#333c4f] ${isDisabled ? "opacity-80" : ""}`}
         >
-            <div className={`flex justify-center rounded-[1.3rem] border p-3 ${toneClass}`}>
-                <div className="relative h-36 w-36">
+            <div className="flex justify-center">
+                <div className="relative h-24 w-24">
                     {isInWork || isDone ? (
                         <span
                             aria-hidden="true"
-                            className={`absolute -inset-2 animate-ping rounded-full ${pulseClass}`}
+                            className={`absolute -inset-1.5 animate-ping rounded-full ${pulseClass}`}
                         />
                     ) : null}
                     <span className="absolute inset-0 rounded-full bg-white/5" aria-hidden="true" />
@@ -131,7 +117,7 @@ function MemberCard({ latestClientAddress, member, to, totalTickets }) {
                         <div
                             className={`relative flex h-full w-full items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-400 ${isDisabled ? "text-rose-200/70" : ""}`}
                         >
-                            <PersonIcon className="h-10 w-10" />
+                            <PersonIcon className="h-7 w-7" />
                         </div>
                     )}
 
@@ -140,17 +126,17 @@ function MemberCard({ latestClientAddress, member, to, totalTickets }) {
                 </div>
             </div>
 
-            <p className="mt-3 text-[1.75rem] leading-7 font-semibold tracking-tight text-white">{member.name}</p>
+            <p className="mt-3 text-base font-semibold leading-5 text-white">{member.name}</p>
 
-            <div className="mt-2 min-h-[3.2rem] text-sm font-semibold">
+            <div className="mt-1.5 text-xs font-semibold leading-4">
                 {isDisabled ? (
                     <p className={statusTextClass}>Временно недоступен</p>
                 ) : isInWork ? (
-                    <p className={`${statusTextClass} text-[0.95rem] leading-5`}>
+                    <p className={`${statusTextClass} line-clamp-2`}>
                         {latestClientAddress?.trim() || "Адрес клиента не указан"}
                     </p>
                 ) : isDone ? (
-                    <p className={`${statusTextClass} text-[0.95rem] leading-5`}>
+                    <p className={`${statusTextClass} line-clamp-2`}>
                         {latestClientAddress?.trim() || "Адрес клиента не указан"}
                     </p>
                 ) : (
@@ -271,9 +257,9 @@ export function CoordinatorDashboard({ department }) {
     return (
         <section className="space-y-6">
             <section className="space-y-3">
-                <h2 className="text-sm font-semibold tracking-[0.02em] text-slate-200">{`Ждут распределения - ${unassignedTickets.length}`}</h2>
+                <h2 className="text-base font-semibold tracking-[0.02em] text-slate-200">{`Ждут распределения (${unassignedTickets.length})`}</h2>
                 {isLoading || isFetching ? (
-                    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+                    <div className="app-subtle-notice">
                         Загружаем тикеты...
                     </div>
                 ) : isError ? (
@@ -281,13 +267,13 @@ export function CoordinatorDashboard({ department }) {
                         Не удалось загрузить тикеты.
                     </div>
                 ) : unassignedTickets.length > 0 ? (
-                    <div className="grid gap-3">
+                    <div className="grid gap-2">
                         {unassignedTickets.map((ticket) => (
                             <ProfileTicketCard key={ticket.id} ticket={ticket} onOpenTicket={handleOpenTicket} />
                         ))}
                     </div>
                 ) : (
-                    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+                    <div className="app-subtle-notice">
                         Нет тикетов к распределению
                     </div>
                 )}
@@ -295,10 +281,10 @@ export function CoordinatorDashboard({ department }) {
 
             <section className="space-y-3">
                 <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
-                    {`Отдел ${departmentMembers.length}`}
+                    {`Отдел (${departmentMembers.length})`}
                 </h2>
                 {isDepartmentMembersLoading || isDepartmentMembersFetching ? (
-                    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+                    <div className="app-subtle-notice">
                         Загружаем сотрудников...
                     </div>
                 ) : isDepartmentMembersError ? (
@@ -306,7 +292,7 @@ export function CoordinatorDashboard({ department }) {
                         Не удалось загрузить сотрудников отдела.
                     </div>
                 ) : departmentMembers.length > 0 ? (
-                    <div className="flex gap-4 overflow-x-auto px-1 pt-1 pb-5 pr-3">
+                    <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pt-1 pb-5 scroll-px-3">
                         {departmentMembers.map((member) => (
                             <MemberCard
                                 key={member.id}
@@ -318,16 +304,16 @@ export function CoordinatorDashboard({ department }) {
                         ))}
                     </div>
                 ) : (
-                    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+                    <div className="app-subtle-notice">
                         В этом отделе пока нет сотрудников.
                     </div>
                 )}
             </section>
 
             <section className="space-y-3">
-                <h2 className="text-sm font-semibold tracking-[0.02em] text-slate-200">{`Назначены и в работе - ${activeDepartmentTickets.length}`}</h2>
+                <h2 className="text-base font-semibold tracking-[0.02em] text-slate-200">{`Назначены и в работе (${activeDepartmentTickets.length})`}</h2>
                 {isLoading || isFetching ? (
-                    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+                    <div className="app-subtle-notice">
                         Загружаем тикеты...
                     </div>
                 ) : isError ? (
@@ -335,7 +321,7 @@ export function CoordinatorDashboard({ department }) {
                         Не удалось загрузить тикеты.
                     </div>
                 ) : activeDepartmentTickets.length > 0 ? (
-                    <div className="grid gap-3">
+                    <div className="grid gap-2">
                         {activeDepartmentTickets.map((ticket) => {
                             const fallbackExecutor =
                                 ticket.executorName || ticket.executorDepartment
@@ -358,7 +344,7 @@ export function CoordinatorDashboard({ department }) {
                         })}
                     </div>
                 ) : (
-                    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+                    <div className="app-subtle-notice">
                         Нет активных тикетов для сотрудников вашего отдела.
                     </div>
                 )}

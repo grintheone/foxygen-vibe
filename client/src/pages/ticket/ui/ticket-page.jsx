@@ -225,7 +225,7 @@ export function TicketPage() {
                 />
 
                 {isInitialTicketLoad ? (
-                    <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+                    <div className="app-subtle-notice">
                         <p className="text-sm text-slate-300">Загрузка тикета...</p>
                     </div>
                 ) : null}

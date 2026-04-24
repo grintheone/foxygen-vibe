@@ -5,7 +5,7 @@ export function DashboardOverview({ isMemberProfile = false, session }) {
     : "Ваша сессия активна. Эта страница профиля получает защищенные данные учетной записи по access token, а ротация refresh token доступна без перехода на другие страницы.";
 
   return (
-    <div className="rounded-[2rem] border border-white/10 bg-white/10 p-8 shadow-2xl shadow-[#6A3BF2]/25 backdrop-blur-xl">
+    <div className="rounded-lg border border-white/10 bg-white/10 p-8 shadow-2xl shadow-[#6A3BF2]/25 backdrop-blur-xl">
       <p className="text-xs font-semibold uppercase tracking-[0.45em] text-[#6A3BF2]">
         {eyebrow}
       </p>

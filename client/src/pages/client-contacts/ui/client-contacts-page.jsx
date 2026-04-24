@@ -90,7 +90,7 @@ export function ClientContactsPage() {
         />
 
         {isClientLoading || isClientFetching ? (
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+          <div className="app-subtle-notice">
             <p className="text-sm text-slate-300">Загрузка клиента...</p>
           </div>
         ) : null}
@@ -102,7 +102,7 @@ export function ClientContactsPage() {
         ) : null}
 
         {isContactsLoading || isContactsFetching ? (
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+          <div className="app-subtle-notice">
             <p className="text-sm text-slate-300">Загрузка контактов...</p>
           </div>
         ) : null}
@@ -128,7 +128,7 @@ export function ClientContactsPage() {
         ) : null}
 
         {!isContactsLoading && !isContactsFetching && !isContactsError && contacts.length === 0 ? (
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+          <div className="app-subtle-notice">
             <p className="text-sm text-slate-300">У этого клиента пока нет контактов.</p>
           </div>
         ) : null}

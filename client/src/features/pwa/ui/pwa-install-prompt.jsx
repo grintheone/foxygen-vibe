@@ -154,7 +154,7 @@ export function PwaInstallPrompt() {
 
   return (
     <div className="pointer-events-none fixed inset-x-4 top-[calc(1rem+env(safe-area-inset-top))] z-50 mx-auto w-full max-w-sm">
-      <section className="pointer-events-auto rounded-[1.75rem] border border-white/15 bg-slate-950/88 p-4 shadow-2xl shadow-black/35 backdrop-blur-xl">
+      <section className="pointer-events-auto rounded-lg border border-white/15 bg-slate-950/88 p-4 shadow-2xl shadow-black/35 backdrop-blur-xl">
         <div className="flex items-start gap-3">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#6A3BF2]/20 text-[#C9B8FF]">
             <svg

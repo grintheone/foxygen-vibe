@@ -616,7 +616,7 @@ function ArchiveTicketsSection({
             </div>
 
             {isLoading ? (
-                <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+                <div className="app-subtle-notice">
                     <p className="text-sm text-slate-300">{loadingMessage}</p>
                 </div>
             ) : null}
@@ -671,7 +671,7 @@ function ArchiveTicketsSection({
                             </div>
 
                             {expandedGroups.has(group.label) ? (
-                                <div className="grid gap-3">
+                                <div className="grid gap-2">
                                     {group.items.map((ticket) =>
                                         entityType === "profile" ? (
                                             <ProfileTicketCard key={ticket.id} ticket={ticket} onOpenTicket={onOpenTicket} />
@@ -695,7 +695,7 @@ function ArchiveTicketsSection({
             ) : null}
 
             {!isLoading && !isError && tickets.length === 0 ? (
-                <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+                <div className="app-subtle-notice">
                     <p className="text-sm text-slate-300">{emptyMessage}</p>
                 </div>
             ) : null}
@@ -1015,7 +1015,7 @@ export function TicketArchivePage({ entityType }) {
                 <ArchiveHeader entityMeta={entityMeta} entityTitle={entityTitle} onBack={handleBack} />
 
                 {isEntityLoading ? (
-                    <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+                    <div className="app-subtle-notice">
                         <p className="text-sm text-slate-300">{config.loadingEntityMessage}</p>
                     </div>
                 ) : null}

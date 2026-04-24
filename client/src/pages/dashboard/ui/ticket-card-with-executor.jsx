@@ -57,22 +57,24 @@ export function TicketCardWithExecutor({ ticket, executor, onOpenTicket }) {
             tabIndex={0}
             onClick={() => onOpenTicket(ticket.id)}
             onKeyDown={handleCardKeyDown}
-            className="relative w-full cursor-pointer overflow-hidden rounded-3xl border border-white/10 bg-slate-950/35 text-left shadow-xl shadow-black/20 transition hover:border-white/20 hover:bg-slate-950/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+            className="relative w-full cursor-pointer overflow-hidden rounded-lg border border-slate-400/20 bg-[#2f3748] text-left shadow-xl shadow-black/20 transition hover:border-slate-300/35 hover:bg-[#333c4f] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
         >
-            <div className="grid grid-cols-[1fr_auto] gap-3 p-5">
-                <div className="space-y-2">
-                    <p className="text-sm font-semibold text-cyan-100">{reasonValue}</p>
-                    <p className="text-xl font-semibold tracking-tight text-white">{ticket.deviceName}</p>
+            <div className="grid grid-cols-[1fr_auto] gap-3 px-4 py-3.5">
+                <div className="space-y-1.5">
+                    <div className="flex min-w-0 items-center gap-2">
+                        <img src={statusIcon} alt={ticket.status || "status"} className="h-5 w-5 shrink-0" />
+                        <p className="truncate text-sm font-semibold text-slate-100">{reasonValue}</p>
+                    </div>
+                    <p className="text-base font-semibold text-white">{ticket.deviceName}</p>
                     <p className="text-sm text-slate-300">{detailsValue || "Не указано"}</p>
                 </div>
-                <div className="flex flex-col items-end justify-between gap-2">
+                <div className="flex flex-col items-end">
                     <p className="text-sm font-semibold text-slate-200">{deadlineValue}</p>
-                    <p className="text-sm font-semibold text-white">#{ticket.number}</p>
-                    <img src={statusIcon} alt={ticket.status || "status"} className="h-6 w-6" />
+                    <p className="text-sm font-semibold text-slate-200/80">#{ticket.number}</p>
                 </div>
             </div>
 
-            <div className="border-t border-white/10 bg-white/5 px-5 py-4">
+            <div className="border-t border-slate-400/10 bg-[#3f485a] px-4 py-3">
                 <div className="flex items-center gap-3">
                     <UserAvatar
                         avatarUrl={executor?.avatarUrl}

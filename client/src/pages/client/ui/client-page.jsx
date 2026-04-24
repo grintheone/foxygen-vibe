@@ -127,7 +127,7 @@ function ClientAddressSection({ address, mapUrl }) {
     <section className="rounded-3xl border border-white/10 bg-slate-950/35 p-6 shadow-xl shadow-black/20 backdrop-blur">
       <h2 className="text-2xl font-bold tracking-tight text-slate-50 sm:text-3xl">Адрес</h2>
 
-      <div className="mt-5 overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/45">
+      <div className="mt-5 overflow-hidden rounded-lg border border-white/10 bg-slate-950/45">
         {mapUrl ? (
           <div className="h-64 border-b border-white/10 bg-slate-100 sm:h-72">
             <iframe
@@ -156,7 +156,7 @@ function ClientLatestTicketsSection({ clientId, tickets, isError, isLoading, onO
       <h2 className="text-2xl font-bold tracking-tight text-slate-50 sm:text-3xl">Последние выезды</h2>
 
       {isLoading ? (
-        <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+        <div className="app-subtle-notice">
           <p className="text-sm text-slate-300">Загрузка последних выездов...</p>
         </div>
       ) : null}
@@ -168,7 +168,7 @@ function ClientLatestTicketsSection({ clientId, tickets, isError, isLoading, onO
       ) : null}
 
       {!isLoading && !isError && tickets.length > 0 ? (
-        <div className="grid gap-3">
+        <div className="grid gap-2">
           {tickets.map((ticket) => (
             <TicketCardWithExecutor
               key={ticket.id}
@@ -184,7 +184,7 @@ function ClientLatestTicketsSection({ clientId, tickets, isError, isLoading, onO
       ) : null}
 
       {!isLoading && !isError && tickets.length === 0 ? (
-        <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+        <div className="app-subtle-notice">
           <p className="text-sm text-slate-300">У этого клиента пока нет закрытых выездов.</p>
         </div>
       ) : null}
@@ -223,7 +223,7 @@ function ClientContactsSection({ clientId, contacts, isError, isLoading, onOpenC
       <h2 className="text-2xl font-bold tracking-tight text-slate-50 sm:text-3xl">Контакты</h2>
 
       {isLoading ? (
-        <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+        <div className="app-subtle-notice">
           <p className="text-sm text-slate-300">Загрузка контактов...</p>
         </div>
       ) : null}
@@ -249,7 +249,7 @@ function ClientContactsSection({ clientId, contacts, isError, isLoading, onOpenC
       ) : null}
 
       {!isLoading && !isError && visibleContacts.length === 0 ? (
-        <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+        <div className="app-subtle-notice">
           <p className="text-sm text-slate-300">У этого клиента пока нет контактов.</p>
         </div>
       ) : null}
@@ -290,7 +290,7 @@ function ClientAgreementsSection({ agreements, clientId, isError, isLoading, onO
       <h2 className="text-2xl font-bold tracking-tight text-slate-50 sm:text-3xl">Оборудование</h2>
 
       {isLoading ? (
-        <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+        <div className="app-subtle-notice">
           <p className="text-sm text-slate-300">Загрузка оборудования...</p>
         </div>
       ) : null}
@@ -316,7 +316,7 @@ function ClientAgreementsSection({ agreements, clientId, isError, isLoading, onO
       ) : null}
 
       {!isLoading && !isError && visibleAgreements.length === 0 ? (
-        <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+        <div className="app-subtle-notice">
           <p className="text-sm text-slate-300">У этого клиента пока нет оборудования по договорам.</p>
         </div>
       ) : null}
@@ -363,7 +363,7 @@ function ClientCommentsSection({
       <h2 className="text-2xl font-bold tracking-tight text-slate-50 sm:text-3xl">Комментарии</h2>
 
       {isLoading ? (
-        <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+        <div className="app-subtle-notice">
           <p className="text-sm text-slate-300">Загрузка комментариев...</p>
         </div>
       ) : null}
@@ -375,7 +375,7 @@ function ClientCommentsSection({
       ) : null}
 
       {!isLoading && !isError && comments.length === 0 ? (
-        <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+        <div className="app-subtle-notice">
           <p className="text-sm text-slate-300">Пока нет комментариев.</p>
         </div>
       ) : null}
@@ -412,14 +412,14 @@ function ClientCommentsSection({
 
       <form
         onSubmit={onSubmit}
-        className="flex items-end gap-3 rounded-[2rem] border border-white/10 bg-slate-950/35 p-3 shadow-xl shadow-black/20 backdrop-blur"
+        className="flex items-end gap-3 rounded-lg border border-white/10 bg-slate-950/35 p-3 shadow-xl shadow-black/20 backdrop-blur"
       >
         <textarea
           value={commentText}
           onChange={(event) => onChangeText(event.target.value)}
           placeholder="Добавить комментарий"
           rows={3}
-          className="min-h-[7rem] flex-1 resize-none rounded-[1.6rem] border border-white/10 bg-white/5 px-5 py-4 text-lg text-slate-100 outline-none transition placeholder:text-slate-400 focus:border-white/25"
+          className="min-h-[7rem] flex-1 resize-none rounded-lg border border-white/10 bg-white/5 px-5 py-4 text-lg text-slate-100 outline-none transition placeholder:text-slate-400 focus:border-white/25"
         />
         <button
           type="submit"
@@ -559,7 +559,7 @@ export function ClientPage() {
         <ClientHeader title={pageTitle} onBack={() => navigate(-1)} />
 
         {isLoading || isFetching ? (
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+          <div className="app-subtle-notice">
             <p className="text-sm text-slate-300">Загрузка клиента...</p>
           </div>
         ) : null}

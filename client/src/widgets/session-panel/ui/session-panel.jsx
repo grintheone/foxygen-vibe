@@ -5,7 +5,7 @@ export function SessionPanel({
   onSignOut,
 }) {
   return (
-    <section className="rounded-[2rem] border border-emerald-300/20 bg-emerald-400/10 p-6 shadow-2xl shadow-emerald-950/30 backdrop-blur-xl">
+    <section className="rounded-lg border border-emerald-300/20 bg-emerald-400/10 p-6 shadow-2xl shadow-emerald-950/30 backdrop-blur-xl">
       <p className="text-xs font-semibold uppercase tracking-[0.35em] text-emerald-300">
         Сессия активна
       </p>

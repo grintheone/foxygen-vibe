@@ -70,7 +70,7 @@ export function ClientAgreementsPage() {
                 <ClientAgreementsHeader title={pageTitle} onBack={() => navigate(-1)} />
 
                 {isClientLoading || isClientFetching ? (
-                    <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+                    <div className="app-subtle-notice">
                         <p className="text-sm text-slate-300">Загрузка клиента...</p>
                     </div>
                 ) : null}
@@ -82,7 +82,7 @@ export function ClientAgreementsPage() {
                 ) : null}
 
                 {isAgreementsLoading || isAgreementsFetching ? (
-                    <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+                    <div className="app-subtle-notice">
                         <p className="text-sm text-slate-300">Загрузка оборудования...</p>
                     </div>
                 ) : null}
@@ -114,7 +114,7 @@ export function ClientAgreementsPage() {
                 ) : null}
 
                 {!isAgreementsLoading && !isAgreementsFetching && !isAgreementsError && agreements.length === 0 ? (
-                    <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+                    <div className="app-subtle-notice">
                         <p className="text-sm text-slate-300">У этого клиента пока нет оборудования по договорам.</p>
                     </div>
                 ) : null}

@@ -143,7 +143,7 @@ export function ChangePasswordPage() {
           </div>
         </header>
 
-        <section className="rounded-[2rem] border border-white/10 bg-white/10 p-8 shadow-2xl shadow-[#6A3BF2]/20 backdrop-blur-xl">
+        <section className="rounded-lg border border-white/10 bg-white/10 p-8 shadow-2xl shadow-[#6A3BF2]/20 backdrop-blur-xl">
           <form className="space-y-5" onSubmit={handleSubmit}>
             <label className="block">
               <span className="mb-2 block text-sm font-medium text-slate-200">Текущий пароль</span>
