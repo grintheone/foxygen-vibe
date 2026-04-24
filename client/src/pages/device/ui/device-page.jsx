@@ -265,16 +265,17 @@ function DeviceServiceSection({ agreement, isError, isLoading, onOpenClient, onO
                     <button
                         type="button"
                         onClick={() => onOpenClient(agreement.client)}
-                        className="w-full rounded-3xl border border-white/10 bg-slate-950/35 p-6 text-left shadow-xl shadow-black/20 backdrop-blur transition hover:border-white/20 hover:bg-slate-950/45"
+                        className="w-full rounded-lg border border-slate-400/20 bg-[#2f3748] px-4 py-4 text-left shadow-xl shadow-black/20 transition hover:border-slate-300/35 hover:bg-[#333c4f]"
                     >
-                        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
-                            Активный контракт
-                        </p>
-                        <p className="mt-3 text-2xl font-semibold tracking-tight text-slate-50">
+                        <p className="text-[16px] font-semibold leading-snug tracking-tight text-slate-50">
                             {agreement.clientName || "Не указано"}
                         </p>
-                        <p className="mt-2 text-lg text-slate-400">{agreement.clientAddress || "Адрес не указан"}</p>
-                        <p className="mt-6 text-base font-medium text-slate-200">{formatAgreementRange(agreement)}</p>
+                        <p className="mt-2 text-[16px] leading-snug text-slate-200/85">
+                            {agreement.clientAddress || "Адрес не указан"}
+                        </p>
+                        <p className="mt-5 text-[16px] font-medium leading-snug text-slate-400">
+                            {formatAgreementRange(agreement)}
+                        </p>
                     </button>
 
                     <button
@@ -416,33 +417,37 @@ function DeviceCommentsSection({
                     {comments.map((comment) => (
                         <article
                             key={comment.id}
-                            className="rounded-3xl border border-white/10 bg-slate-950/35 p-6 shadow-xl shadow-black/20 backdrop-blur"
+                            className="overflow-hidden rounded-lg border border-slate-400/20 bg-[#2f3748] shadow-xl shadow-black/20"
                         >
-                            <p className="text-lg leading-8 text-slate-100 sm:text-2xl sm:leading-10">
-                                {comment.text || "—"}
-                            </p>
-
-                            <div className="mt-6 flex items-end justify-between gap-4">
-                                <div className="flex items-center gap-4">
-                                    <UserAvatar
-                                        avatarUrl={comment.avatarUrl}
-                                        userId={comment.author_id}
-                                        name={comment.authorName}
-                                        className="h-10 w-10 sm:h-12 sm:w-12"
-                                        iconClassName="h-5 w-5 sm:h-6 sm:w-6"
-                                    />
-                                    <div>
-                                        <p className="text-lg font-semibold text-slate-100">
-                                            {comment.authorName || "Не указано"}
-                                        </p>
-                                        <p className="text-sm text-slate-400 sm:text-lg">
-                                            {comment.department || "Отдел не указан"}
-                                        </p>
-                                    </div>
-                                </div>
-                                <p className="shrink-0 text-sm text-slate-400 sm:text-lg">
-                                    {formatCommentDate(comment.created_at)}
+                            <div className="px-4 py-4">
+                                <p className="text-[16px] leading-7 text-slate-100 sm:text-[18px]">
+                                    {comment.text || "—"}
                                 </p>
+                            </div>
+
+                            <div className="border-t border-slate-400/10 bg-[#3f485a] px-4 py-3">
+                                <div className="flex items-end justify-between gap-4">
+                                    <div className="flex items-center gap-3">
+                                        <UserAvatar
+                                            avatarUrl={comment.avatarUrl}
+                                            userId={comment.author_id}
+                                            name={comment.authorName}
+                                            className="h-10 w-10"
+                                            iconClassName="h-5 w-5"
+                                        />
+                                        <div>
+                                            <p className="text-[16px] font-semibold text-slate-100">
+                                                {comment.authorName || "Не указано"}
+                                            </p>
+                                            <p className="text-sm text-slate-200/80">
+                                                {comment.department || "Отдел не указан"}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <p className="shrink-0 text-sm text-slate-200/80">
+                                        {formatCommentDate(comment.created_at)}
+                                    </p>
+                                </div>
                             </div>
                         </article>
                     ))}
@@ -451,19 +456,19 @@ function DeviceCommentsSection({
 
             <form
                 onSubmit={onSubmit}
-                className="flex items-end gap-3 rounded-lg border border-white/10 bg-slate-950/35 p-3 shadow-xl shadow-black/20 backdrop-blur"
+                className="flex items-center gap-3"
             >
                 <textarea
                     value={commentText}
                     onChange={(event) => onChangeText(event.target.value)}
                     placeholder="Добавить комментарий"
-                    rows={3}
-                    className="min-h-[7rem] flex-1 resize-none rounded-lg border border-white/10 bg-white/5 px-5 py-4 text-lg text-slate-100 outline-none transition placeholder:text-slate-400 focus:border-white/25"
+                    rows={1}
+                    className="h-[42px] min-h-[42px] flex-1 resize-none rounded-full bg-[#3f485a] px-4 py-[9px] text-[16px] leading-6 text-slate-100 outline-none transition placeholder:text-slate-300/70 focus:ring-1 focus:ring-slate-300/35 sm:h-12 sm:min-h-12 sm:px-5 sm:py-3 lg:h-14 lg:min-h-14"
                 />
                 <button
                     type="submit"
                     disabled={isSubmitting || !commentText.trim()}
-                    className="inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#6A3BF2] text-white transition hover:bg-[#7C52F5] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full bg-[#3f485a] text-slate-100 transition hover:bg-[#4a5468] disabled:cursor-not-allowed disabled:opacity-60 sm:h-12 sm:w-12 lg:h-14 lg:w-14"
                     aria-label="Отправить комментарий"
                 >
                     <svg
@@ -474,7 +479,7 @@ function DeviceCommentsSection({
                         strokeWidth="2.4"
                         strokeLinecap="round"
                         strokeLinejoin="round"
-                        className="h-6 w-6"
+                        className="h-5 w-5 sm:h-6 sm:w-6"
                         aria-hidden="true"
                     >
                         <path d="M3 11.5 20.5 4 13 21l-2.5-6.5L3 11.5Z" />
@@ -938,6 +943,18 @@ export function DevicePage() {
     const hasCreateTicketWidget = canCreateTicket && !isLoading && !isFetching && !isError && Boolean(device);
     const hasMissingCommentReference = isMissingCommentReferenceError(commentsError);
     const isCommentsSectionError = isCommentsError && !hasMissingCommentReference;
+    const mockComments = [
+        {
+            authorName: "Анна Петрова",
+            author_id: "mock-device-comment-author",
+            avatarUrl: "",
+            created_at: "2026-04-24T10:30:00.000Z",
+            department: "Сервисный отдел",
+            id: "mock-device-comment-1",
+            text: "Провели удаленную проверку. Оборудование на связи, рекомендуем плановый выезд для диагностики блока питания.",
+        },
+    ];
+    const displayComments = [...mockComments, ...comments];
 
     async function handleSubmitComment(event) {
         event.preventDefault();
@@ -1048,7 +1065,7 @@ export function DevicePage() {
                             onOpenTicket={(ticketId) => navigate(routePaths.ticketById(ticketId))}
                         />
                         <DeviceCommentsSection
-                            comments={comments}
+                            comments={displayComments}
                             commentText={commentText}
                             errorMessage={commentError}
                             isError={isCommentsSectionError}
