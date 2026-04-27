@@ -211,7 +211,7 @@ export function TicketPage() {
     return (
         <PageShell>
             <section
-                className={`w-full space-y-6 transition ${hasVisibleActionWidget ? "pb-28" : ""} ${
+                className={`w-full space-y-6 transition ${hasVisibleActionWidget ? "pb-[4.5rem]" : ""} ${
                     isReportSheetOpen || isAssignmentSheetOpen ? "brightness-75" : ""
                 }`}
             >

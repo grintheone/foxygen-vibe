@@ -82,9 +82,9 @@ export function ProfileTicketCard({ ticket, onOpenTicket }) {
     <button
       type="button"
       onClick={() => onOpenTicket(ticket.id)}
-      className="relative w-full overflow-hidden rounded-lg border border-slate-400/20 bg-[#2f3748] px-4 py-3.5 text-left shadow-xl shadow-black/20 transition hover:border-slate-300/35 hover:bg-[#333c4f]"
+      className="relative w-full overflow-hidden rounded-lg border border-slate-400/20 bg-[#2f3748] text-left shadow-xl shadow-black/20 transition hover:border-slate-300/35 hover:bg-[#333c4f]"
     >
-      <div className="grid grid-cols-[1fr_auto] gap-3">
+      <div className="grid grid-cols-[1fr_auto] gap-3 px-4 py-3.5">
         <div className="min-w-0 space-y-1.5">
           <div className="flex min-w-0 items-center gap-2">
             <img src={statusConfig.icon} alt="" className="h-5 w-5 shrink-0" />
@@ -100,19 +100,21 @@ export function ProfileTicketCard({ ticket, onOpenTicket }) {
         </div>
       </div>
 
-      <div className="mt-3 flex items-end justify-between gap-3 border-t border-slate-400/10 pt-3">
-        <div className="min-w-0 space-y-1.5 text-sm text-slate-300">
-          <p className="truncate">{ticket?.clientName || "Клиент не указан"}</p>
-          {ticket?.clientAddress ? <p className="truncate text-slate-200/80">{ticket.clientAddress}</p> : null}
-        </div>
+      <div className="border-t border-slate-400/10 bg-[#3f485a] px-4 py-3">
+        <div className="flex items-end justify-between gap-3">
+          <div className="min-w-0 space-y-1.5 text-sm text-slate-300">
+            <p className="truncate font-semibold text-slate-100">{ticket?.clientName || "Клиент не указан"}</p>
+            {ticket?.clientAddress ? <p className="truncate text-slate-200/80">{ticket.clientAddress}</p> : null}
+          </div>
 
-        {ticket?.urgent ? (
-          <span
-            className={`shrink-0 rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] ${urgencyBadgeClassName}`}
-          >
-            Срочно
-          </span>
-        ) : null}
+          {ticket?.urgent ? (
+            <span
+              className={`shrink-0 rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] ${urgencyBadgeClassName}`}
+            >
+              Срочно
+            </span>
+          ) : null}
+        </div>
       </div>
 
       {shouldShowGradient ? (

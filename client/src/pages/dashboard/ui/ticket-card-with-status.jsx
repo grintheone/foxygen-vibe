@@ -17,6 +17,16 @@ const statusIconByType = {
   worksDone: ticketDoneIcon,
 };
 
+const statusLabelByType = {
+  assigned: "Назначен",
+  canceled: "Отменен",
+  cancelled: "Отменен",
+  closed: "Закрыт",
+  created: "Создан",
+  inWork: "На выезде",
+  worksDone: "Работы завершены",
+};
+
 export function TicketCardWithStatus({ ticket, onOpenTicket }) {
   const reasonValue = resolveTicketReason(ticket);
   const deadlineDisplay = resolveTicketDeadlineDisplay(ticket);
@@ -39,14 +49,15 @@ export function TicketCardWithStatus({ ticket, onOpenTicket }) {
     ? "from-rose-500/0 via-rose-400/80 to-rose-300/0"
     : "from-cyan-500/0 via-cyan-400/80 to-cyan-300/0";
   const statusIcon = statusIconByType[ticket.status] || ticketAssignedIcon;
+  const statusLabel = ticket.statusTitle?.trim() || statusLabelByType[ticket.status] || ticket.status || "Статус";
 
   return (
     <button
       type="button"
       onClick={() => onOpenTicket(ticket.id)}
-      className="relative w-full overflow-hidden rounded-lg border border-slate-400/20 bg-[#2f3748] px-4 py-3.5 text-left shadow-lg shadow-black/20 transition hover:border-slate-300/35 hover:bg-[#333c4f]"
+      className="relative w-full overflow-hidden rounded-lg border border-slate-400/20 bg-[#2f3748] text-left shadow-xl shadow-black/20 transition hover:border-slate-300/35 hover:bg-[#333c4f] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
     >
-      <div className="grid grid-cols-[1fr_auto] gap-3">
+      <div className="grid grid-cols-[1fr_auto] gap-3 px-4 py-3.5">
         <div className="min-w-0 space-y-1.5">
           <div className="flex min-w-0 items-center gap-2">
             <img src={statusIcon} alt="" className="h-5 w-5 shrink-0" />
@@ -60,15 +71,25 @@ export function TicketCardWithStatus({ ticket, onOpenTicket }) {
             <p className="text-sm font-semibold text-slate-200">{deadlineValue}</p>
             <p className="text-sm font-semibold text-slate-200/80">#{ticket.number}</p>
           </div>
+        </div>
+      </div>
+
+      <div className="border-t border-slate-400/10 bg-[#3f485a] px-4 py-3">
+        <div className="flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <p className="truncate text-base font-semibold text-slate-100">{statusLabel}</p>
+          </div>
+
           {shouldShowBadge ? (
             <span
-              className={`rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] ${badgeClassName}`}
+              className={`shrink-0 rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] ${badgeClassName}`}
             >
-              СРОЧНО
+              Срочно
             </span>
           ) : null}
         </div>
       </div>
+
       {shouldShowGradient ? (
         <span
           aria-hidden="true"

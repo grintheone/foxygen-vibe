@@ -943,19 +943,6 @@ export function DevicePage() {
     const hasCreateTicketWidget = canCreateTicket && !isLoading && !isFetching && !isError && Boolean(device);
     const hasMissingCommentReference = isMissingCommentReferenceError(commentsError);
     const isCommentsSectionError = isCommentsError && !hasMissingCommentReference;
-    const mockComments = [
-        {
-            authorName: "Анна Петрова",
-            author_id: "mock-device-comment-author",
-            avatarUrl: "",
-            created_at: "2026-04-24T10:30:00.000Z",
-            department: "Сервисный отдел",
-            id: "mock-device-comment-1",
-            text: "Провели удаленную проверку. Оборудование на связи, рекомендуем плановый выезд для диагностики блока питания.",
-        },
-    ];
-    const displayComments = [...mockComments, ...comments];
-
     async function handleSubmitComment(event) {
         event.preventDefault();
 
@@ -1021,7 +1008,7 @@ export function DevicePage() {
     return (
         <PageShell>
             <section
-                className={`w-full space-y-6 transition ${hasCreateTicketWidget ? "pb-28" : ""} ${
+                className={`w-full space-y-6 transition ${hasCreateTicketWidget ? "pb-[4.5rem]" : ""} ${
                     isCreateTicketSheetOpen ? "brightness-75" : ""
                 }`}
             >
@@ -1065,7 +1052,7 @@ export function DevicePage() {
                             onOpenTicket={(ticketId) => navigate(routePaths.ticketById(ticketId))}
                         />
                         <DeviceCommentsSection
-                            comments={displayComments}
+                            comments={comments}
                             commentText={commentText}
                             errorMessage={commentError}
                             isError={isCommentsSectionError}
