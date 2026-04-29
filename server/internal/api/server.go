@@ -25,6 +25,7 @@ type Server struct {
 	auth                            authConfig
 	sync                            syncConfig
 	storage                         *storage.Client
+	requesterRoleLookup             func(context.Context, pgtype.UUID) (string, error)
 	editorAccessCheck               func(http.ResponseWriter, *http.Request) (pgtype.UUID, bool)
 	editorRoleLookup                func(context.Context, pgtype.UUID) (string, error)
 	editorAgreementDetailLoader     func(context.Context, pgtype.UUID) (editorAgreementDetailResponse, bool, error)

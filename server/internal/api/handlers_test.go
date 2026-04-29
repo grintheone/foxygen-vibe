@@ -1495,3 +1495,73 @@ func TestProfileAvatarUploadEndpointRejectsMissingToken(t *testing.T) {
 		t.Fatalf("expected status %d, got %d", http.StatusUnauthorized, rec.Code)
 	}
 }
+
+func TestShouldRestrictRequesterToExecutorTickets(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name string
+		role string
+		want bool
+	}{
+		{name: "engineer user role is restricted", role: "user", want: true},
+		{name: "role comparison is case insensitive", role: " User ", want: true},
+		{name: "coordinator keeps broad visibility", role: "coordinator", want: false},
+		{name: "admin keeps broad visibility", role: "admin", want: false},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := shouldRestrictRequesterToExecutorTickets(tc.role); got != tc.want {
+				t.Fatalf("expected %t for role %q, got %t", tc.want, tc.role, got)
+			}
+		})
+	}
+}
+
+func TestRequesterTicketExecutorFilterRestrictsUserRole(t *testing.T) {
+	t.Parallel()
+
+	requesterID := mustUUID(t, "11111111-1111-1111-1111-111111111111")
+	srv := &Server{
+		requesterRoleLookup: func(_ context.Context, gotRequesterID pgtype.UUID) (string, error) {
+			if gotRequesterID != requesterID {
+				t.Fatalf("expected requester id %s, got %s", requesterID.String(), gotRequesterID.String())
+			}
+			return "user", nil
+		},
+	}
+
+	filter, err := srv.requesterTicketExecutorFilter(context.Background(), requesterID)
+	if err != nil {
+		t.Fatalf("requesterTicketExecutorFilter returned error: %v", err)
+	}
+	if filter == nil {
+		t.Fatal("expected executor filter for user role")
+	}
+	if *filter != requesterID {
+		t.Fatalf("expected executor filter %s, got %s", requesterID.String(), filter.String())
+	}
+}
+
+func TestRequesterTicketExecutorFilterSkipsCoordinatorRole(t *testing.T) {
+	t.Parallel()
+
+	requesterID := mustUUID(t, "11111111-1111-1111-1111-111111111111")
+	srv := &Server{
+		requesterRoleLookup: func(_ context.Context, _ pgtype.UUID) (string, error) {
+			return "coordinator", nil
+		},
+	}
+
+	filter, err := srv.requesterTicketExecutorFilter(context.Background(), requesterID)
+	if err != nil {
+		t.Fatalf("requesterTicketExecutorFilter returned error: %v", err)
+	}
+	if filter != nil {
+		t.Fatalf("expected no executor filter for coordinator role, got %s", filter.String())
+	}
+}
