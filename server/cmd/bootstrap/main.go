@@ -36,6 +36,14 @@ func main() {
 	if options.ImportDefaultPassword != "" {
 		schemaSettings["foxygen.import_default_password"] = options.ImportDefaultPassword
 	}
+	needsImport := false
+	if options.ImportEnabled {
+		needsImport, err = dbinit.DatabaseNeedsImport(ctx, db)
+		if err != nil {
+			log.Fatal(err)
+		}
+		schemaSettings["foxygen.skip_test_data_seed"] = "true"
+	}
 
 	if err := dbinit.EnsureSchemaWithSessionSettings(ctx, db, "db/schema/*.sql", schemaSettings); err != nil {
 		log.Fatal(err)
@@ -50,10 +58,6 @@ func main() {
 		return
 	}
 
-	needsImport, err := dbinit.DatabaseNeedsImport(ctx, db)
-	if err != nil {
-		log.Fatal(err)
-	}
 	if !needsImport {
 		log.Println("bootstrap import skipped; database already contains application data")
 		return

@@ -11,10 +11,11 @@ import {
 import { PageShell } from "../../../shared/ui/page-shell";
 import { useTicketViewModel } from "../lib/use-ticket-view-model";
 import { buildTicketPatchPayload, resolveTicketActionState } from "../model/ticket-action-widget-model";
+import { TicketClientSection } from "./components/ticket-client-section";
 import { TicketContactCard } from "./components/ticket-contact-card";
+import { TicketDeviceSection } from "./components/ticket-device-section";
 import { TicketHeader } from "./components/ticket-header";
 import { TicketHistorySection } from "./components/ticket-history-section";
-import { TicketNavigationCard } from "./components/ticket-navigation-card";
 import { TicketStatusActionWidget } from "./components/ticket-status-action-widget";
 import { TicketSummaryCard } from "./components/ticket-summary-card";
 import { TicketWorkResultSection } from "./components/ticket-work-result-section";
@@ -29,6 +30,19 @@ const TicketReportSheet = lazy(() =>
         default: module.TicketReportSheet,
     })),
 );
+
+const mockHistoryTicketData = {
+    assignedBy: "mock-coordinator",
+    assignedByAvatarUrl: "",
+    assignedByName: "Анна Смирнова",
+    assigned_at: "2026-04-24T08:15:00.000Z",
+    closed_at: "2026-04-24T11:30:00.000Z",
+    executor: "mock-engineer",
+    executorAvatarUrl: "",
+    executorName: "Илья Волков",
+    workfinished_at: "2026-04-24T10:55:00.000Z",
+    workstarted_at: "2026-04-24T09:05:00.000Z",
+};
 
 export function TicketPage() {
     const navigate = useNavigate();
@@ -50,10 +64,6 @@ export function TicketPage() {
 
     const {
         ticketNumber,
-        statusIcon,
-        statusAlt,
-        finishedDate,
-        isInWork,
         deadlineDisplay,
         reasonValue,
         canOpenDevice,
@@ -65,6 +75,7 @@ export function TicketPage() {
     const [patchTicket, { isLoading: isPatching }] = usePatchTicketMutation();
     const [uploadTicketAttachment, { isLoading: isUploadingAttachment }] = useUploadTicketAttachmentMutation();
     const hasWorkResult = Boolean(ticket?.result?.trim());
+    const historySectionTicket = import.meta.env.DEV && ticket ? { ...ticket, ...mockHistoryTicketData } : ticket;
 
     const actionState = resolveTicketActionState({
         currentUserDepartment: session?.department || "",
@@ -217,10 +228,6 @@ export function TicketPage() {
             >
                 <TicketHeader
                     ticketNumber={ticketNumber}
-                    isInWork={isInWork}
-                    statusIcon={statusIcon}
-                    statusAlt={statusAlt}
-                    finishedDate={finishedDate}
                     onBack={() => navigate(-1)}
                 />
 
@@ -253,23 +260,27 @@ export function TicketPage() {
                             referenceTicket={ticket.referenceTicket}
                         />
 
-                        <section className="space-y-3">
-                            <h2 className="text-xl font-semibold tracking-tight text-slate-300 sm:text-2xl">Оборудование</h2>
-                            <TicketNavigationCard
-                                onClick={handleOpenDevice}
-                                disabled={!canOpenDevice}
-                                value={ticket.deviceName}
-                                subtitle={`С/Н: ${ticket.deviceSerialNumber || "Не указано"}`}
+                        {hasWorkResult ? (
+                            <TicketWorkResultSection
+                                ticket={ticket}
+                                workDuration={workDuration}
+                                onDownloadAttachment={handleDownloadAttachment}
                             />
-                        </section>
+                        ) : null}
 
-                        <section className="space-y-3">
-                            <h2 className="text-xl font-semibold tracking-tight text-slate-300 sm:text-2xl">Клиент</h2>
-                            <TicketNavigationCard
-                                onClick={handleOpenClient}
+                        <TicketDeviceSection
+                            onOpenDevice={handleOpenDevice}
+                            disabled={!canOpenDevice}
+                            deviceName={ticket.deviceName}
+                            serialNumber={ticket.deviceSerialNumber}
+                        />
+
+                        <section className="space-y-4">
+                            <TicketClientSection
+                                onOpenClient={handleOpenClient}
                                 disabled={!canOpenClient}
-                                value={ticket.clientName}
-                                subtitle={ticket.clientAddress}
+                                clientName={ticket.clientName}
+                                clientAddress={ticket.clientAddress}
                             />
                             <TicketContactCard
                                 contactName={ticket.contactName}
@@ -278,15 +289,7 @@ export function TicketPage() {
                                 emailHref={emailHref}
                             />
                         </section>
-
-                        {hasWorkResult ? (
-                            <TicketWorkResultSection
-                                ticket={ticket}
-                                workDuration={workDuration}
-                                onDownloadAttachment={handleDownloadAttachment}
-                            />
-                        ) : null}
-                        <TicketHistorySection ticket={ticket} />
+                        <TicketHistorySection ticket={historySectionTicket} />
                     </>
                 ) : null}
             </section>

@@ -10,9 +10,9 @@ import {
   useGetCommentsQuery,
   useGetClientTicketsQuery,
 } from "../../../shared/api/tickets-api";
+import { TicketContactCard } from "../../ticket/ui/components/ticket-contact-card";
+import { TicketDeviceCard } from "../../ticket/ui/components/ticket-device-section";
 import { routePaths } from "../../../shared/config/routes";
-import { ContactCard } from "../../../shared/ui/contact-card";
-import { NavigationCard } from "../../../shared/ui/navigation-card";
 import { PageShell } from "../../../shared/ui/page-shell";
 import { UserAvatar } from "../../../shared/ui/user-avatar";
 
@@ -86,17 +86,17 @@ function BackButton({ onClick }) {
       type="button"
       onClick={onClick}
       aria-label="Назад"
-      className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[#6A3BF2] text-white transition hover:bg-[#7C52F5]"
+      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#2F3545] text-[#94A3B8] transition hover:bg-[#394055] sm:h-12 sm:w-12 lg:h-14 lg:w-14"
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
-        strokeWidth="2.5"
+        strokeWidth="1.8"
         strokeLinecap="round"
         strokeLinejoin="round"
-        className="h-5 w-5"
+        className="h-5 w-5 sm:h-6 sm:w-6 lg:h-7 lg:w-7"
         aria-hidden="true"
       >
         <path d="M15 18l-6-6 6-6" />
@@ -105,31 +105,40 @@ function BackButton({ onClick }) {
   );
 }
 
-function ClientHeader({ title, onBack }) {
+function ClientHeader({ onBack }) {
   return (
-    <header className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center rounded-3xl border border-white/10 bg-slate-950/35 p-6 shadow-xl shadow-black/20 backdrop-blur">
-      <div className="justify-self-start">
+    <header className="bg-transparent px-1 pt-2">
+      <div className="grid grid-cols-[auto_1fr_auto] items-center gap-4 sm:gap-6 lg:gap-8">
         <BackButton onClick={onBack} />
+        <p className="justify-self-center text-center text-sm font-semibold tracking-[0.18em] text-[#94A3B8] sm:text-base lg:text-lg xl:text-xl">
+          Клиент
+        </p>
+        <div className="h-11 w-11 shrink-0 sm:h-12 sm:w-12 lg:h-14 lg:w-14" aria-hidden="true" />
       </div>
-
-      <div className="justify-self-center text-center">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Клиент</p>
-        <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">{title}</h1>
-      </div>
-
-      <div className="h-11 w-11" aria-hidden="true" />
     </header>
+  );
+}
+
+function ClientInfoSection({ title }) {
+  return (
+    <section className="px-1">
+      <div className="min-w-0">
+        <h1 className="text-[24px] font-semibold leading-tight tracking-tight text-white sm:text-[28px] lg:text-[32px] xl:text-[36px]">
+          {title}
+        </h1>
+      </div>
+    </section>
   );
 }
 
 function ClientAddressSection({ address, mapUrl }) {
   return (
-    <section className="rounded-3xl border border-white/10 bg-slate-950/35 p-6 shadow-xl shadow-black/20 backdrop-blur">
-      <h2 className="text-2xl font-bold tracking-tight text-slate-50 sm:text-3xl">Адрес</h2>
+    <section className="space-y-4 px-1">
+      <h2 className="text-[16px] font-semibold tracking-tight text-[#BCC2CA] sm:text-[18px] lg:text-[20px]">Адрес</h2>
 
-      <div className="mt-5 overflow-hidden rounded-lg border border-white/10 bg-slate-950/45">
+      <div className="overflow-hidden rounded-lg border border-slate-400/20 bg-[#2f3748] shadow-xl shadow-black/20">
         {mapUrl ? (
-          <div className="h-64 border-b border-white/10 bg-slate-100 sm:h-72">
+          <div className="h-64 border-b border-slate-400/10 bg-slate-100 sm:h-72">
             <iframe
               title="Карта адреса клиента"
               src={mapUrl}
@@ -140,8 +149,8 @@ function ClientAddressSection({ address, mapUrl }) {
           </div>
         ) : null}
 
-        <div className="p-6 sm:p-8">
-          <p className="text-2xl font-semibold tracking-tight text-slate-50 sm:text-3xl">
+        <div className={`${mapUrl ? "bg-[#3f485a]" : ""} px-4 py-4 sm:px-5 sm:py-5`}>
+          <p className="text-[16px] font-semibold leading-7 tracking-tight text-slate-50 sm:text-[18px]">
             {address || "Адрес не указан"}
           </p>
         </div>
@@ -152,8 +161,10 @@ function ClientAddressSection({ address, mapUrl }) {
 
 function ClientLatestTicketsSection({ clientId, tickets, isError, isLoading, onOpenTicket, onOpenArchive }) {
   return (
-    <section className="space-y-4">
-      <h2 className="text-2xl font-bold tracking-tight text-slate-50 sm:text-3xl">Последние выезды</h2>
+    <section className="space-y-4 px-1">
+      <h2 className="text-[16px] font-semibold tracking-tight text-[#BCC2CA] sm:text-[18px] lg:text-[20px]">
+        Последние выезды
+      </h2>
 
       {isLoading ? (
         <div className="app-subtle-notice">
@@ -219,8 +230,8 @@ function ClientContactsSection({ clientId, contacts, isError, isLoading, onOpenC
   const shouldShowAllLink = contacts.length > 2;
 
   return (
-    <section className="space-y-4">
-      <h2 className="text-2xl font-bold tracking-tight text-slate-50 sm:text-3xl">Контакты</h2>
+    <section className="space-y-4 px-1">
+      <h2 className="text-[16px] font-semibold tracking-tight text-[#BCC2CA] sm:text-[18px] lg:text-[20px]">Контакты</h2>
 
       {isLoading ? (
         <div className="app-subtle-notice">
@@ -235,9 +246,9 @@ function ClientContactsSection({ clientId, contacts, isError, isLoading, onOpenC
       ) : null}
 
       {!isLoading && !isError && visibleContacts.length > 0 ? (
-        <div className="grid gap-3">
+        <div className="grid gap-4">
           {visibleContacts.map((contact) => (
-            <ContactCard
+            <TicketContactCard
               key={contact.id}
               contactName={contact.name}
               contactPosition={contact.position}
@@ -286,8 +297,10 @@ function ClientAgreementsSection({ agreements, clientId, isError, isLoading, onO
   const shouldShowAllLink = agreements.length > 2;
 
   return (
-    <section className="space-y-4">
-      <h2 className="text-2xl font-bold tracking-tight text-slate-50 sm:text-3xl">Оборудование</h2>
+    <section className="space-y-4 px-1">
+      <h2 className="text-[16px] font-semibold tracking-tight text-[#BCC2CA] sm:text-[18px] lg:text-[20px]">
+        Оборудование
+      </h2>
 
       {isLoading ? (
         <div className="app-subtle-notice">
@@ -302,14 +315,14 @@ function ClientAgreementsSection({ agreements, clientId, isError, isLoading, onO
       ) : null}
 
       {!isLoading && !isError && visibleAgreements.length > 0 ? (
-        <div className="grid gap-3">
+        <div className="grid gap-4">
           {visibleAgreements.map((agreement) => (
-            <NavigationCard
+            <TicketDeviceCard
               key={agreement.id}
-              value={agreement.deviceName}
-              subtitle={`С/Н: ${agreement.deviceSerialNumber || "Не указано"}`}
+              deviceName={agreement.deviceName}
+              serialNumber={agreement.deviceSerialNumber}
               disabled={!agreement.device}
-              onClick={() => onOpenDevice(agreement.device)}
+              onOpenDevice={() => onOpenDevice(agreement.device)}
             />
           ))}
         </div>
@@ -360,7 +373,9 @@ function ClientCommentsSection({
 }) {
   return (
     <section className="space-y-4">
-      <h2 className="text-2xl font-bold tracking-tight text-slate-50 sm:text-3xl">Комментарии</h2>
+      <h2 className="text-[16px] font-semibold tracking-tight text-[#BCC2CA] sm:text-[18px] lg:text-[20px]">
+        Комментарии
+      </h2>
 
       {isLoading ? (
         <div className="app-subtle-notice">
@@ -385,46 +400,47 @@ function ClientCommentsSection({
           {comments.map((comment) => (
             <article
               key={comment.id}
-              className="rounded-3xl border border-white/10 bg-slate-950/35 p-6 shadow-xl shadow-black/20 backdrop-blur"
+              className="overflow-hidden rounded-lg border border-slate-400/20 bg-[#2f3748] shadow-xl shadow-black/20"
             >
-              <p className="text-lg leading-8 text-slate-100 sm:text-2xl sm:leading-10">{comment.text || "—"}</p>
+              <div className="px-4 py-4">
+                <p className="text-[16px] leading-7 text-slate-100 sm:text-[18px]">{comment.text || "—"}</p>
+              </div>
 
-              <div className="mt-6 flex items-end justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <UserAvatar
-                    avatarUrl={comment.avatarUrl}
-                    userId={comment.author_id}
-                    name={comment.authorName}
-                    className="h-10 w-10 sm:h-12 sm:w-12"
-                    iconClassName="h-5 w-5 sm:h-6 sm:w-6"
-                  />
-                  <div>
-                    <p className="text-lg font-semibold text-slate-100">{comment.authorName || "Не указано"}</p>
-                    <p className="text-sm text-slate-400 sm:text-lg">{comment.department || "Отдел не указан"}</p>
+              <div className="border-t border-slate-400/10 bg-[#3f485a] px-4 py-3">
+                <div className="flex items-end justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <UserAvatar
+                      avatarUrl={comment.avatarUrl}
+                      userId={comment.author_id}
+                      name={comment.authorName}
+                      className="h-10 w-10"
+                      iconClassName="h-5 w-5"
+                    />
+                    <div>
+                      <p className="text-[16px] font-semibold text-slate-100">{comment.authorName || "Не указано"}</p>
+                      <p className="text-sm text-slate-200/80">{comment.department || "Отдел не указан"}</p>
+                    </div>
                   </div>
+                  <p className="shrink-0 text-sm text-slate-200/80">{formatCommentDate(comment.created_at)}</p>
                 </div>
-                <p className="shrink-0 text-sm text-slate-400 sm:text-lg">{formatCommentDate(comment.created_at)}</p>
               </div>
             </article>
           ))}
         </div>
       ) : null}
 
-      <form
-        onSubmit={onSubmit}
-        className="flex items-end gap-3 rounded-lg border border-white/10 bg-slate-950/35 p-3 shadow-xl shadow-black/20 backdrop-blur"
-      >
+      <form onSubmit={onSubmit} className="flex items-center gap-3">
         <textarea
           value={commentText}
           onChange={(event) => onChangeText(event.target.value)}
           placeholder="Добавить комментарий"
-          rows={3}
-          className="min-h-[7rem] flex-1 resize-none rounded-lg border border-white/10 bg-white/5 px-5 py-4 text-lg text-slate-100 outline-none transition placeholder:text-slate-400 focus:border-white/25"
+          rows={1}
+          className="h-[42px] min-h-[42px] flex-1 resize-none rounded-full bg-[#3f485a] px-4 py-[9px] text-[16px] leading-6 text-slate-100 outline-none transition placeholder:text-slate-300/70 focus:ring-1 focus:ring-slate-300/35 sm:h-12 sm:min-h-12 sm:px-5 sm:py-3 lg:h-14 lg:min-h-14"
         />
         <button
           type="submit"
           disabled={isSubmitting || !commentText.trim()}
-          className="inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#6A3BF2] text-white transition hover:bg-[#7C52F5] disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full bg-[#3f485a] text-slate-100 transition hover:bg-[#4a5468] disabled:cursor-not-allowed disabled:opacity-60 sm:h-12 sm:w-12 lg:h-14 lg:w-14"
           aria-label="Отправить комментарий"
         >
           <svg
@@ -435,7 +451,7 @@ function ClientCommentsSection({
             strokeWidth="2.4"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="h-6 w-6"
+            className="h-5 w-5 sm:h-6 sm:w-6"
             aria-hidden="true"
           >
             <path d="M3 11.5 20.5 4 13 21l-2.5-6.5L3 11.5Z" />
@@ -556,7 +572,8 @@ export function ClientPage() {
   return (
     <PageShell>
       <section className="w-full space-y-6">
-        <ClientHeader title={pageTitle} onBack={() => navigate(-1)} />
+        <ClientHeader onBack={() => navigate(-1)} />
+        <ClientInfoSection title={pageTitle} />
 
         {isLoading || isFetching ? (
           <div className="app-subtle-notice">

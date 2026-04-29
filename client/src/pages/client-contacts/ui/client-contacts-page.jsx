@@ -3,7 +3,8 @@ import {
   useGetClientByIdQuery,
   useGetClientContactsQuery,
 } from "../../../shared/api/tickets-api";
-import { ContactCard } from "../../../shared/ui/contact-card";
+import { TicketContactCard } from "../../ticket/ui/components/ticket-contact-card";
+import { TicketHeader } from "../../ticket/ui/components/ticket-header";
 import { PageShell } from "../../../shared/ui/page-shell";
 
 function normalizePhoneHref(phone) {
@@ -19,41 +20,6 @@ function normalizePhoneHref(phone) {
 function normalizeEmailHref(email) {
   const value = (email || "").trim();
   return value ? `mailto:${value}` : "";
-}
-
-function BackButton({ onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[#6A3BF2] text-white transition hover:bg-[#7C52F5]"
-      aria-label="Назад"
-    >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="h-5 w-5"
-        aria-hidden="true"
-      >
-        <path d="M15 18l-6-6 6-6" />
-      </svg>
-    </button>
-  );
-}
-
-function ClientContactsHeader({ title, onBack }) {
-  return (
-    <header className="rounded-3xl border border-white/10 bg-slate-950/35 p-6 shadow-xl shadow-black/20 backdrop-blur">
-      <BackButton onClick={onBack} />
-      <p className="mt-4 text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Контакты</p>
-      <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">{title}</h1>
-    </header>
-  );
 }
 
 export function ClientContactsPage() {
@@ -84,13 +50,10 @@ export function ClientContactsPage() {
   return (
     <PageShell>
       <section className="w-full space-y-6">
-        <ClientContactsHeader
-          title={pageTitle}
-          onBack={() => navigate(-1)}
-        />
+        <TicketHeader title={pageTitle} onBack={() => navigate(-1)} />
 
         {isClientLoading || isClientFetching ? (
-          <div className="app-subtle-notice">
+          <div className="app-subtle-notice px-1">
             <p className="text-sm text-slate-300">Загрузка клиента...</p>
           </div>
         ) : null}
@@ -114,9 +77,9 @@ export function ClientContactsPage() {
         ) : null}
 
         {!isContactsLoading && !isContactsFetching && !isContactsError && contacts.length > 0 ? (
-          <div className="grid gap-3">
+          <div className="grid gap-3 px-1">
             {contacts.map((contact) => (
-              <ContactCard
+              <TicketContactCard
                 key={contact.id}
                 contactName={contact.name}
                 contactPosition={contact.position}
@@ -128,8 +91,11 @@ export function ClientContactsPage() {
         ) : null}
 
         {!isContactsLoading && !isContactsFetching && !isContactsError && contacts.length === 0 ? (
-          <div className="app-subtle-notice">
-            <p className="text-sm text-slate-300">У этого клиента пока нет контактов.</p>
+          <div className="rounded-lg border border-white/20 bg-transparent px-5 py-4 text-left">
+            <p className="text-[16px] font-semibold leading-snug tracking-tight text-slate-50">Контактов пока нет</p>
+            <p className="mt-2 text-[16px] leading-snug text-slate-200/85">
+              У этого клиента пока нет контактов.
+            </p>
           </div>
         ) : null}
       </section>

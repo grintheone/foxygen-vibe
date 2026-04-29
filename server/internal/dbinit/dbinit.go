@@ -49,17 +49,33 @@ func EnsureSchemaWithSessionSettings(ctx context.Context, db *pgxpool.Pool, sche
 }
 
 func DatabaseNeedsImport(ctx context.Context, db *pgxpool.Pool) (bool, error) {
-	var hasData bool
+	for _, table := range []string{"accounts", "clients", "tickets", "agreements"} {
+		exists, err := tableExists(ctx, db, table)
+		if err != nil {
+			return false, fmt.Errorf("check existing application data: %w", err)
+		}
+		if !exists {
+			continue
+		}
 
-	if err := db.QueryRow(ctx, `
-		SELECT
-			EXISTS (SELECT 1 FROM accounts LIMIT 1)
-			OR EXISTS (SELECT 1 FROM clients LIMIT 1)
-			OR EXISTS (SELECT 1 FROM tickets LIMIT 1)
-			OR EXISTS (SELECT 1 FROM agreements LIMIT 1)
-	`).Scan(&hasData); err != nil {
-		return false, fmt.Errorf("check existing application data: %w", err)
+		var hasRows bool
+		query := fmt.Sprintf(`SELECT EXISTS (SELECT 1 FROM public.%s LIMIT 1)`, table)
+		if err := db.QueryRow(ctx, query).Scan(&hasRows); err != nil {
+			return false, fmt.Errorf("check existing application data: %w", err)
+		}
+		if hasRows {
+			return false, nil
+		}
 	}
 
-	return !hasData, nil
+	return true, nil
+}
+
+func tableExists(ctx context.Context, db *pgxpool.Pool, table string) (bool, error) {
+	var exists bool
+	if err := db.QueryRow(ctx, `SELECT to_regclass($1) IS NOT NULL`, "public."+table).Scan(&exists); err != nil {
+		return false, err
+	}
+
+	return exists, nil
 }

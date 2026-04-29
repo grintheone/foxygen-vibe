@@ -23,7 +23,12 @@ DECLARE
   created_status_id VARCHAR(128);
   inwork_status_id VARCHAR(128);
   closed_status_id VARCHAR(128);
+  skip_test_seed BOOLEAN := COALESCE(current_setting('foxygen.skip_test_data_seed', true), 'false')::BOOLEAN;
 BEGIN
+  IF skip_test_seed THEN
+    RETURN;
+  END IF;
+
   SELECT id
   INTO legacy_department_id
   FROM departments

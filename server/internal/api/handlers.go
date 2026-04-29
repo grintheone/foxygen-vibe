@@ -3380,6 +3380,14 @@ func logTicketSyncBadRequest(remoteAddr string, input syncTicketRequest, format 
 	)
 }
 
+func normalizeSyncedTicketReason(reason string, exists bool) string {
+	if !exists {
+		return ""
+	}
+
+	return reason
+}
+
 func decodeTicketSyncEnvelopeData(raw json.RawMessage) ([]syncEnvelopeTicket, error) {
 	trimmed := bytes.TrimSpace(raw)
 	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
@@ -4047,9 +4055,15 @@ func (s *Server) processTicketSyncRequest(ctx context.Context, remoteAddr string
 		log.Printf("validate ticket sync reason failed: %v", err)
 		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to create ticket"}
 	}
+	resolvedReason := normalizeSyncedTicketReason(input.Reason, reasonExists)
 	if !reasonExists {
-		logTicketSyncBadRequest(remoteAddr, input, "reason not found")
-		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "reason not found"}
+		log.Printf(
+			"ticket sync reason missing; continuing with empty reason remote=%q source=%q sync_key=%q requested_reason=%q",
+			remoteAddr,
+			input.Source,
+			input.SyncKey,
+			input.Reason,
+		)
 	}
 
 	if input.TicketType != "" {
@@ -4178,7 +4192,7 @@ func (s *Server) processTicketSyncRequest(ctx context.Context, remoteAddr string
 			NULLIF($3, ''),
 			$4,
 			$5,
-			$6,
+			NULLIF($6, ''),
 			$7,
 			$8,
 			'created',
@@ -4190,7 +4204,7 @@ func (s *Server) processTicketSyncRequest(ctx context.Context, remoteAddr string
 		WHERE sync_source IS NOT NULL AND sync_key IS NOT NULL
 		DO NOTHING
 		RETURNING id, number, COALESCE(status, '')
-	`, clientID, deviceID, input.TicketType, nullableUUID(externalAuthorID), departmentID, input.Reason, input.Description, nullableUUID(contactID), input.Urgent, input.Source, input.SyncKey).Scan(
+	`, clientID, deviceID, input.TicketType, nullableUUID(externalAuthorID), departmentID, resolvedReason, input.Description, nullableUUID(contactID), input.Urgent, input.Source, input.SyncKey).Scan(
 		&createdTicketID,
 		&createdTicketNo,
 		&createdStatus,

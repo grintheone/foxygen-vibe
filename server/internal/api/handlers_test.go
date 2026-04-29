@@ -320,6 +320,24 @@ func TestNormalizeTicketSyncAuthorFallsBackToLegacyFields(t *testing.T) {
 	}
 }
 
+func TestNormalizeSyncedTicketReasonPreservesKnownReason(t *testing.T) {
+	t.Parallel()
+
+	got := normalizeSyncedTicketReason("maintenance", true)
+	if got != "maintenance" {
+		t.Fatalf("expected known reason to be preserved, got %q", got)
+	}
+}
+
+func TestNormalizeSyncedTicketReasonDropsUnknownReason(t *testing.T) {
+	t.Parallel()
+
+	got := normalizeSyncedTicketReason("maintenance", false)
+	if got != "" {
+		t.Fatalf("expected unknown reason to be dropped, got %q", got)
+	}
+}
+
 func TestParseOptionalUUIDAllowsEmptyValue(t *testing.T) {
 	t.Parallel()
 

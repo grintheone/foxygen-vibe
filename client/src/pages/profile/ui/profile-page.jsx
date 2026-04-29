@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import fireIcon from "../../../assets/icons/fire-icon.svg";
 import ticketClosedIcon from "../../../assets/icons/ticket-closed.svg";
 import ticketDoneIcon from "../../../assets/icons/ticket-done.svg";
 import ticketAssignedIcon from "../../../assets/icons/ticket-assigned.svg";
@@ -191,13 +190,19 @@ function ProfileInfoRow({ label, value }) {
     );
 }
 
-function ProfileStatCard({ icon, iconAlt = "", label, value, toneClassName }) {
+function ProfileStatCard({ icon, iconAlt = "", iconEmoji = "", label, value, toneClassName }) {
     return (
         <article className="rounded-3xl border border-white/10 bg-slate-950/35 p-5 shadow-lg shadow-black/10">
             <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-semibold text-slate-300">{label}</p>
                 <span className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl ${toneClassName}`}>
-                    <img src={icon} alt={iconAlt} className="h-5 w-5" />
+                    {iconEmoji ? (
+                        <span aria-hidden="true" className="text-lg leading-none">
+                            {iconEmoji}
+                        </span>
+                    ) : (
+                        <img src={icon} alt={iconAlt} className="h-5 w-5" />
+                    )}
                 </span>
             </div>
             <p className="mt-4 text-3xl font-bold tracking-tight text-white">{value}</p>
@@ -626,8 +631,7 @@ export function ProfilePage() {
                                     toneClassName="border border-emerald-200/25 bg-emerald-400/15"
                                 />
                                 <ProfileStatCard
-                                    icon={fireIcon}
-                                    iconAlt=""
+                                    iconEmoji="🔥"
                                     label="Просрочено"
                                     value={profile.ticketStats?.overdue || 0}
                                     toneClassName="border border-rose-200/25 bg-rose-500/15"

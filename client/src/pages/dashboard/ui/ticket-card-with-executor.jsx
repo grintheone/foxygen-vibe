@@ -1,4 +1,3 @@
-import fireIcon from "../../../assets/icons/fire-icon.svg";
 import ticketAssignedIcon from "../../../assets/icons/ticket-assigned.svg";
 import ticketCanceledIcon from "../../../assets/icons/ticket-canceled.svg";
 import ticketClosedIcon from "../../../assets/icons/ticket-closed.svg";
@@ -23,7 +22,7 @@ export function TicketCardWithExecutor({ ticket, executor, onOpenTicket }) {
     const deadlineDisplay = resolveTicketDeadlineDisplay(ticket);
     const deadlineValue = deadlineDisplay.shouldUseFireIcon ? (
         <span className="inline-flex items-center gap-1">
-            <img src={fireIcon} alt="" className="h-4 w-4" />
+            <span aria-hidden="true">🔥</span>
             <span>{deadlineDisplay.dateValue}</span>
         </span>
     ) : deadlineDisplay.isFinishedDate || deadlineDisplay.isPlaceholder ? (

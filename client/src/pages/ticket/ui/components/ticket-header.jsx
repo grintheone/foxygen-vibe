@@ -1,40 +1,39 @@
-export function TicketHeader({ ticketNumber, isInWork, statusIcon, statusAlt, finishedDate, onBack }) {
+function BackButton({ onClick }) {
     return (
-        <header className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center rounded-3xl border border-white/10 bg-slate-950/35 p-6 shadow-xl shadow-black/20 backdrop-blur">
-            <div className="justify-self-start">
-                <button
-                    type="button"
-                    onClick={onBack}
-                    aria-label="Назад в дэшборд"
-                    className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[#6A3BF2] text-white transition hover:bg-[#7C52F5]"
-                >
-                    <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="h-5 w-5"
-                        aria-hidden="true"
-                    >
-                        <path d="M15 18l-6-6 6-6" />
-                    </svg>
-                </button>
-            </div>
+        <button
+            type="button"
+            onClick={onClick}
+            aria-label="Назад"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#2F3545] text-[#94A3B8] transition hover:bg-[#394055] sm:h-12 sm:w-12 lg:h-14 lg:w-14"
+        >
+            <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="h-5 w-5 sm:h-6 sm:w-6 lg:h-7 lg:w-7"
+                aria-hidden="true"
+            >
+                <path d="M15 18l-6-6 6-6" />
+            </svg>
+        </button>
+    );
+}
 
-            <div className="justify-self-center text-center">
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Тикет</p>
-                <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">Заявка #{ticketNumber}</h1>
-            </div>
+export function TicketHeader({ title, ticketNumber, onBack }) {
+    const headerTitle = title || `Тикет #${ticketNumber}`;
 
-            <div className="flex items-center justify-self-end gap-2">
-                <span className="relative inline-flex h-8 w-8 items-center justify-center">
-                    {isInWork ? <span className="ticket-inwork-ripple" aria-hidden="true" /> : null}
-                    <img src={statusIcon} alt={statusAlt} className="relative z-[1] h-8 w-8" />
-                </span>
-                {finishedDate ? <p className="text-sm font-semibold text-slate-100">{finishedDate}</p> : null}
+    return (
+        <header className="bg-transparent px-1 pt-2">
+            <div className="grid grid-cols-[auto_1fr_auto] items-center gap-4 sm:gap-6 lg:gap-8">
+                <BackButton onClick={onBack} />
+                <h1 className="justify-self-center text-center text-sm font-semibold tracking-[0.18em] text-[#94A3B8] sm:text-base lg:text-lg xl:text-xl">
+                    {headerTitle}
+                </h1>
+                <div className="h-11 w-11 shrink-0 sm:h-12 sm:w-12 lg:h-14 lg:w-14" aria-hidden="true" />
             </div>
         </header>
     );

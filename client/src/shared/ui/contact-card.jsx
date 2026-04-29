@@ -37,7 +37,14 @@ function MailIcon() {
   );
 }
 
-export function ContactCard({ className = "", contactName, contactPosition, phoneHref, emailHref }) {
+export function ContactCard({
+  actionButtonClassName = "",
+  className = "",
+  contactName,
+  contactPosition,
+  phoneHref,
+  emailHref,
+}) {
   const hasContactData = Boolean(contactName?.trim() || contactPosition?.trim() || phoneHref || emailHref);
 
   if (!hasContactData) {
@@ -57,7 +64,7 @@ export function ContactCard({ className = "", contactName, contactPosition, phon
           <a
             href={phoneHref}
             aria-label={`Позвонить ${contactName || "контакту"}`}
-            className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white transition hover:border-white/30 hover:bg-white/10 sm:h-16 sm:w-16"
+            className={`inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white transition hover:border-white/30 hover:bg-white/10 sm:h-16 sm:w-16 ${actionButtonClassName}`.trim()}
           >
             <PhoneIcon />
           </a>
@@ -66,7 +73,7 @@ export function ContactCard({ className = "", contactName, contactPosition, phon
           <a
             href={emailHref}
             aria-label={`Написать ${contactName || "контакту"}`}
-            className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white transition hover:border-white/30 hover:bg-white/10 sm:h-16 sm:w-16"
+            className={`inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white transition hover:border-white/30 hover:bg-white/10 sm:h-16 sm:w-16 ${actionButtonClassName}`.trim()}
           >
             <MailIcon />
           </a>

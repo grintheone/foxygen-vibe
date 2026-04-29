@@ -91,19 +91,26 @@ export function TicketWorkResultSection({ ticket, workDuration, onDownloadAttach
     }
 
     return (
-        <section className="space-y-3 rounded-3xl border border-emerald-300/25 bg-emerald-500/10 p-5 sm:p-6">
+        <section
+            className="space-y-4 rounded-lg border border-[#AADB1E]/35 p-4 shadow-xl shadow-black/20 sm:p-5"
+            style={{
+                background: "linear-gradient(180deg, rgba(170, 219, 30, 0.22) 0%, rgba(16, 185, 129, 0.12) 100%)",
+            }}
+        >
             <div className="flex items-center justify-between gap-4">
-                <h2 className="text-xl font-semibold tracking-tight text-emerald-100 sm:text-2xl">Результат работы</h2>
-                <p className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-100 sm:text-lg">
+                <h2 className="text-[16px] font-semibold tracking-tight text-[#AADB1E] sm:text-[18px] lg:text-[20px]">
+                    Результат работы
+                </h2>
+                <p className="inline-flex items-center gap-2 text-[16px] font-semibold text-[#AADB1E] sm:text-[18px] lg:text-[20px]">
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
-                        strokeWidth="2.2"
+                        strokeWidth="1.9"
                         strokeLinecap="round"
                         strokeLinejoin="round"
-                        className="h-6 w-6"
+                        className="h-5 w-5 sm:h-6 sm:w-6"
                         aria-hidden="true"
                     >
                         <circle cx="12" cy="12" r="8" />
@@ -113,30 +120,10 @@ export function TicketWorkResultSection({ ticket, workDuration, onDownloadAttach
                 </p>
             </div>
 
-            <div className="rounded-2xl border border-white/15 bg-slate-900/35 p-5 shadow-lg shadow-black/20 backdrop-blur-sm">
-                <div className="flex items-start gap-4">
-                    <UserAvatar
-                        avatarUrl={ticket.executorAvatarUrl}
-                        userId={ticket.executor}
-                        name={ticket.executorName}
-                        className="h-12 w-12"
-                        iconClassName="h-6 w-6"
-                    />
-                    <div className="min-w-0">
-                        <p className="text-lg font-semibold leading-tight text-slate-100 sm:text-2xl">
-                            {ticket.executorName || "Исполнитель не назначен"}
-                        </p>
-                        <p className="text-sm text-slate-400 sm:text-xl">{ticket.executorDepartment || "Отдел не указан"}</p>
-                    </div>
-                </div>
-
-                <p className="mt-4 text-sm leading-relaxed text-slate-200 sm:text-lg">{ticket.result}</p>
-            </div>
-
             {attachments.length > 0 ? (
                 <div className="space-y-3">
-                    <div className="-mx-5 overflow-x-auto pb-2 sm:-mx-6">
-                        <div className="flex min-w-full gap-3 px-5 sm:px-6">
+                    <div className="-mx-4 overflow-x-auto pb-2 sm:-mx-5">
+                        <div className="flex min-w-full gap-3 px-4 sm:px-5">
                             {attachments.map((attachment) => {
                                 const previewUrl = previewUrls[attachment.id];
 
@@ -148,7 +135,7 @@ export function TicketWorkResultSection({ ticket, workDuration, onDownloadAttach
                                             void handleDownload(attachment);
                                         }}
                                         disabled={!attachment.downloadUrl}
-                                        className="flex h-60 w-44 shrink-0 flex-col overflow-hidden rounded-2xl border border-white/15 bg-slate-900/25 text-left transition hover:bg-slate-900/40 disabled:cursor-not-allowed disabled:opacity-60"
+                                        className="flex h-60 w-44 shrink-0 flex-col overflow-hidden rounded-lg border border-white/15 bg-slate-900/25 text-left transition hover:bg-slate-900/40 disabled:cursor-not-allowed disabled:opacity-60"
                                     >
                                         <div className="flex h-44 w-44 items-center justify-center bg-slate-950/40 p-3">
                                             {previewUrl ? (
@@ -173,16 +160,34 @@ export function TicketWorkResultSection({ ticket, workDuration, onDownloadAttach
                             })}
                         </div>
                     </div>
-
-                    <p className="text-center text-xs uppercase tracking-[0.2em] text-emerald-100/80">
-                        Нажмите на вложение, чтобы скачать
-                    </p>
                 </div>
             ) : (
-                <div className="rounded-2xl border border-dashed border-white/15 bg-slate-900/15 px-4 py-5 text-sm text-slate-200">
+                <div className="rounded-lg border border-dashed border-white/15 bg-slate-900/15 px-4 py-5 text-sm text-slate-200">
                     Вложения появятся после загрузки отчета.
                 </div>
             )}
+
+            <div className="border-t border-white/10 pt-4">
+                <div className="flex items-start gap-4">
+                    <UserAvatar
+                        avatarUrl={ticket.executorAvatarUrl}
+                        userId={ticket.executor}
+                        name={ticket.executorName}
+                        className="h-12 w-12"
+                        iconClassName="h-6 w-6"
+                    />
+                    <div className="min-w-0">
+                        <p className="text-[16px] font-semibold leading-snug tracking-tight text-slate-50 sm:text-[18px]">
+                            {ticket.executorName || "Исполнитель не назначен"}
+                        </p>
+                        <p className="mt-1 text-[16px] leading-snug text-slate-200/80">
+                            {ticket.executorDepartment || "Отдел не указан"}
+                        </p>
+                    </div>
+                </div>
+
+                <p className="mt-4 text-[16px] leading-relaxed text-slate-100">{ticket.result}</p>
+            </div>
 
             {downloadError ? <p className="text-xs text-rose-100">{downloadError}</p> : null}
         </section>

@@ -3,7 +3,6 @@ import ticketClosedIcon from "../../../../assets/icons/ticket-closed.svg";
 import ticketDoneIcon from "../../../../assets/icons/ticket-done.svg";
 import ticketInWorkIcon from "../../../../assets/icons/ticket-inwork.svg";
 import { UserAvatar } from "../../../../shared/ui/user-avatar";
-import { ticketSurfaceClassName } from "./ticket-surface";
 
 function formatHistoryDate(value) {
     if (!value) {
@@ -97,9 +96,11 @@ export function TicketHistorySection({ ticket }) {
     }
 
     return (
-        <section className={`${ticketSurfaceClassName} space-y-5 p-5 sm:p-6`}>
-            <h2 className="text-xl font-semibold tracking-tight text-slate-300 sm:text-2xl">История тикета</h2>
-            <div className="space-y-6">
+        <section className="space-y-4 px-1">
+            <h2 className="text-[16px] font-semibold tracking-tight text-[#BCC2CA] sm:text-[18px] lg:text-[20px]">
+                История тикета
+            </h2>
+            <div className="space-y-4">
                 {historyEntries.map((entry, index) => {
                     const isLast = index === historyEntries.length - 1;
 
@@ -126,7 +127,7 @@ export function TicketHistorySection({ ticket }) {
                                 </div>
                                 <div className="relative flex min-h-[4.25rem] w-6 justify-center">
                                     {!isLast ? (
-                                        <span className="absolute left-1/2 top-10 h-[calc(100%-1.25rem)] w-0.5 -translate-x-1/2 bg-slate-400/60" />
+                                        <span className="absolute left-1/2 top-[2.25rem] h-[calc(100%-1.25rem)] w-0.5 -translate-x-1/2 bg-slate-400/60" />
                                     ) : null}
                                     <img src={entry.icon} alt="" className="relative z-[1] mt-1 h-6 w-6" />
                                 </div>
