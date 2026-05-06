@@ -3,6 +3,35 @@ import { useGetDepartmentsQuery } from "../../../../shared/api/tickets-api";
 import { SelectField } from "../../../../shared/ui/select-field";
 import { SlideOverSheet } from "../../../../shared/ui/slide-over-sheet";
 
+const supportedImageMimeTypes = new Set([
+    "image/avif",
+    "image/bmp",
+    "image/gif",
+    "image/heic",
+    "image/heif",
+    "image/jpeg",
+    "image/png",
+    "image/svg+xml",
+    "image/tiff",
+    "image/webp",
+]);
+const supportedImageExtensions = new Set([
+    "avif",
+    "bmp",
+    "gif",
+    "heic",
+    "heif",
+    "jpeg",
+    "jpg",
+    "png",
+    "svg",
+    "tif",
+    "tiff",
+    "webp",
+]);
+const supportedImageAcceptValue =
+    ".avif,.bmp,.gif,.heic,.heif,.jpeg,.jpg,.png,.svg,.tif,.tiff,.webp,image/avif,image/bmp,image/gif,image/heic,image/heif,image/jpeg,image/png,image/svg+xml,image/tiff,image/webp";
+
 function createPreviewItems(files) {
     return files.map((file) => ({
         downloadUrl: "",
@@ -12,6 +41,17 @@ function createPreviewItems(files) {
         serverAttachmentId: "",
         uploadStatus: "pending",
     }));
+}
+
+function isSupportedImageFile(file) {
+    const normalizedType = String(file?.type || "").trim().toLowerCase();
+    if (normalizedType && supportedImageMimeTypes.has(normalizedType)) {
+        return true;
+    }
+
+    const fileName = String(file?.name || "");
+    const ext = fileName.includes(".") ? fileName.split(".").pop().trim().toLowerCase() : "";
+    return supportedImageExtensions.has(ext);
 }
 
 function resolveUploadStatusClassName(status) {
@@ -116,10 +156,23 @@ export function TicketReportSheet({
             return;
         }
 
-        const previewItems = createPreviewItems(selectedFiles);
+        const validFiles = selectedFiles.filter((file) => isSupportedImageFile(file));
+        const rejectedFilesCount = selectedFiles.length - validFiles.length;
+
+        if (rejectedFilesCount > 0) {
+            setLocalError("Можно загружать только изображения AVIF, BMP, GIF, HEIC, HEIF, JPG, PNG, SVG, TIFF и WebP.");
+        } else {
+            setLocalError("");
+        }
+
+        if (validFiles.length === 0) {
+            event.target.value = "";
+            return;
+        }
+
+        const previewItems = createPreviewItems(validFiles);
         setMediaPreviews((previous) => [...previous, ...previewItems]);
         setIsSubmitted(false);
-        setLocalError("");
         event.target.value = "";
     }
 
@@ -367,7 +420,7 @@ export function TicketReportSheet({
                             id="ticket-report-media"
                             name="media"
                             type="file"
-                            accept="image/*"
+                            accept={supportedImageAcceptValue}
                             multiple
                             disabled={isSubmitting || isSubmitted}
                             className="sr-only"

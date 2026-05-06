@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -102,14 +103,21 @@ func (s *Server) handleTicketAttachmentUpload(w http.ResponseWriter, r *http.Req
 		http.Error(w, "file name is required", http.StatusBadRequest)
 		return
 	}
-	if fileHeader.Size <= 0 {
+
+	fileBytes, err := io.ReadAll(file)
+	if err != nil {
+		http.Error(w, "failed to read uploaded file", http.StatusBadRequest)
+		return
+	}
+	if len(fileBytes) == 0 {
 		http.Error(w, "file must not be empty", http.StatusBadRequest)
 		return
 	}
 
-	mediaType := strings.TrimSpace(fileHeader.Header.Get("Content-Type"))
-	if mediaType == "" {
-		mediaType = "application/octet-stream"
+	mediaType, ok := detectSupportedImageUploadMediaType(fileBytes)
+	if !ok {
+		http.Error(w, "only supported image formats can be uploaded", http.StatusUnsupportedMediaType)
+		return
 	}
 
 	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(fileName)), ".")
@@ -140,7 +148,7 @@ func (s *Server) handleTicketAttachmentUpload(w http.ResponseWriter, r *http.Req
 	}
 
 	objectKey := storage.TicketAttachmentObjectKey(ticketID.String(), attachmentID, fileName)
-	uploaded, err := s.storage.PutObject(ctx, objectKey, file, fileHeader.Size, mediaType)
+	uploaded, err := s.storage.PutObject(ctx, objectKey, bytes.NewReader(fileBytes), int64(len(fileBytes)), mediaType)
 	if err != nil {
 		log.Printf("upload attachment to MinIO failed: %v", err)
 		http.Error(w, "failed to upload attachment", http.StatusBadGateway)

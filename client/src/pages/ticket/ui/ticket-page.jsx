@@ -264,7 +264,6 @@ export function TicketPage() {
                             <TicketWorkResultSection
                                 ticket={ticket}
                                 workDuration={workDuration}
-                                onDownloadAttachment={handleDownloadAttachment}
                             />
                         ) : null}
 

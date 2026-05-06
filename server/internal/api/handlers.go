@@ -37,10 +37,16 @@ const (
 	syncDeviceAgreementNS      = "foxygen-vibe/device-binding-agreements"
 )
 
-var supportedProfileAvatarMediaTypes = map[string]struct{}{
+var supportedImageUploadMediaTypes = map[string]struct{}{
+	"image/avif":    {},
+	"image/bmp":     {},
 	"image/gif":  {},
+	"image/heic":    {},
+	"image/heif":    {},
 	"image/jpeg": {},
 	"image/png":  {},
+	"image/svg+xml": {},
+	"image/tiff":    {},
 	"image/webp": {},
 }
 
@@ -529,9 +535,84 @@ func buildVersionedProfileAvatarURL(userID string, version int64) string {
 	return buildProfileAvatarDownloadURL(userID) + "?v=" + strconv.FormatInt(version, 10)
 }
 
-func isSupportedProfileAvatarMediaType(mediaType string) bool {
-	_, ok := supportedProfileAvatarMediaTypes[strings.TrimSpace(strings.ToLower(mediaType))]
+func isSupportedImageUploadMediaType(mediaType string) bool {
+	_, ok := supportedImageUploadMediaTypes[strings.TrimSpace(strings.ToLower(mediaType))]
 	return ok
+}
+
+func detectSupportedImageUploadMediaType(fileBytes []byte) (string, bool) {
+	if len(fileBytes) == 0 {
+		return "", false
+	}
+
+	sniffLength := 512
+	if len(fileBytes) < sniffLength {
+		sniffLength = len(fileBytes)
+	}
+
+	mediaType := strings.TrimSpace(strings.ToLower(http.DetectContentType(fileBytes[:sniffLength])))
+	if isSupportedImageUploadMediaType(mediaType) {
+		return mediaType, true
+	}
+
+	if isSVGImage(fileBytes) {
+		return "image/svg+xml", true
+	}
+	if isBMPImage(fileBytes) {
+		return "image/bmp", true
+	}
+	if isTIFFImage(fileBytes) {
+		return "image/tiff", true
+	}
+	if mediaType, ok := detectISOBMFFImageMediaType(fileBytes); ok {
+		return mediaType, true
+	}
+
+	return "", false
+}
+
+func isSVGImage(fileBytes []byte) bool {
+	const inspectLimit = 1024
+	limit := len(fileBytes)
+	if limit > inspectLimit {
+		limit = inspectLimit
+	}
+
+	content := strings.TrimSpace(strings.ToLower(string(fileBytes[:limit])))
+	return strings.Contains(content, "<svg")
+}
+
+func isBMPImage(fileBytes []byte) bool {
+	return len(fileBytes) >= 2 && fileBytes[0] == 'B' && fileBytes[1] == 'M'
+}
+
+func isTIFFImage(fileBytes []byte) bool {
+	if len(fileBytes) < 4 {
+		return false
+	}
+
+	return (fileBytes[0] == 'I' && fileBytes[1] == 'I' && fileBytes[2] == 42 && fileBytes[3] == 0) ||
+		(fileBytes[0] == 'M' && fileBytes[1] == 'M' && fileBytes[2] == 0 && fileBytes[3] == 42)
+}
+
+func detectISOBMFFImageMediaType(fileBytes []byte) (string, bool) {
+	if len(fileBytes) < 16 || string(fileBytes[4:8]) != "ftyp" {
+		return "", false
+	}
+
+	for start := 8; start+4 <= len(fileBytes); start += 4 {
+		brand := string(fileBytes[start : start+4])
+		switch brand {
+		case "avif", "avis":
+			return "image/avif", true
+		case "heic", "heix", "hevc", "hevx":
+			return "image/heic", true
+		case "heif", "mif1", "msf1":
+			return "image/heif", true
+		}
+	}
+
+	return "", false
 }
 
 func (s *Server) handleProfileAvatarUpload(w http.ResponseWriter, r *http.Request) {
@@ -579,13 +660,9 @@ func (s *Server) handleProfileAvatarUpload(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	sniffLength := 512
-	if len(fileBytes) < sniffLength {
-		sniffLength = len(fileBytes)
-	}
-	mediaType := http.DetectContentType(fileBytes[:sniffLength])
-	if !isSupportedProfileAvatarMediaType(mediaType) {
-		http.Error(w, "only JPG, PNG, GIF, and WebP images are supported", http.StatusUnsupportedMediaType)
+	mediaType, ok := detectSupportedImageUploadMediaType(fileBytes)
+	if !ok {
+		http.Error(w, "only supported image formats can be uploaded", http.StatusUnsupportedMediaType)
 		return
 	}
 
