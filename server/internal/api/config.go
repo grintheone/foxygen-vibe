@@ -19,6 +19,7 @@ type authConfig struct {
 
 type syncConfig struct {
 	sharedSecret string
+	logFilePath  string
 }
 
 func (c syncConfig) Enabled() bool {
@@ -166,8 +167,14 @@ func resolveSyncConfig() (syncConfig, error) {
 		return syncConfig{}, err
 	}
 
+	logFilePath := getConfigValue(fileEnv, "TICKET_SYNC_LOG_FILE")
+	if logFilePath == "" {
+		logFilePath = defaultSyncLogFilePath
+	}
+
 	return syncConfig{
 		sharedSecret: getConfigValue(fileEnv, "TICKET_SYNC_SECRET"),
+		logFilePath:  logFilePath,
 	}, nil
 }
 

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"time"
@@ -24,6 +25,8 @@ type Server struct {
 	queries                         accountStore
 	auth                            authConfig
 	sync                            syncConfig
+	syncLogCloser                   io.Closer
+	syncLogger                      *log.Logger
 	storage                         *storage.Client
 	requesterRoleLookup             func(context.Context, pgtype.UUID) (string, error)
 	editorAccessCheck               func(http.ResponseWriter, *http.Request) (pgtype.UUID, bool)
@@ -103,6 +106,13 @@ func New() (*Server, error) {
 		sync:               sync,
 	}
 
+	syncLogger, syncLogCloser, err := newSyncLogger(sync.logFilePath)
+	if err != nil {
+		return nil, err
+	}
+	api.syncLogger = syncLogger
+	api.syncLogCloser = syncLogCloser
+
 	if storageConfig.Enabled() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -154,6 +164,9 @@ func (s *Server) connectStorage(ctx context.Context, config storage.Config) {
 func (s *Server) Close() {
 	if s.db != nil {
 		s.db.Close()
+	}
+	if s.syncLogCloser != nil {
+		_ = s.syncLogCloser.Close()
 	}
 }
 

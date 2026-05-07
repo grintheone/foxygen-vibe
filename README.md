@@ -52,6 +52,7 @@ Useful notes:
 - The first-start import is controlled by `BOOTSTRAP_IMPORT_ENABLED=true|false`.
 - Imported users receive the temporary password from `IMPORT_DEFAULT_PASSWORD`.
 - If the database already contains app data, the bootstrap step skips the import and starts the API normally.
+- Sync webhook logs are written to `TICKET_SYNC_LOG_FILE` inside the server container. In the production compose file this defaults to `/app/logs/sync.log` on the `server-sync-logs` volume.
 - Use the local `with-minio` profile only when you are not connecting to an existing S3-compatible storage service.
 - Before deployment, ask infrastructure which RFC1918 ranges are already in use on that host and pick a Docker subnet outside them.
 
@@ -70,9 +71,11 @@ The backend now exposes a webhook-style endpoint at `/api/v1/sync` for server-to
 
 1. Set a shared secret in `server/.env`:
    `TICKET_SYNC_SECRET=<sync-shared-secret>`
-2. Start the API from `server/`:
+2. Optionally choose a sync log file path:
+   `TICKET_SYNC_LOG_FILE=logs/sync.log`
+3. Start the API from `server/`:
    `go run .`
-3. Send `POST` requests to your server with the `X-Sync-Secret` header and JSON like:
+4. Send `POST` requests to your server with the `X-Sync-Secret` header and JSON like:
    ```json
    {
      "author": "00000000-0000-0000-0000-000000000004",
