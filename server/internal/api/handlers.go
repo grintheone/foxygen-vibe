@@ -103,20 +103,23 @@ type profileTicketStatsResponse struct {
 }
 
 type syncTicketRequest struct {
-	Author              string `json:"author"`
-	AuthorTitle         string `json:"author_title"`
-	Client              string `json:"client"`
-	ContactPerson       string `json:"contact_person"`
-	Department          string `json:"department"`
-	Description         string `json:"description"`
-	Device              string `json:"device"`
-	ExternalAuthorID    string `json:"external_author_id"`
-	ExternalAuthorTitle string `json:"external_author_title"`
-	Reason              string `json:"reason"`
-	Source              string `json:"source"`
-	SyncKey             string `json:"sync_key"`
-	TicketType          string `json:"ticket_type"`
-	Urgent              bool   `json:"urgent"`
+	Author              string          `json:"author"`
+	AuthorTitle         string          `json:"author_title"`
+	AssignedBy          *syncTicketUser `json:"assignedBy"`
+	Client              string          `json:"client"`
+	ContactPerson       string          `json:"contact_person"`
+	Department          string          `json:"department"`
+	Description         string          `json:"description"`
+	Device              string          `json:"device"`
+	Executor            *syncTicketUser `json:"executor"`
+	ExternalAuthorID    string          `json:"external_author_id"`
+	ExternalAuthorTitle string          `json:"external_author_title"`
+	Reason              string          `json:"reason"`
+	Source              string          `json:"source"`
+	Status              string          `json:"status"`
+	SyncKey             string          `json:"sync_key"`
+	TicketType          string          `json:"ticket_type"`
+	Urgent              bool            `json:"urgent"`
 }
 
 type syncTicketResponse struct {
@@ -149,6 +152,15 @@ type syncEnvelopeNamedRef struct {
 	Title string `json:"title"`
 }
 
+type syncTicketUser struct {
+	ID         string                `json:"id"`
+	Login      string                `json:"login"`
+	Password   string                `json:"password"`
+	Title      string                `json:"title"`
+	Department *syncEnvelopeNamedRef `json:"department"`
+	Email      string                `json:"email"`
+}
+
 type syncEnvelopeUser struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
@@ -156,6 +168,7 @@ type syncEnvelopeUser struct {
 
 type syncEnvelopeTicket struct {
 	ID            string                `json:"id"`
+	AssignedBy    *syncTicketUser       `json:"assignedBy"`
 	TicketType    string                `json:"ticketType"`
 	Author        *syncEnvelopeUser     `json:"author"`
 	Client        *syncEnvelopeRef      `json:"client"`
@@ -163,7 +176,9 @@ type syncEnvelopeTicket struct {
 	Department    *syncEnvelopeNamedRef `json:"department"`
 	Description   string                `json:"description"`
 	Device        *syncEnvelopeRef      `json:"device"`
+	Executor      *syncTicketUser       `json:"executor"`
 	Reason        string                `json:"reason"`
+	Status        string                `json:"status"`
 	Urgent        bool                  `json:"urgent"`
 }
 
@@ -202,6 +217,17 @@ type syncContactRequest struct {
 	SendAllNotifications bool   `json:"sendAllNotifications"`
 }
 
+type syncClassificatorRequest struct {
+	ID                      string          `json:"id"`
+	Title                   string          `json:"title"`
+	Manufacturer            json.RawMessage `json:"manufacturer"`
+	ResearchType            json.RawMessage `json:"researchType"`
+	RegistrationCertificate json.RawMessage `json:"registrationCertificate"`
+	MaintenanceRegulations  json.RawMessage `json:"maintenanceRegulations"`
+	Attachments             []string        `json:"attachments"`
+	Images                  []string        `json:"images"`
+}
+
 type syncContactResponse struct {
 	Client  string `json:"client"`
 	Created bool   `json:"created"`
@@ -209,9 +235,22 @@ type syncContactResponse struct {
 	Name    string `json:"name"`
 }
 
+type syncClassificatorResponse struct {
+	Created      bool    `json:"created"`
+	ID           string  `json:"id"`
+	Manufacturer *string `json:"manufacturer,omitempty"`
+	ResearchType *string `json:"researchType,omitempty"`
+	Title        string  `json:"title"`
+}
+
 type syncContactEnvelopeResponse struct {
 	Type string              `json:"type"`
 	Data syncContactResponse `json:"data"`
+}
+
+type syncClassificatorEnvelopeResponse struct {
+	Type string                    `json:"type"`
+	Data syncClassificatorResponse `json:"data"`
 }
 
 type syncDeviceResponse struct {
@@ -3532,12 +3571,135 @@ func normalizeTicketSyncAuthor(author string, authorTitle string, legacyAuthor s
 	return strings.TrimSpace(legacyAuthor), strings.TrimSpace(legacyAuthorTitle)
 }
 
-func normalizeSyncedTicketReason(reason string, exists bool) string {
-	if !exists {
-		return ""
+func normalizeSyncTicketUser(user *syncTicketUser) *syncTicketUser {
+	if user == nil {
+		return nil
 	}
 
-	return reason
+	normalized := &syncTicketUser{
+		ID:       strings.TrimSpace(user.ID),
+		Login:    strings.TrimSpace(user.Login),
+		Password: strings.TrimSpace(user.Password),
+		Title:    strings.TrimSpace(user.Title),
+		Email:    strings.TrimSpace(strings.ToLower(user.Email)),
+	}
+
+	if user.Department != nil {
+		departmentID := strings.TrimSpace(user.Department.ID)
+		departmentTitle := strings.TrimSpace(user.Department.Title)
+		if departmentID != "" || departmentTitle != "" {
+			normalized.Department = &syncEnvelopeNamedRef{
+				ID:    departmentID,
+				Title: departmentTitle,
+			}
+		}
+	}
+
+	if normalized.ID == "" &&
+		normalized.Login == "" &&
+		normalized.Password == "" &&
+		normalized.Title == "" &&
+		normalized.Email == "" &&
+		normalized.Department == nil {
+		return nil
+	}
+
+	return normalized
+}
+
+func normalizeSyncTicketStatus(status string, executor *syncTicketUser, assignedBy *syncTicketUser) string {
+	status = strings.TrimSpace(status)
+	if status != "" {
+		return status
+	}
+	if executor != nil || assignedBy != nil {
+		return "assigned"
+	}
+
+	return "created"
+}
+
+func splitSyncTicketUserTitle(title string) (string, string) {
+	parts := strings.Fields(strings.TrimSpace(title))
+	switch len(parts) {
+	case 0:
+		return "", ""
+	case 1:
+		return parts[0], ""
+	default:
+		return parts[0], strings.Join(parts[1:], " ")
+	}
+}
+
+func ticketReasonLookupCandidates(reason string) []string {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		return nil
+	}
+
+	candidates := []string{reason}
+	appendIfMissing := func(candidate string) {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			return
+		}
+		for _, existing := range candidates {
+			if existing == candidate {
+				return
+			}
+		}
+		candidates = append(candidates, candidate)
+	}
+
+	switch reason {
+	case "maintenance", "mainenance":
+		appendIfMissing("maintanence")
+	case "maintanence":
+		appendIfMissing("maintenance")
+	case "repairs":
+		appendIfMissing("repair")
+	case "repair":
+		appendIfMissing("repairs")
+	}
+
+	return candidates
+}
+
+func resolveKnownTicketReasonID(requested string, exists func(string) bool) string {
+	for _, candidate := range ticketReasonLookupCandidates(requested) {
+		if exists(candidate) {
+			return candidate
+		}
+	}
+
+	return ""
+}
+
+func (s *Server) ticketReasonExistsByID(ctx context.Context, reasonID string) (bool, error) {
+	if s.editorTicketReasonExists != nil {
+		return s.editorTicketReasonExists(ctx, reasonID)
+	}
+
+	var reasonExists bool
+	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM ticket_reasons WHERE id = $1)`, reasonID).Scan(&reasonExists); err != nil {
+		return false, err
+	}
+
+	return reasonExists, nil
+}
+
+func (s *Server) resolveTicketReasonID(ctx context.Context, requested string) (string, bool, error) {
+	for _, candidate := range ticketReasonLookupCandidates(requested) {
+		exists, err := s.ticketReasonExistsByID(ctx, candidate)
+		if err != nil {
+			return "", false, err
+		}
+		if exists {
+			return candidate, true, nil
+		}
+	}
+
+	return "", false, nil
 }
 
 func decodeTicketSyncEnvelopeData(raw json.RawMessage) ([]syncEnvelopeTicket, error) {
@@ -3592,16 +3754,22 @@ func mapEnvelopeTicketToSyncRequest(item syncEnvelopeTicket) syncTicketRequest {
 		deviceID = strings.TrimSpace(item.Device.ID)
 	}
 
+	assignedBy := normalizeSyncTicketUser(item.AssignedBy)
+	executor := normalizeSyncTicketUser(item.Executor)
+
 	return syncTicketRequest{
 		Author:        authorID,
 		AuthorTitle:   authorTitle,
+		AssignedBy:    assignedBy,
 		Client:        clientID,
 		ContactPerson: contactID,
 		Department:    department,
 		Description:   strings.TrimSpace(item.Description),
 		Device:        deviceID,
+		Executor:      executor,
 		Reason:        strings.TrimSpace(item.Reason),
 		Source:        "tickets",
+		Status:        normalizeSyncTicketStatus(item.Status, executor, assignedBy),
 		SyncKey:       strings.TrimSpace(item.ID),
 		TicketType:    strings.TrimSpace(item.TicketType),
 		Urgent:        item.Urgent,
@@ -3678,6 +3846,20 @@ func decodeContactSyncEnvelopeData(raw json.RawMessage) (syncContactRequest, err
 	return input, nil
 }
 
+func decodeClassificatorSyncEnvelopeData(raw json.RawMessage) (syncClassificatorRequest, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return syncClassificatorRequest{}, errors.New("classificator data is required")
+	}
+
+	var input syncClassificatorRequest
+	if err := json.Unmarshal(trimmed, &input); err != nil {
+		return syncClassificatorRequest{}, err
+	}
+
+	return input, nil
+}
+
 func buildSyncContactName(input syncContactRequest) string {
 	return strings.Join(strings.Fields(strings.Join([]string{
 		strings.TrimSpace(input.FirstName),
@@ -3700,6 +3882,36 @@ func deterministicSyncAgreementID(deviceID, clientID string) string {
 		b[8], b[9],
 		b[10], b[11], b[12], b[13], b[14], b[15],
 	)
+}
+
+func parseSyncOptionalEntityID(raw json.RawMessage) (string, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return "", nil
+	}
+
+	var direct string
+	if err := json.Unmarshal(trimmed, &direct); err == nil {
+		return strings.TrimSpace(direct), nil
+	}
+
+	var ref struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(trimmed, &ref); err == nil {
+		return strings.TrimSpace(ref.ID), nil
+	}
+
+	return "", fmt.Errorf("unsupported reference payload: %s", string(trimmed))
+}
+
+func normalizeSyncJSON(raw json.RawMessage, fallback string) json.RawMessage {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return json.RawMessage(fallback)
+	}
+
+	return append(json.RawMessage(nil), trimmed...)
 }
 
 func (s *Server) processDeviceSyncRequest(ctx context.Context, remoteAddr string, input syncDeviceRequest) (int, syncDeviceResponse, error) {
@@ -3891,6 +4103,63 @@ func (s *Server) syncClientExistsByID(ctx context.Context, clientID pgtype.UUID)
 	return exists, nil
 }
 
+func (s *Server) upsertSyncClassificatorRecord(
+	ctx context.Context,
+	classificatorID pgtype.UUID,
+	title string,
+	manufacturer any,
+	researchType any,
+	registrationCertificate json.RawMessage,
+	maintenanceRegulations json.RawMessage,
+	attachments []string,
+	images []string,
+) (bool, error) {
+	if s.syncClassificatorUpserter != nil {
+		return s.syncClassificatorUpserter(
+			ctx,
+			classificatorID,
+			title,
+			manufacturer,
+			researchType,
+			registrationCertificate,
+			maintenanceRegulations,
+			attachments,
+			images,
+		)
+	}
+
+	var exists bool
+	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM classificators WHERE id = $1)`, classificatorID).Scan(&exists); err != nil {
+		return false, err
+	}
+
+	if _, err := s.db.Exec(ctx, `
+		INSERT INTO classificators (
+			id,
+			title,
+			manufacturer,
+			research_type,
+			registration_certificate,
+			maintenance_regulations,
+			attachments,
+			images
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		ON CONFLICT (id) DO UPDATE
+		SET title = EXCLUDED.title,
+			manufacturer = EXCLUDED.manufacturer,
+			research_type = EXCLUDED.research_type,
+			registration_certificate = EXCLUDED.registration_certificate,
+			maintenance_regulations = EXCLUDED.maintenance_regulations,
+			attachments = EXCLUDED.attachments,
+			images = EXCLUDED.images
+	`, classificatorID, title, manufacturer, researchType, registrationCertificate, maintenanceRegulations, attachments, images); err != nil {
+		return false, err
+	}
+
+	return !exists, nil
+}
+
 func (s *Server) upsertSyncContactRecord(ctx context.Context, contactID pgtype.UUID, name string, position string, phone string, email string, clientID pgtype.UUID) (bool, error) {
 	if s.syncContactUpserter != nil {
 		return s.syncContactUpserter(ctx, contactID, name, position, phone, email, clientID)
@@ -3915,6 +4184,297 @@ func (s *Server) upsertSyncContactRecord(ctx context.Context, contactID pgtype.U
 	}
 
 	return !exists, nil
+}
+
+func upsertSyncDepartment(ctx context.Context, tx pgx.Tx, department *syncEnvelopeNamedRef) (pgtype.UUID, error) {
+	var departmentID pgtype.UUID
+	if department == nil {
+		return departmentID, nil
+	}
+
+	departmentKey := strings.TrimSpace(department.ID)
+	departmentTitle := strings.TrimSpace(department.Title)
+	if departmentKey == "" && departmentTitle == "" {
+		return departmentID, nil
+	}
+
+	if departmentTitle != "" {
+		err := tx.QueryRow(ctx, `
+			SELECT id
+			FROM departments
+			WHERE LOWER(title) = LOWER($1)
+			ORDER BY id
+			LIMIT 1
+		`, departmentTitle).Scan(&departmentID)
+		if err == nil {
+			return departmentID, nil
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return departmentID, fmt.Errorf("lookup department by title: %w", err)
+		}
+	}
+
+	if departmentKey == "" {
+		if err := tx.QueryRow(ctx, `
+			INSERT INTO departments (title)
+			VALUES ($1)
+			RETURNING id
+		`, departmentTitle).Scan(&departmentID); err != nil {
+			return departmentID, fmt.Errorf("create department by title: %w", err)
+		}
+		return departmentID, nil
+	}
+
+	if err := departmentID.Scan(departmentKey); err != nil {
+		return departmentID, fmt.Errorf("department id must be a valid UUID: %w", err)
+	}
+
+	var exists bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM departments WHERE id = $1)`, departmentID).Scan(&exists); err != nil {
+		return departmentID, fmt.Errorf("check department existence: %w", err)
+	}
+	if exists {
+		if departmentTitle != "" {
+			if _, err := tx.Exec(ctx, `
+				UPDATE departments
+				SET title = $1
+				WHERE id = $2
+			`, departmentTitle, departmentID); err != nil {
+				return departmentID, fmt.Errorf("update department title: %w", err)
+			}
+		}
+		return departmentID, nil
+	}
+
+	if departmentTitle == "" {
+		return departmentID, errors.New("department title is required when department id is new")
+	}
+
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO departments (id, title)
+		VALUES ($1, $2)
+	`, departmentID, departmentTitle); err != nil {
+		return departmentID, fmt.Errorf("create department by id: %w", err)
+	}
+
+	return departmentID, nil
+}
+
+func upsertSyncTicketAccount(ctx context.Context, tx pgx.Tx, label string, user *syncTicketUser) (pgtype.UUID, error) {
+	var userID pgtype.UUID
+	if user == nil {
+		return userID, nil
+	}
+	if user.ID == "" {
+		return userID, fmt.Errorf("%s id is required", label)
+	}
+	if err := userID.Scan(user.ID); err != nil {
+		return userID, fmt.Errorf("%s id must be a valid UUID: %w", label, err)
+	}
+
+	departmentID, err := upsertSyncDepartment(ctx, tx, user.Department)
+	if err != nil {
+		return userID, fmt.Errorf("%s department: %w", label, err)
+	}
+
+	passwordHash := ""
+	if user.Password != "" {
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+		if err != nil {
+			return userID, fmt.Errorf("hash %s password: %w", label, err)
+		}
+		passwordHash = string(hashedPassword)
+	}
+
+	var accountExists bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM accounts WHERE user_id = $1)`, userID).Scan(&accountExists); err != nil {
+		return userID, fmt.Errorf("check %s account existence: %w", label, err)
+	}
+
+	switch {
+	case !accountExists && user.Login == "":
+		return userID, fmt.Errorf("%s login is required", label)
+	case !accountExists && passwordHash == "":
+		return userID, fmt.Errorf("%s password is required", label)
+	case !accountExists:
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO accounts (user_id, username, password_hash)
+			VALUES ($1, $2, $3)
+		`, userID, user.Login, passwordHash); err != nil {
+			return userID, fmt.Errorf("create %s account: %w", label, err)
+		}
+	default:
+		if user.Login != "" || passwordHash != "" {
+			if _, err := tx.Exec(ctx, `
+				UPDATE accounts
+				SET username = CASE
+						WHEN $2 <> ''
+						 AND NOT EXISTS (
+						 	SELECT 1
+						 	FROM accounts existing
+						 	WHERE existing.username = $2
+						 	  AND existing.user_id <> $1
+						 )
+						THEN $2
+						ELSE username
+					END,
+				    password_hash = CASE WHEN $3 <> '' THEN $3 ELSE password_hash END
+				WHERE user_id = $1
+			`, userID, user.Login, passwordHash); err != nil {
+				return userID, fmt.Errorf("update %s account: %w", label, err)
+			}
+		}
+	}
+
+	firstName, lastName := splitSyncTicketUserTitle(user.Title)
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO users (user_id, first_name, last_name, department, email)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (user_id) DO UPDATE
+		SET first_name = CASE WHEN EXCLUDED.first_name <> '' THEN EXCLUDED.first_name ELSE users.first_name END,
+		    last_name = CASE WHEN EXCLUDED.last_name <> '' THEN EXCLUDED.last_name ELSE users.last_name END,
+		    department = COALESCE(EXCLUDED.department, users.department),
+		    email = CASE WHEN EXCLUDED.email <> '' THEN EXCLUDED.email ELSE users.email END
+	`, userID, firstName, lastName, nullableUUID(departmentID), user.Email); err != nil {
+		return userID, fmt.Errorf("upsert %s user profile: %w", label, err)
+	}
+
+	return userID, nil
+}
+
+func (s *Server) processClassificatorSyncRequest(ctx context.Context, remoteAddr string, input syncClassificatorRequest) (int, syncClassificatorResponse, error) {
+	input.ID = strings.TrimSpace(input.ID)
+	input.Title = strings.TrimSpace(input.Title)
+	input.RegistrationCertificate = normalizeSyncJSON(input.RegistrationCertificate, "{}")
+	input.MaintenanceRegulations = normalizeSyncJSON(input.MaintenanceRegulations, "[]")
+	input.Attachments = normalizeEditorStringList(input.Attachments)
+	input.Images = normalizeEditorStringList(input.Images)
+
+	switch {
+	case input.ID == "":
+		s.logClassificatorSyncBadRequest(remoteAddr, input, "id is required")
+		return 0, syncClassificatorResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "id is required"}
+	case input.Title == "":
+		s.logClassificatorSyncBadRequest(remoteAddr, input, "title is required")
+		return 0, syncClassificatorResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "title is required"}
+	case !json.Valid(input.RegistrationCertificate):
+		s.logClassificatorSyncBadRequest(remoteAddr, input, "registrationCertificate must be valid JSON")
+		return 0, syncClassificatorResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "registrationCertificate must be valid JSON"}
+	case !json.Valid(input.MaintenanceRegulations):
+		s.logClassificatorSyncBadRequest(remoteAddr, input, "maintenanceRegulations must be valid JSON")
+		return 0, syncClassificatorResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "maintenanceRegulations must be valid JSON"}
+	}
+
+	var classificatorID pgtype.UUID
+	if err := classificatorID.Scan(input.ID); err != nil {
+		s.logClassificatorSyncBadRequest(remoteAddr, input, "id must be a valid UUID parse_err=%q", err.Error())
+		return 0, syncClassificatorResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "id must be a valid UUID"}
+	}
+
+	manufacturerText, err := parseSyncOptionalEntityID(input.Manufacturer)
+	if err != nil {
+		s.logClassificatorSyncBadRequest(remoteAddr, input, "manufacturer must be a valid UUID parse_err=%q", err.Error())
+		return 0, syncClassificatorResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "manufacturer must be a valid UUID"}
+	}
+
+	researchTypeText, err := parseSyncOptionalEntityID(input.ResearchType)
+	if err != nil {
+		s.logClassificatorSyncBadRequest(remoteAddr, input, "researchType must be a valid UUID parse_err=%q", err.Error())
+		return 0, syncClassificatorResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "researchType must be a valid UUID"}
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	var manufacturerValue any
+	var manufacturerID pgtype.UUID
+	if manufacturerText != "" {
+		if err := manufacturerID.Scan(manufacturerText); err != nil {
+			s.logClassificatorSyncBadRequest(remoteAddr, input, "manufacturer must be a valid UUID parse_err=%q", err.Error())
+			return 0, syncClassificatorResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "manufacturer must be a valid UUID"}
+		}
+
+		manufacturerExists, err := s.editorManufacturerExistsByID(ctx, manufacturerID)
+		if err != nil {
+			s.logSyncProcessingError(remoteAddr, "classificator", input, "validate manufacturer", err)
+			return 0, syncClassificatorResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to sync classificator"}
+		}
+		if !manufacturerExists {
+			s.logClassificatorSyncBadRequest(remoteAddr, input, "manufacturer not found")
+			return 0, syncClassificatorResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "manufacturer not found"}
+		}
+
+		manufacturerValue = manufacturerID
+	}
+
+	var researchTypeValue any
+	var researchTypeID pgtype.UUID
+	if researchTypeText != "" {
+		if err := researchTypeID.Scan(researchTypeText); err != nil {
+			s.logClassificatorSyncBadRequest(remoteAddr, input, "researchType must be a valid UUID parse_err=%q", err.Error())
+			return 0, syncClassificatorResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "researchType must be a valid UUID"}
+		}
+
+		researchTypeExists, err := s.editorResearchTypeExistsByID(ctx, researchTypeID)
+		if err != nil {
+			s.logSyncProcessingError(remoteAddr, "classificator", input, "validate research type", err)
+			return 0, syncClassificatorResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to sync classificator"}
+		}
+		if !researchTypeExists {
+			s.logClassificatorSyncBadRequest(remoteAddr, input, "research type not found")
+			return 0, syncClassificatorResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "research type not found"}
+		}
+
+		researchTypeValue = researchTypeID
+	}
+
+	created, err := s.upsertSyncClassificatorRecord(
+		ctx,
+		classificatorID,
+		input.Title,
+		manufacturerValue,
+		researchTypeValue,
+		input.RegistrationCertificate,
+		input.MaintenanceRegulations,
+		input.Attachments,
+		input.Images,
+	)
+	if err != nil {
+		s.logSyncProcessingError(remoteAddr, "classificator", input, "upsert classificator", err)
+		return 0, syncClassificatorResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to sync classificator"}
+	}
+
+	statusCode := http.StatusOK
+	if created {
+		statusCode = http.StatusCreated
+	}
+
+	s.syncLogf(
+		"classificator sync upserted remote=%q id=%s created=%t manufacturer=%q research_type=%q",
+		remoteAddr,
+		uuidToString(classificatorID),
+		created,
+		manufacturerText,
+		researchTypeText,
+	)
+
+	var manufacturerResponse *string
+	if manufacturerText != "" {
+		manufacturerResponse = &manufacturerText
+	}
+
+	var researchTypeResponse *string
+	if researchTypeText != "" {
+		researchTypeResponse = &researchTypeText
+	}
+
+	return statusCode, syncClassificatorResponse{
+		Created:      created,
+		ID:           uuidToString(classificatorID),
+		Manufacturer: manufacturerResponse,
+		ResearchType: researchTypeResponse,
+		Title:        input.Title,
+	}, nil
 }
 
 func (s *Server) processContactSyncRequest(ctx context.Context, remoteAddr string, input syncContactRequest) (int, syncContactResponse, error) {
@@ -3993,13 +4553,16 @@ func (s *Server) processContactSyncRequest(ctx context.Context, remoteAddr strin
 
 func (s *Server) processTicketSyncRequest(ctx context.Context, remoteAddr string, input syncTicketRequest) (int, syncTicketResponse, error) {
 	input.Author, input.AuthorTitle = normalizeTicketSyncAuthor(input.Author, input.AuthorTitle, input.ExternalAuthorID, input.ExternalAuthorTitle)
+	input.AssignedBy = normalizeSyncTicketUser(input.AssignedBy)
 	input.Client = strings.TrimSpace(input.Client)
 	input.ContactPerson = strings.TrimSpace(input.ContactPerson)
 	input.Department = strings.TrimSpace(input.Department)
 	input.Description = strings.TrimSpace(input.Description)
 	input.Device = strings.TrimSpace(input.Device)
+	input.Executor = normalizeSyncTicketUser(input.Executor)
 	input.Reason = strings.TrimSpace(input.Reason)
 	input.Source, input.SyncKey = normalizeTicketSyncMetadata(input.Source, input.SyncKey)
+	input.Status = normalizeSyncTicketStatus(input.Status, input.Executor, input.AssignedBy)
 	input.TicketType = strings.TrimSpace(input.TicketType)
 
 	switch {
@@ -4055,52 +4618,18 @@ func (s *Server) processTicketSyncRequest(ctx context.Context, remoteAddr string
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
+	ticketExists := false
 	if input.Source != "" && input.SyncKey != "" {
-		var (
-			existingTicketID       pgtype.UUID
-			existingTicketNo       int32
-			existingStatus         string
-			existingDepartmentID   pgtype.UUID
-			existingExternalAuthor pgtype.UUID
-		)
+		var existingTicketID pgtype.UUID
 		err := s.db.QueryRow(ctx, `
-			SELECT
-				id,
-				number,
-				COALESCE(status, ''),
-				department,
-				external_author
+			SELECT id
 			FROM tickets
 			WHERE sync_source = $1
 			  AND sync_key = $2
-		`, input.Source, input.SyncKey).Scan(
-			&existingTicketID,
-			&existingTicketNo,
-			&existingStatus,
-			&existingDepartmentID,
-			&existingExternalAuthor,
-		)
+		`, input.Source, input.SyncKey).Scan(&existingTicketID)
 		if err == nil {
-			s.syncLogf(
-				"ticket sync duplicate remote=%q source=%q sync_key=%q ticket_id=%s ticket_number=%d",
-				remoteAddr,
-				input.Source,
-				input.SyncKey,
-				uuidToString(existingTicketID),
-				existingTicketNo,
-			)
-			return http.StatusOK, syncTicketResponse{
-				Author:     nullableUUIDToString(existingExternalAuthor),
-				Department: uuidToString(existingDepartmentID),
-				Duplicate:  true,
-				ID:         uuidToString(existingTicketID),
-				Number:     existingTicketNo,
-				Source:     input.Source,
-				Status:     existingStatus,
-				SyncKey:    input.SyncKey,
-			}, nil
-		}
-		if !errors.Is(err, pgx.ErrNoRows) {
+			ticketExists = true
+		} else if !errors.Is(err, pgx.ErrNoRows) {
 			s.logSyncProcessingError(remoteAddr, "ticket", input, "load existing synced ticket", err)
 			return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to create ticket"}
 		}
@@ -4132,12 +4661,11 @@ func (s *Server) processTicketSyncRequest(ctx context.Context, remoteAddr string
 		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "department not found"}
 	}
 
-	var reasonExists bool
-	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM ticket_reasons WHERE id = $1)`, input.Reason).Scan(&reasonExists); err != nil {
+	resolvedReason, reasonExists, err := s.resolveTicketReasonID(ctx, input.Reason)
+	if err != nil {
 		s.logSyncProcessingError(remoteAddr, "ticket", input, "validate reason", err)
 		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to create ticket"}
 	}
-	resolvedReason := normalizeSyncedTicketReason(input.Reason, reasonExists)
 	if !reasonExists {
 		s.syncLogf(
 			"ticket sync reason missing; continuing with empty reason remote=%q source=%q sync_key=%q requested_reason=%q",
@@ -4157,6 +4685,17 @@ func (s *Server) processTicketSyncRequest(ctx context.Context, remoteAddr string
 		if !ticketTypeExists {
 			s.logTicketSyncBadRequest(remoteAddr, input, "ticket_type not found")
 			return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "ticket_type not found"}
+		}
+	}
+	if input.Status != "" {
+		var ticketStatusExists bool
+		if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM ticket_statuses WHERE type = $1)`, input.Status).Scan(&ticketStatusExists); err != nil {
+			s.logSyncProcessingError(remoteAddr, "ticket", input, "validate ticket status", err)
+			return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to create ticket"}
+		}
+		if !ticketStatusExists {
+			s.logTicketSyncBadRequest(remoteAddr, input, "status not found")
+			return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "status not found"}
 		}
 	}
 
@@ -4248,10 +4787,24 @@ func (s *Server) processTicketSyncRequest(ctx context.Context, remoteAddr string
 		)
 	}
 
+	assignedByID, err := upsertSyncTicketAccount(ctx, tx, "assignedBy", input.AssignedBy)
+	if err != nil {
+		s.logTicketSyncBadRequest(remoteAddr, input, err.Error())
+		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: err.Error()}
+	}
+
+	executorID, err := upsertSyncTicketAccount(ctx, tx, "executor", input.Executor)
+	if err != nil {
+		s.logTicketSyncBadRequest(remoteAddr, input, err.Error())
+		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: err.Error()}
+	}
+
 	var (
 		createdTicketID pgtype.UUID
 		createdTicketNo int32
 		createdStatus   string
+		createdDeptID   pgtype.UUID
+		createdAuthorID pgtype.UUID
 	)
 	if err := tx.QueryRow(ctx, `
 		INSERT INTO tickets (
@@ -4266,7 +4819,10 @@ func (s *Server) processTicketSyncRequest(ctx context.Context, remoteAddr string
 			status,
 			urgent,
 			sync_source,
-			sync_key
+			sync_key,
+			executor,
+			assigned_by,
+			assigned_at
 		)
 		VALUES (
 			$1,
@@ -4277,58 +4833,50 @@ func (s *Server) processTicketSyncRequest(ctx context.Context, remoteAddr string
 			NULLIF($6, ''),
 			$7,
 			$8,
-			'created',
-			$9,
-			NULLIF($10, ''),
-			NULLIF($11, '')
+			NULLIF($9, ''),
+			$10,
+			NULLIF($11, ''),
+			NULLIF($12, ''),
+			$13,
+			$14,
+			CASE
+				WHEN COALESCE(NULLIF($9, ''), '') = 'assigned'
+				  OR $13 IS NOT NULL
+				  OR $14 IS NOT NULL
+				THEN (NOW() AT TIME ZONE 'UTC')
+				ELSE NULL
+			END
 		)
 		ON CONFLICT (sync_source, sync_key)
 		WHERE sync_source IS NOT NULL AND sync_key IS NOT NULL
-		DO NOTHING
-		RETURNING id, number, COALESCE(status, '')
-	`, clientID, deviceID, input.TicketType, nullableUUID(externalAuthorID), departmentID, resolvedReason, input.Description, nullableUUID(contactID), input.Urgent, input.Source, input.SyncKey).Scan(
+		DO UPDATE
+		SET client = EXCLUDED.client,
+		    device = EXCLUDED.device,
+		    ticket_type = EXCLUDED.ticket_type,
+		    external_author = EXCLUDED.external_author,
+		    department = EXCLUDED.department,
+		    reason = EXCLUDED.reason,
+		    description = EXCLUDED.description,
+		    contact_person = EXCLUDED.contact_person,
+		    status = COALESCE(EXCLUDED.status, tickets.status),
+		    urgent = EXCLUDED.urgent,
+		    executor = EXCLUDED.executor,
+		    assigned_by = EXCLUDED.assigned_by,
+		    assigned_at = CASE
+		    	WHEN COALESCE(EXCLUDED.status, '') = 'assigned'
+		    	  OR EXCLUDED.executor IS NOT NULL
+		    	  OR EXCLUDED.assigned_by IS NOT NULL
+		    	THEN COALESCE(tickets.assigned_at, NOW() AT TIME ZONE 'UTC')
+		    	ELSE NULL
+		    END
+		RETURNING id, number, COALESCE(status, ''), department, external_author
+	`, clientID, deviceID, input.TicketType, nullableUUID(externalAuthorID), departmentID, resolvedReason, input.Description, nullableUUID(contactID), input.Status, input.Urgent, input.Source, input.SyncKey, nullableUUID(executorID), nullableUUID(assignedByID)).Scan(
 		&createdTicketID,
 		&createdTicketNo,
 		&createdStatus,
+		&createdDeptID,
+		&createdAuthorID,
 	); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) && input.Source != "" && input.SyncKey != "" {
-			var existingDepartmentID pgtype.UUID
-			var existingExternalAuthor pgtype.UUID
-			if err := tx.QueryRow(ctx, `
-				SELECT id, number, COALESCE(status, ''), department, external_author
-				FROM tickets
-				WHERE sync_source = $1
-				  AND sync_key = $2
-			`, input.Source, input.SyncKey).Scan(&createdTicketID, &createdTicketNo, &createdStatus, &existingDepartmentID, &existingExternalAuthor); err != nil {
-				s.logSyncProcessingError(remoteAddr, "ticket", input, "load duplicate synced ticket", err)
-				return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to create ticket"}
-			}
-
-			if err := tx.Commit(ctx); err != nil {
-				s.logSyncProcessingError(remoteAddr, "ticket", input, "commit duplicate transaction", err)
-				return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to create ticket"}
-			}
-
-			s.syncLogf(
-				"ticket sync duplicate after insert race source=%q sync_key=%q ticket_id=%s ticket_number=%d",
-				input.Source,
-				input.SyncKey,
-				uuidToString(createdTicketID),
-				createdTicketNo,
-			)
-
-			return http.StatusOK, syncTicketResponse{
-				Author:     nullableUUIDToString(existingExternalAuthor),
-				Department: uuidToString(existingDepartmentID),
-				Duplicate:  true,
-				ID:         uuidToString(createdTicketID),
-				Number:     createdTicketNo,
-				Source:     input.Source,
-				Status:     createdStatus,
-				SyncKey:    input.SyncKey,
-			}, nil
-		}
-
 		s.logSyncProcessingError(remoteAddr, "ticket", input, "create ticket", err)
 		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to create ticket"}
 	}
@@ -4338,20 +4886,31 @@ func (s *Server) processTicketSyncRequest(ctx context.Context, remoteAddr string
 		return 0, syncTicketResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to create ticket"}
 	}
 
+	action := "created"
+	statusCode := http.StatusCreated
+	if ticketExists {
+		action = "updated"
+		statusCode = http.StatusOK
+	}
+
 	s.syncLogf(
-		"ticket sync created source=%q sync_key=%q ticket_id=%s ticket_number=%d department=%s author=%q",
+		"ticket sync %s source=%q sync_key=%q ticket_id=%s ticket_number=%d department=%s author=%q executor=%q assigned_by=%q status=%q",
+		action,
 		input.Source,
 		input.SyncKey,
 		uuidToString(createdTicketID),
 		createdTicketNo,
-		uuidToString(departmentID),
+		uuidToString(createdDeptID),
 		input.Author,
+		uuidToString(executorID),
+		uuidToString(assignedByID),
+		createdStatus,
 	)
 
-	return http.StatusCreated, syncTicketResponse{
-		Author:     nullableUUIDToString(externalAuthorID),
-		Department: uuidToString(departmentID),
-		Duplicate:  false,
+	return statusCode, syncTicketResponse{
+		Author:     nullableUUIDToString(createdAuthorID),
+		Department: uuidToString(createdDeptID),
+		Duplicate:  ticketExists,
 		ID:         uuidToString(createdTicketID),
 		Number:     createdTicketNo,
 		Source:     input.Source,
@@ -4465,6 +5024,33 @@ func (s *Server) handleTicketSync(w http.ResponseWriter, r *http.Request) {
 
 			writeJSON(w, statusCode, syncContactEnvelopeResponse{
 				Type: "contact",
+				Data: response,
+			})
+			return
+		case "classificator", "classificators":
+			input, err := decodeClassificatorSyncEnvelopeData(envelope.Data)
+			if err != nil {
+				s.logSyncDecodeError(r.RemoteAddr, entityType, envelope.Data, r.Header.Get("Content-Type"), r.ContentLength, err)
+				http.Error(w, "invalid request body", http.StatusBadRequest)
+				return
+			}
+			s.logSyncEntityReceived(r.RemoteAddr, entityType, envelope.Data)
+
+			statusCode, response, err := s.processClassificatorSyncRequest(r.Context(), r.RemoteAddr, input)
+			if err != nil {
+				var requestErr *syncRequestError
+				if errors.As(err, &requestErr) {
+					http.Error(w, requestErr.Message, requestErr.StatusCode)
+					return
+				}
+
+				s.logSyncProcessingError(r.RemoteAddr, entityType, input, "process request", err)
+				http.Error(w, "failed to sync classificator", http.StatusInternalServerError)
+				return
+			}
+
+			writeJSON(w, statusCode, syncClassificatorEnvelopeResponse{
+				Type: entityType,
 				Data: response,
 			})
 			return
@@ -4857,8 +5443,8 @@ func (s *Server) handleTicketsCreate(w http.ResponseWriter, r *http.Request, req
 		return
 	}
 
-	var reasonExists bool
-	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM ticket_reasons WHERE id = $1)`, input.Reason).Scan(&reasonExists); err != nil {
+	resolvedReason, reasonExists, err := s.resolveTicketReasonID(ctx, input.Reason)
+	if err != nil {
 		log.Printf("validate ticket reason failed: %v", err)
 		http.Error(w, "failed to create ticket", http.StatusInternalServerError)
 		return
@@ -4990,7 +5576,7 @@ func (s *Server) handleTicketsCreate(w http.ResponseWriter, r *http.Request, req
 			'assigned'
 		)
 		RETURNING id, number, COALESCE(status, ''), assigned_at, assigned_start, assigned_end
-	`, assignedStart, assignedEnd, input.Urgent, clientID, deviceID, requesterID, requesterDepartment, requesterID, input.Reason, input.Description, nullableUUID(contactID), executorID).Scan(
+	`, assignedStart, assignedEnd, input.Urgent, clientID, deviceID, requesterID, requesterDepartment, requesterID, resolvedReason, input.Description, nullableUUID(contactID), executorID).Scan(
 		&createdTicketID,
 		&createdTicketNo,
 		&createdTicketState,
@@ -5587,8 +6173,8 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 			return
 		}
 
-		var reasonExists bool
-		if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM ticket_reasons WHERE id = $1)`, input.Reason).Scan(&reasonExists); err != nil {
+		resolvedReason, reasonExists, err := s.resolveTicketReasonID(ctx, input.Reason)
+		if err != nil {
 			log.Printf("validate ticket reason failed: %v", err)
 			http.Error(w, "failed to update ticket", http.StatusInternalServerError)
 			return
@@ -5597,6 +6183,7 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 			http.Error(w, "reason not found", http.StatusBadRequest)
 			return
 		}
+		input.Reason = resolvedReason
 
 		if contactPersonID.Valid {
 			var contactExists bool

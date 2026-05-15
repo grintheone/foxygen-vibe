@@ -2388,7 +2388,7 @@ func (s *Server) handleEditorTicketPatch(w http.ResponseWriter, r *http.Request,
 
 	var reasonValue any = nil
 	if input.Reason != "" {
-		reasonExists, err := s.editorTicketReasonExistsByID(ctx, input.Reason)
+		resolvedReason, reasonExists, err := s.resolveTicketReasonID(ctx, input.Reason)
 		if err != nil {
 			log.Printf("validate editor ticket reason failed: %v", err)
 			http.Error(w, "failed to update ticket", http.StatusInternalServerError)
@@ -2399,7 +2399,7 @@ func (s *Server) handleEditorTicketPatch(w http.ResponseWriter, r *http.Request,
 			return
 		}
 
-		reasonValue = input.Reason
+		reasonValue = resolvedReason
 	}
 
 	var ticketTypeValue any = nil
@@ -3137,16 +3137,12 @@ func (s *Server) editorDepartmentExistsByID(ctx context.Context, departmentID pg
 }
 
 func (s *Server) editorTicketReasonExistsByID(ctx context.Context, reasonID string) (bool, error) {
-	if s.editorTicketReasonExists != nil {
-		return s.editorTicketReasonExists(ctx, reasonID)
-	}
-
-	var reasonExists bool
-	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM ticket_reasons WHERE id = $1)`, reasonID).Scan(&reasonExists); err != nil {
+	resolvedReason, exists, err := s.resolveTicketReasonID(ctx, reasonID)
+	if err != nil {
 		return false, err
 	}
 
-	return reasonExists, nil
+	return exists && resolvedReason != "", nil
 }
 
 func (s *Server) editorTicketStatusExistsByID(ctx context.Context, statusID string) (bool, error) {

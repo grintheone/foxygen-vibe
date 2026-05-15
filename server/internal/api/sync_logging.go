@@ -123,6 +123,13 @@ func (s *Server) logDeviceSyncBadRequest(remoteAddr string, input syncDeviceRequ
 	)
 }
 
+func (s *Server) logClassificatorSyncBadRequest(remoteAddr string, input syncClassificatorRequest, format string, args ...any) {
+	s.syncLogf(
+		"classificator sync rejected: "+format+" remote=%q entity_type=%q payload=%s",
+		append(args, remoteAddr, "classificator", compactSyncLogPayload(input))...,
+	)
+}
+
 func (s *Server) logContactSyncBadRequest(remoteAddr string, input syncContactRequest, format string, args ...any) {
 	s.syncLogf(
 		"contact sync rejected: "+format+" remote=%q entity_type=%q payload=%s",

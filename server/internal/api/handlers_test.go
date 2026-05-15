@@ -320,19 +320,45 @@ func TestNormalizeTicketSyncAuthorFallsBackToLegacyFields(t *testing.T) {
 	}
 }
 
-func TestNormalizeSyncedTicketReasonPreservesKnownReason(t *testing.T) {
+func TestResolveKnownTicketReasonIDPreservesKnownReason(t *testing.T) {
 	t.Parallel()
 
-	got := normalizeSyncedTicketReason("maintenance", true)
+	got := resolveKnownTicketReasonID("maintenance", func(candidate string) bool {
+		return candidate == "maintenance"
+	})
 	if got != "maintenance" {
 		t.Fatalf("expected known reason to be preserved, got %q", got)
 	}
 }
 
-func TestNormalizeSyncedTicketReasonDropsUnknownReason(t *testing.T) {
+func TestResolveKnownTicketReasonIDFallsBackToLegacyMaintenanceID(t *testing.T) {
 	t.Parallel()
 
-	got := normalizeSyncedTicketReason("maintenance", false)
+	got := resolveKnownTicketReasonID("maintenance", func(candidate string) bool {
+		return candidate == "maintanence"
+	})
+	if got != "maintanence" {
+		t.Fatalf("expected maintenance to resolve to maintanence, got %q", got)
+	}
+}
+
+func TestResolveKnownTicketReasonIDFallsBackToCanonicalMaintenanceID(t *testing.T) {
+	t.Parallel()
+
+	got := resolveKnownTicketReasonID("maintanence", func(candidate string) bool {
+		return candidate == "maintenance"
+	})
+	if got != "maintenance" {
+		t.Fatalf("expected maintanence to resolve to maintenance, got %q", got)
+	}
+}
+
+func TestResolveKnownTicketReasonIDDropsUnknownReason(t *testing.T) {
+	t.Parallel()
+
+	got := resolveKnownTicketReasonID("maintenance", func(string) bool {
+		return false
+	})
 	if got != "" {
 		t.Fatalf("expected unknown reason to be dropped, got %q", got)
 	}
@@ -415,6 +441,96 @@ func TestDecodeTicketSyncRequestsSupportsTicketEnvelope(t *testing.T) {
 	}
 }
 
+func TestDecodeTicketSyncRequestsMapsAssignedUsersFromEnvelope(t *testing.T) {
+	t.Parallel()
+
+	requests, wrapped, err := decodeTicketSyncRequests([]byte(`{
+		"type":"tickets",
+		"data":{
+			"id":"ticket-456",
+			"client":{"id":"client-1"},
+			"department":{"id":"department-1","title":"Service Department"},
+			"description":"Needs assignment",
+			"device":{"id":"device-1"},
+			"executor":{
+				"id":"2e3358a6-6613-11f0-8136-40b0765b1e01",
+				"login":"Albert.Andrianov",
+				"password":"wtqWVoYP",
+				"title":"Альберт Андрианов",
+				"department":{"id":"2e3358a7-6613-11f0-8136-40b0765b1e01","title":"Сервис КПД"},
+				"email":"AA@KPD.com.ru"
+			},
+			"assignedBy":{
+				"id":"6f1a8d46-6613-11f0-8136-40b0765b1e01",
+				"login":"Anna.Ivanova",
+				"password":"Secret123",
+				"title":"Анна Иванова",
+				"department":{"id":"2e3358a7-6613-11f0-8136-40b0765b1e01","title":"Сервис КПД"},
+				"email":"ANNA@example.com"
+			},
+			"reason":"diagnostic"
+		}
+	}`))
+	if err != nil {
+		t.Fatalf("decode envelope with assignees: %v", err)
+	}
+	if !wrapped {
+		t.Fatal("expected wrapped tickets payload")
+	}
+	if len(requests) != 1 {
+		t.Fatalf("expected one request, got %d", len(requests))
+	}
+
+	got := requests[0]
+	if got.Status != "assigned" {
+		t.Fatalf("expected assigned status derived from assignee payload, got %q", got.Status)
+	}
+	if got.Executor == nil {
+		t.Fatal("expected executor to be mapped")
+	}
+	if got.Executor.ID != "2e3358a6-6613-11f0-8136-40b0765b1e01" ||
+		got.Executor.Login != "Albert.Andrianov" ||
+		got.Executor.Password != "wtqWVoYP" ||
+		got.Executor.Title != "Альберт Андрианов" ||
+		got.Executor.Email != "aa@kpd.com.ru" {
+		t.Fatalf("unexpected executor mapping: %+v", got.Executor)
+	}
+	if got.Executor.Department == nil ||
+		got.Executor.Department.ID != "2e3358a7-6613-11f0-8136-40b0765b1e01" ||
+		got.Executor.Department.Title != "Сервис КПД" {
+		t.Fatalf("unexpected executor department mapping: %+v", got.Executor.Department)
+	}
+	if got.AssignedBy == nil {
+		t.Fatal("expected assignedBy to be mapped")
+	}
+	if got.AssignedBy.ID != "6f1a8d46-6613-11f0-8136-40b0765b1e01" ||
+		got.AssignedBy.Login != "Anna.Ivanova" ||
+		got.AssignedBy.Password != "Secret123" ||
+		got.AssignedBy.Title != "Анна Иванова" ||
+		got.AssignedBy.Email != "anna@example.com" {
+		t.Fatalf("unexpected assignedBy mapping: %+v", got.AssignedBy)
+	}
+	if got.AssignedBy.Department == nil ||
+		got.AssignedBy.Department.ID != "2e3358a7-6613-11f0-8136-40b0765b1e01" ||
+		got.AssignedBy.Department.Title != "Сервис КПД" {
+		t.Fatalf("unexpected assignedBy department mapping: %+v", got.AssignedBy.Department)
+	}
+}
+
+func TestNormalizeSyncTicketStatusDefaultsToAssignedWhenExecutorPresent(t *testing.T) {
+	t.Parallel()
+
+	status := normalizeSyncTicketStatus("", &syncTicketUser{ID: "executor-1"}, nil)
+	if status != "assigned" {
+		t.Fatalf("expected executor to imply assigned status, got %q", status)
+	}
+
+	createdStatus := normalizeSyncTicketStatus("", nil, nil)
+	if createdStatus != "created" {
+		t.Fatalf("expected empty assignee payload to default to created, got %q", createdStatus)
+	}
+}
+
 func TestDecodeTicketSyncRequestsRejectsUnsupportedEnvelopeType(t *testing.T) {
 	t.Parallel()
 
@@ -490,6 +606,42 @@ func TestDecodeContactSyncEnvelopeData(t *testing.T) {
 	}
 }
 
+func TestDecodeClassificatorSyncEnvelopeData(t *testing.T) {
+	t.Parallel()
+
+	input, err := decodeClassificatorSyncEnvelopeData(json.RawMessage(`{
+		"id":"2c161c29-4dc9-11f1-814d-40b0765b1e01",
+		"refs":[],
+		"title":"TG16B-21 Центрифуга TG16B с №21 ротором угловым для пробирок 12-местным",
+		"manufacturer":null,
+		"researchType":null,
+		"registrationCertificate":{"number":"","date":"0001-01-01T00:00:00Z","issueDate":"0001-01-01T00:00:00Z"},
+		"maintenanceRegulations":[],
+		"maintenanceMaterialsList":[],
+		"attachments":[],
+		"notes":[""],
+		"images":[]
+	}`))
+	if err != nil {
+		t.Fatalf("decode classificator envelope: %v", err)
+	}
+	if input.ID != "2c161c29-4dc9-11f1-814d-40b0765b1e01" {
+		t.Fatalf("expected classificator id to be decoded, got %+v", input)
+	}
+	if input.Title == "" {
+		t.Fatalf("expected classificator title to be decoded, got %+v", input)
+	}
+	if compactSyncLogPayload(input.RegistrationCertificate) != `{"number":"","date":"0001-01-01T00:00:00Z","issueDate":"0001-01-01T00:00:00Z"}` {
+		t.Fatalf("unexpected registration certificate payload: %s", compactSyncLogPayload(input.RegistrationCertificate))
+	}
+	if compactSyncLogPayload(input.MaintenanceRegulations) != `[]` {
+		t.Fatalf("unexpected maintenance regulations payload: %s", compactSyncLogPayload(input.MaintenanceRegulations))
+	}
+	if len(input.Attachments) != 0 || len(input.Images) != 0 {
+		t.Fatalf("expected empty media lists, got attachments=%v images=%v", input.Attachments, input.Images)
+	}
+}
+
 func TestProcessContactSyncRequestCreatesContact(t *testing.T) {
 	t.Parallel()
 
@@ -552,6 +704,111 @@ func TestProcessContactSyncRequestCreatesContact(t *testing.T) {
 	}
 	if !response.Created || response.Name != "Арина Иванова" {
 		t.Fatalf("expected created response with normalized name, got %+v", response)
+	}
+}
+
+func TestProcessClassificatorSyncRequestCreatesClassificator(t *testing.T) {
+	t.Parallel()
+
+	classificatorID := mustUUID(t, "2c161c29-4dc9-11f1-814d-40b0765b1e01")
+	manufacturerID := mustUUID(t, "11111111-1111-1111-1111-111111111111")
+	researchTypeID := mustUUID(t, "22222222-2222-2222-2222-222222222222")
+
+	var (
+		gotClassificatorID         pgtype.UUID
+		gotTitle                   string
+		gotManufacturer            any
+		gotResearchType            any
+		gotRegistrationCertificate json.RawMessage
+		gotMaintenanceRegulations  json.RawMessage
+		gotAttachments             []string
+		gotImages                  []string
+	)
+
+	srv := &Server{
+		editorManufacturerExists: func(_ context.Context, id pgtype.UUID) (bool, error) {
+			if id != manufacturerID {
+				t.Fatalf("expected manufacturer lookup id %s, got %s", manufacturerID.String(), id.String())
+			}
+			return true, nil
+		},
+		editorResearchTypeExists: func(_ context.Context, id pgtype.UUID) (bool, error) {
+			if id != researchTypeID {
+				t.Fatalf("expected research type lookup id %s, got %s", researchTypeID.String(), id.String())
+			}
+			return true, nil
+		},
+		syncClassificatorUpserter: func(
+			_ context.Context,
+			id pgtype.UUID,
+			title string,
+			manufacturer any,
+			researchType any,
+			registrationCertificate json.RawMessage,
+			maintenanceRegulations json.RawMessage,
+			attachments []string,
+			images []string,
+		) (bool, error) {
+			gotClassificatorID = id
+			gotTitle = title
+			gotManufacturer = manufacturer
+			gotResearchType = researchType
+			gotRegistrationCertificate = registrationCertificate
+			gotMaintenanceRegulations = maintenanceRegulations
+			gotAttachments = attachments
+			gotImages = images
+			return true, nil
+		},
+	}
+
+	statusCode, response, err := srv.processClassificatorSyncRequest(context.Background(), "172.30.240.4:50520", syncClassificatorRequest{
+		ID:                      classificatorID.String(),
+		Title:                   "  TG16B-21 Центрифуга  ",
+		Manufacturer:            json.RawMessage(`{"id":"` + manufacturerID.String() + `","title":"Ignored"}`),
+		ResearchType:            json.RawMessage(`"` + researchTypeID.String() + `"`),
+		RegistrationCertificate: json.RawMessage(`{"number":"RU-1"}`),
+		MaintenanceRegulations:  json.RawMessage(`[{"kind":"yearly"}]`),
+		Attachments:             []string{" manual.pdf ", "", "spec.docx"},
+		Images:                  []string{" photo-1.jpg ", " "},
+	})
+	if err != nil {
+		t.Fatalf("process classificator sync: %v", err)
+	}
+	if statusCode != http.StatusCreated {
+		t.Fatalf("expected status %d, got %d", http.StatusCreated, statusCode)
+	}
+	if gotClassificatorID != classificatorID {
+		t.Fatalf("expected upserter to receive classificator id %s, got %s", classificatorID.String(), gotClassificatorID.String())
+	}
+	if gotTitle != "TG16B-21 Центрифуга" {
+		t.Fatalf("expected trimmed title, got %q", gotTitle)
+	}
+	if gotManufacturerID, ok := gotManufacturer.(pgtype.UUID); !ok || gotManufacturerID != manufacturerID {
+		t.Fatalf("expected manufacturer uuid, got %#v", gotManufacturer)
+	}
+	if gotResearchTypeID, ok := gotResearchType.(pgtype.UUID); !ok || gotResearchTypeID != researchTypeID {
+		t.Fatalf("expected research type uuid, got %#v", gotResearchType)
+	}
+	if compactSyncLogPayload(gotRegistrationCertificate) != `{"number":"RU-1"}` {
+		t.Fatalf("unexpected registration certificate payload: %s", compactSyncLogPayload(gotRegistrationCertificate))
+	}
+	if compactSyncLogPayload(gotMaintenanceRegulations) != `[{"kind":"yearly"}]` {
+		t.Fatalf("unexpected maintenance regulations payload: %s", compactSyncLogPayload(gotMaintenanceRegulations))
+	}
+	if len(gotAttachments) != 2 || gotAttachments[0] != "manual.pdf" || gotAttachments[1] != "spec.docx" {
+		t.Fatalf("unexpected attachments: %#v", gotAttachments)
+	}
+	if len(gotImages) != 1 || gotImages[0] != "photo-1.jpg" {
+		t.Fatalf("unexpected images: %#v", gotImages)
+	}
+	if !response.Created || response.ID != classificatorID.String() || response.Title != "TG16B-21 Центрифуга" {
+		t.Fatalf("unexpected classificator response: %+v", response)
+	}
+	if response.Manufacturer == nil || *response.Manufacturer != manufacturerID.String() {
+		t.Fatalf("expected manufacturer id in response, got %+v", response)
+	}
+	if response.ResearchType == nil || *response.ResearchType != researchTypeID.String() {
+		t.Fatalf("expected research type id in response, got %+v", response)
 	}
 }
 

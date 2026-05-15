@@ -58,6 +58,7 @@ type Server struct {
 	profileAccessCheck              func(context.Context, pgtype.UUID, pgtype.UUID) (bool, error)
 	accountDisabledUpdater          func(context.Context, pgtype.UUID, bool) (bool, error)
 	syncClientExists                func(context.Context, pgtype.UUID) (bool, error)
+	syncClassificatorUpserter       func(context.Context, pgtype.UUID, string, any, any, json.RawMessage, json.RawMessage, []string, []string) (bool, error)
 	syncContactUpserter             func(context.Context, pgtype.UUID, string, string, string, string, pgtype.UUID) (bool, error)
 }
 
