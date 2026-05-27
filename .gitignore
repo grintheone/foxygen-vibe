@@ -7,5 +7,6 @@ server/server
 server/.env
 server/dump.json
 deploy/production/.env
+deploy/production/backups/
 deploy/production/bootstrap/*
 !deploy/production/bootstrap/.gitkeep

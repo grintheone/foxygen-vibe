@@ -4827,22 +4827,22 @@ func (s *Server) processTicketSyncRequest(ctx context.Context, remoteAddr string
 		VALUES (
 			$1,
 			$2,
-			NULLIF($3, ''),
-			$4,
+			NULLIF($3::text, ''),
+			$4::uuid,
 			$5,
-			NULLIF($6, ''),
+			NULLIF($6::text, ''),
 			$7,
-			$8,
-			NULLIF($9, ''),
+			$8::uuid,
+			NULLIF($9::text, ''),
 			$10,
-			NULLIF($11, ''),
-			NULLIF($12, ''),
-			$13,
-			$14,
+			NULLIF($11::text, ''),
+			NULLIF($12::text, ''),
+			$13::uuid,
+			$14::uuid,
 			CASE
-				WHEN COALESCE(NULLIF($9, ''), '') = 'assigned'
-				  OR $13 IS NOT NULL
-				  OR $14 IS NOT NULL
+				WHEN COALESCE(NULLIF($9::text, ''), '') = 'assigned'
+				  OR $13::uuid IS NOT NULL
+				  OR $14::uuid IS NOT NULL
 				THEN (NOW() AT TIME ZONE 'UTC')
 				ELSE NULL
 			END

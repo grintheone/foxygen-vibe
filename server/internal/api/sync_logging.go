@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 const defaultSyncLogFilePath = "logs/sync.log"
@@ -56,6 +57,7 @@ func compactSyncLogPayload(payload any) string {
 	}
 
 	if json.Valid(raw) {
+		raw = redactSyncLogPayload(raw)
 		var compact bytes.Buffer
 		if err := json.Compact(&compact, raw); err == nil {
 			raw = compact.Bytes()
@@ -67,6 +69,47 @@ func compactSyncLogPayload(payload any) string {
 	}
 
 	return string(raw)
+}
+
+func redactSyncLogPayload(raw []byte) []byte {
+	if !strings.Contains(strings.ToLower(string(raw)), "password") {
+		return raw
+	}
+
+	var payload any
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return raw
+	}
+
+	redactSyncLogValue(payload)
+
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return raw
+	}
+
+	return encoded
+}
+
+func redactSyncLogValue(value any) {
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, nested := range typed {
+			if isSensitiveSyncLogKey(key) {
+				typed[key] = "[redacted]"
+				continue
+			}
+			redactSyncLogValue(nested)
+		}
+	case []any:
+		for _, nested := range typed {
+			redactSyncLogValue(nested)
+		}
+	}
+}
+
+func isSensitiveSyncLogKey(key string) bool {
+	return strings.Contains(strings.ToLower(key), "password")
 }
 
 func (s *Server) syncLogf(format string, args ...any) {

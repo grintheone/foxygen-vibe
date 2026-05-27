@@ -56,6 +56,49 @@ Useful notes:
 - Use the local `with-minio` profile only when you are not connecting to an existing S3-compatible storage service.
 - Before deployment, ask infrastructure which RFC1918 ranges are already in use on that host and pick a Docker subnet outside them.
 
+## Set up daily PostgreSQL backups
+
+The production database runs inside the `postgres` compose service, so the simplest reliable backup flow is:
+
+1. Keep the stack running with `docker compose -f docker-compose.production.yml up -d`.
+2. Run [`deploy/production/backup-db.sh`](/Users/grintheone/Dev/Projects/foxygen-v3.1/deploy/production/backup-db.sh) from the host on a daily cron schedule.
+3. Store the generated files on persistent host storage and copy them off the machine if you need disaster recovery.
+
+The script:
+
+- Loads `deploy/production/.env`
+- Runs `pg_dump` inside the `postgres` container
+- Writes a compressed SQL backup to `deploy/production/backups/`
+- Deletes backup files older than `BACKUP_KEEP_DAYS`
+
+Optional settings in `deploy/production/.env`:
+
+- `BACKUP_DIR=./deploy/production/backups`
+- `BACKUP_PREFIX=foxygen-db`
+- `BACKUP_KEEP_DAYS=14`
+
+Run a backup manually:
+
+```sh
+./deploy/production/backup-db.sh
+```
+
+Example cron entry for a daily 02:15 backup on the Docker host:
+
+```cron
+15 2 * * * cd /path/to/foxygen-v3.1 && ./deploy/production/backup-db.sh >> /var/log/foxygen-db-backup.log 2>&1
+```
+
+Quick restore example from a compressed backup:
+
+```sh
+gzip -dc deploy/production/backups/foxygen-db_2026-05-15_02-15-00.sql.gz \
+  | docker compose --env-file deploy/production/.env -f docker-compose.production.yml exec -T postgres \
+      sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+```
+
+For stronger disaster recovery, sync the backup directory to external storage after each run. Host-only backups protect against accidental deletes and bad migrations, but they do not protect against full-host loss.
+
 ## Run the server
 
 1. Start PostgreSQL:
