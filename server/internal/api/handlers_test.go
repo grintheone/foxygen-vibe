@@ -606,6 +606,32 @@ func TestDecodeContactSyncEnvelopeData(t *testing.T) {
 	}
 }
 
+func TestDecodeClientSyncEnvelopeData(t *testing.T) {
+	t.Parallel()
+
+	input, err := decodeClientSyncEnvelopeData(json.RawMessage(`{
+		"id":"256406ac-59a2-11f1-814e-40b0765b1e01",
+		"ref":null,
+		"title":"ММЦ ВТ, Белоостров",
+		"address":"Лен.обл, Всеволожский р-н, с.п.Юкковское, тер. Клиника Белоостров, зд. 1, к. 1",
+		"region":null,
+		"location":{"lat":60.123,"lon":30.456},
+		"laboratorySystem":null
+	}`))
+	if err != nil {
+		t.Fatalf("decode client envelope: %v", err)
+	}
+	if input.ID != "256406ac-59a2-11f1-814e-40b0765b1e01" {
+		t.Fatalf("expected client id to be decoded, got %+v", input)
+	}
+	if input.Title != "ММЦ ВТ, Белоостров" || input.Address == "" {
+		t.Fatalf("expected client details to be decoded, got %+v", input)
+	}
+	if compactSyncLogPayload(input.Location) != `{"lat":60.123,"lon":30.456}` {
+		t.Fatalf("unexpected location payload: %s", compactSyncLogPayload(input.Location))
+	}
+}
+
 func TestDecodeClassificatorSyncEnvelopeData(t *testing.T) {
 	t.Parallel()
 
@@ -639,6 +665,81 @@ func TestDecodeClassificatorSyncEnvelopeData(t *testing.T) {
 	}
 	if len(input.Attachments) != 0 || len(input.Images) != 0 {
 		t.Fatalf("expected empty media lists, got attachments=%v images=%v", input.Attachments, input.Images)
+	}
+}
+
+func TestProcessClientSyncRequestCreatesClient(t *testing.T) {
+	t.Parallel()
+
+	clientID := mustUUID(t, "256406ac-59a2-11f1-814e-40b0765b1e01")
+	regionID := mustUUID(t, "11111111-1111-1111-1111-111111111111")
+	laboratorySystemID := mustUUID(t, "22222222-2222-2222-2222-222222222222")
+
+	var (
+		gotClientID         pgtype.UUID
+		gotTitle            string
+		gotAddress          string
+		gotRegion           any
+		gotLocation         any
+		gotLaboratorySystem any
+	)
+
+	srv := &Server{
+		editorRegionExists: func(_ context.Context, id pgtype.UUID) (bool, error) {
+			if id != regionID {
+				t.Fatalf("expected region lookup id %s, got %s", regionID.String(), id.String())
+			}
+			return true, nil
+		},
+		syncClientUpserter: func(_ context.Context, id pgtype.UUID, title string, address string, region any, location any, laboratorySystem any) (bool, error) {
+			gotClientID = id
+			gotTitle = title
+			gotAddress = address
+			gotRegion = region
+			gotLocation = location
+			gotLaboratorySystem = laboratorySystem
+			return true, nil
+		},
+	}
+
+	statusCode, response, err := srv.processClientSyncRequest(context.Background(), "172.30.240.4:38570", syncClientRequest{
+		ID:               clientID.String(),
+		Title:            "  ММЦ ВТ,   Белоостров  ",
+		Address:          " Лен.обл ",
+		Region:           json.RawMessage(`{"id":"` + regionID.String() + `","title":"Ленинградская область"}`),
+		Location:         json.RawMessage(`{"lat":60.123,"lon":30.456}`),
+		LaboratorySystem: json.RawMessage(`"` + laboratorySystemID.String() + `"`),
+	})
+	if err != nil {
+		t.Fatalf("process client sync: %v", err)
+	}
+	if statusCode != http.StatusCreated {
+		t.Fatalf("expected status %d, got %d", http.StatusCreated, statusCode)
+	}
+	if gotClientID != clientID {
+		t.Fatalf("expected upserter to receive client id %s, got %s", clientID.String(), gotClientID.String())
+	}
+	if gotTitle != "ММЦ ВТ, Белоостров" || gotAddress != "Лен.обл" {
+		t.Fatalf("expected normalized client fields, got %q / %q", gotTitle, gotAddress)
+	}
+	if gotRegionID, ok := gotRegion.(pgtype.UUID); !ok || gotRegionID != regionID {
+		t.Fatalf("expected region uuid, got %#v", gotRegion)
+	}
+	if gotLaboratorySystemID, ok := gotLaboratorySystem.(pgtype.UUID); !ok || gotLaboratorySystemID != laboratorySystemID {
+		t.Fatalf("expected laboratory system uuid, got %#v", gotLaboratorySystem)
+	}
+	location, ok := gotLocation.(json.RawMessage)
+	if !ok || compactSyncLogPayload(location) != `{"lat":60.123,"lon":30.456}` {
+		t.Fatalf("unexpected location: %#v", gotLocation)
+	}
+	if !response.Created || response.ID != clientID.String() || response.Title != "ММЦ ВТ, Белоостров" {
+		t.Fatalf("unexpected client response: %+v", response)
+	}
+	if response.Region == nil || *response.Region != regionID.String() {
+		t.Fatalf("expected region id in response, got %+v", response)
+	}
+	if response.LaboratorySystem == nil || *response.LaboratorySystem != laboratorySystemID.String() {
+		t.Fatalf("expected laboratory system id in response, got %+v", response)
 	}
 }
 

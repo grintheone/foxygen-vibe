@@ -217,6 +217,16 @@ type syncContactRequest struct {
 	SendAllNotifications bool   `json:"sendAllNotifications"`
 }
 
+type syncClientRequest struct {
+	ID               string          `json:"id"`
+	Ref              json.RawMessage `json:"ref"`
+	Title            string          `json:"title"`
+	Address          string          `json:"address"`
+	Region           json.RawMessage `json:"region"`
+	Location         json.RawMessage `json:"location"`
+	LaboratorySystem json.RawMessage `json:"laboratorySystem"`
+}
+
 type syncClassificatorRequest struct {
 	ID                      string          `json:"id"`
 	Title                   string          `json:"title"`
@@ -235,6 +245,16 @@ type syncContactResponse struct {
 	Name    string `json:"name"`
 }
 
+type syncClientResponse struct {
+	Address          string          `json:"address"`
+	Created          bool            `json:"created"`
+	ID               string          `json:"id"`
+	LaboratorySystem *string         `json:"laboratorySystem,omitempty"`
+	Location         json.RawMessage `json:"location,omitempty"`
+	Region           *string         `json:"region,omitempty"`
+	Title            string          `json:"title"`
+}
+
 type syncClassificatorResponse struct {
 	Created      bool    `json:"created"`
 	ID           string  `json:"id"`
@@ -246,6 +266,11 @@ type syncClassificatorResponse struct {
 type syncContactEnvelopeResponse struct {
 	Type string              `json:"type"`
 	Data syncContactResponse `json:"data"`
+}
+
+type syncClientEnvelopeResponse struct {
+	Type string             `json:"type"`
+	Data syncClientResponse `json:"data"`
 }
 
 type syncClassificatorEnvelopeResponse struct {
@@ -3846,6 +3871,23 @@ func decodeContactSyncEnvelopeData(raw json.RawMessage) (syncContactRequest, err
 	return input, nil
 }
 
+func decodeClientSyncEnvelopeData(raw json.RawMessage) (syncClientRequest, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return syncClientRequest{}, errors.New("client data is required")
+	}
+
+	decoder := json.NewDecoder(bytes.NewReader(trimmed))
+	decoder.DisallowUnknownFields()
+
+	var input syncClientRequest
+	if err := decoder.Decode(&input); err != nil {
+		return syncClientRequest{}, err
+	}
+
+	return input, nil
+}
+
 func decodeClassificatorSyncEnvelopeData(raw json.RawMessage) (syncClassificatorRequest, error) {
 	trimmed := bytes.TrimSpace(raw)
 	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
@@ -3909,6 +3951,15 @@ func normalizeSyncJSON(raw json.RawMessage, fallback string) json.RawMessage {
 	trimmed := bytes.TrimSpace(raw)
 	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
 		return json.RawMessage(fallback)
+	}
+
+	return append(json.RawMessage(nil), trimmed...)
+}
+
+func nullableSyncJSON(raw json.RawMessage) json.RawMessage {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return nil
 	}
 
 	return append(json.RawMessage(nil), trimmed...)
@@ -4101,6 +4152,39 @@ func (s *Server) syncClientExistsByID(ctx context.Context, clientID pgtype.UUID)
 	}
 
 	return exists, nil
+}
+
+func (s *Server) upsertSyncClientRecord(ctx context.Context, clientID pgtype.UUID, title string, address string, region any, location any, laboratorySystem any) (bool, error) {
+	if s.syncClientUpserter != nil {
+		return s.syncClientUpserter(ctx, clientID, title, address, region, location, laboratorySystem)
+	}
+
+	var exists bool
+	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM clients WHERE id = $1)`, clientID).Scan(&exists); err != nil {
+		return false, err
+	}
+
+	if _, err := s.db.Exec(ctx, `
+		INSERT INTO clients (
+			id,
+			title,
+			region,
+			address,
+			location,
+			laboratory_system
+		)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (id) DO UPDATE
+		SET title = EXCLUDED.title,
+			region = EXCLUDED.region,
+			address = EXCLUDED.address,
+			location = EXCLUDED.location,
+			laboratory_system = EXCLUDED.laboratory_system
+	`, clientID, title, region, address, location, laboratorySystem); err != nil {
+		return false, err
+	}
+
+	return !exists, nil
 }
 
 func (s *Server) upsertSyncClassificatorRecord(
@@ -4340,6 +4424,120 @@ func upsertSyncTicketAccount(ctx context.Context, tx pgx.Tx, label string, user 
 	}
 
 	return userID, nil
+}
+
+func (s *Server) processClientSyncRequest(ctx context.Context, remoteAddr string, input syncClientRequest) (int, syncClientResponse, error) {
+	input.ID = strings.TrimSpace(input.ID)
+	input.Title = strings.Join(strings.Fields(input.Title), " ")
+	input.Address = strings.TrimSpace(input.Address)
+
+	switch {
+	case input.ID == "":
+		s.logClientSyncBadRequest(remoteAddr, input, "id is required")
+		return 0, syncClientResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "id is required"}
+	case input.Title == "":
+		s.logClientSyncBadRequest(remoteAddr, input, "title is required")
+		return 0, syncClientResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "title is required"}
+	}
+
+	var clientID pgtype.UUID
+	if err := clientID.Scan(input.ID); err != nil {
+		s.logClientSyncBadRequest(remoteAddr, input, "id must be a valid UUID parse_err=%q", err.Error())
+		return 0, syncClientResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "id must be a valid UUID"}
+	}
+
+	regionText, err := parseSyncOptionalEntityID(input.Region)
+	if err != nil {
+		s.logClientSyncBadRequest(remoteAddr, input, "region must be a valid UUID parse_err=%q", err.Error())
+		return 0, syncClientResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "region must be a valid UUID"}
+	}
+
+	laboratorySystemText, err := parseSyncOptionalEntityID(input.LaboratorySystem)
+	if err != nil {
+		s.logClientSyncBadRequest(remoteAddr, input, "laboratorySystem must be a valid UUID parse_err=%q", err.Error())
+		return 0, syncClientResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "laboratorySystem must be a valid UUID"}
+	}
+
+	locationValue := nullableSyncJSON(input.Location)
+	if locationValue != nil && !json.Valid(locationValue) {
+		s.logClientSyncBadRequest(remoteAddr, input, "location must be valid JSON")
+		return 0, syncClientResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "location must be valid JSON"}
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	var regionValue any
+	var regionID pgtype.UUID
+	if regionText != "" {
+		if err := regionID.Scan(regionText); err != nil {
+			s.logClientSyncBadRequest(remoteAddr, input, "region must be a valid UUID parse_err=%q", err.Error())
+			return 0, syncClientResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "region must be a valid UUID"}
+		}
+
+		regionExists, err := s.editorRegionExistsByID(ctx, regionID)
+		if err != nil {
+			s.logSyncProcessingError(remoteAddr, "client", input, "validate region", err)
+			return 0, syncClientResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to sync client"}
+		}
+		if !regionExists {
+			s.logClientSyncBadRequest(remoteAddr, input, "region not found")
+			return 0, syncClientResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "region not found"}
+		}
+
+		regionValue = regionID
+	}
+
+	var laboratorySystemValue any
+	var laboratorySystemID pgtype.UUID
+	if laboratorySystemText != "" {
+		if err := laboratorySystemID.Scan(laboratorySystemText); err != nil {
+			s.logClientSyncBadRequest(remoteAddr, input, "laboratorySystem must be a valid UUID parse_err=%q", err.Error())
+			return 0, syncClientResponse{}, &syncRequestError{StatusCode: http.StatusBadRequest, Message: "laboratorySystem must be a valid UUID"}
+		}
+
+		laboratorySystemValue = laboratorySystemID
+	}
+
+	created, err := s.upsertSyncClientRecord(ctx, clientID, input.Title, input.Address, regionValue, locationValue, laboratorySystemValue)
+	if err != nil {
+		s.logSyncProcessingError(remoteAddr, "client", input, "upsert client", err)
+		return 0, syncClientResponse{}, &syncRequestError{StatusCode: http.StatusInternalServerError, Message: "failed to sync client"}
+	}
+
+	statusCode := http.StatusOK
+	if created {
+		statusCode = http.StatusCreated
+	}
+
+	s.syncLogf(
+		"client sync upserted remote=%q id=%s created=%t region=%q laboratory_system=%q",
+		remoteAddr,
+		uuidToString(clientID),
+		created,
+		regionText,
+		laboratorySystemText,
+	)
+
+	var regionResponse *string
+	if regionText != "" {
+		regionResponse = &regionText
+	}
+
+	var laboratorySystemResponse *string
+	if laboratorySystemText != "" {
+		laboratorySystemResponse = &laboratorySystemText
+	}
+
+	return statusCode, syncClientResponse{
+		Address:          input.Address,
+		Created:          created,
+		ID:               uuidToString(clientID),
+		LaboratorySystem: laboratorySystemResponse,
+		Location:         locationValue,
+		Region:           regionResponse,
+		Title:            input.Title,
+	}, nil
 }
 
 func (s *Server) processClassificatorSyncRequest(ctx context.Context, remoteAddr string, input syncClassificatorRequest) (int, syncClassificatorResponse, error) {
@@ -4997,6 +5195,33 @@ func (s *Server) handleTicketSync(w http.ResponseWriter, r *http.Request) {
 
 			writeJSON(w, statusCode, syncDeviceEnvelopeResponse{
 				Type: "device",
+				Data: response,
+			})
+			return
+		case "client":
+			input, err := decodeClientSyncEnvelopeData(envelope.Data)
+			if err != nil {
+				s.logSyncDecodeError(r.RemoteAddr, entityType, envelope.Data, r.Header.Get("Content-Type"), r.ContentLength, err)
+				http.Error(w, "invalid request body", http.StatusBadRequest)
+				return
+			}
+			s.logSyncEntityReceived(r.RemoteAddr, entityType, envelope.Data)
+
+			statusCode, response, err := s.processClientSyncRequest(r.Context(), r.RemoteAddr, input)
+			if err != nil {
+				var requestErr *syncRequestError
+				if errors.As(err, &requestErr) {
+					http.Error(w, requestErr.Message, requestErr.StatusCode)
+					return
+				}
+
+				s.logSyncProcessingError(r.RemoteAddr, entityType, input, "process request", err)
+				http.Error(w, "failed to sync client", http.StatusInternalServerError)
+				return
+			}
+
+			writeJSON(w, statusCode, syncClientEnvelopeResponse{
+				Type: "client",
 				Data: response,
 			})
 			return
