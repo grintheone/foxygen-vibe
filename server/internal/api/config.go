@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"foxygen-vibe/server/internal/pouchsync"
 	"foxygen-vibe/server/internal/storage"
 )
 
@@ -149,6 +150,52 @@ func resolveStorageConfig() (storage.Config, error) {
 		return storage.Config{}, err
 	}
 
+	return config, nil
+}
+
+func resolvePouchSyncConfig() (pouchsync.Config, error) {
+	fileEnv, err := loadDotEnv(".env")
+	if err != nil {
+		return pouchsync.Config{}, err
+	}
+
+	pouchURL := getConfigValue(fileEnv, "POUCHDB_URL")
+	enabled := pouchURL != ""
+	if value := getConfigValue(fileEnv, "POUCHDB_ENABLED"); value != "" {
+		parsed, err := strconv.ParseBool(value)
+		if err != nil {
+			return pouchsync.Config{}, fmt.Errorf("POUCHDB_ENABLED: parse bool: %w", err)
+		}
+		enabled = parsed
+	}
+
+	heartbeat, err := resolveDuration(fileEnv, "POUCHDB_HEARTBEAT", 30*time.Second)
+	if err != nil {
+		return pouchsync.Config{}, err
+	}
+	retryMinDelay, err := resolveDuration(fileEnv, "POUCHDB_RETRY_MIN_DELAY", time.Second)
+	if err != nil {
+		return pouchsync.Config{}, err
+	}
+	retryMaxDelay, err := resolveDuration(fileEnv, "POUCHDB_RETRY_MAX_DELAY", 30*time.Second)
+	if err != nil {
+		return pouchsync.Config{}, err
+	}
+
+	config := pouchsync.Config{
+		Enabled:       enabled,
+		URL:           pouchURL,
+		Username:      getConfigValue(fileEnv, "POUCHDB_USERNAME"),
+		Password:      getConfigValue(fileEnv, "POUCHDB_PASSWORD"),
+		Source:        getConfigValue(fileEnv, "POUCHDB_SOURCE"),
+		Heartbeat:     heartbeat,
+		RetryMinDelay: retryMinDelay,
+		RetryMaxDelay: retryMaxDelay,
+	}.Normalized()
+
+	if err := config.Validate(); err != nil {
+		return pouchsync.Config{}, err
+	}
 	return config, nil
 }
 

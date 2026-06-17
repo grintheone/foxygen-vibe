@@ -9,6 +9,7 @@ import (
 
 	appdb "foxygen-vibe/server/internal/db"
 	"foxygen-vibe/server/internal/dbinit"
+	"foxygen-vibe/server/internal/pouchsync"
 	"foxygen-vibe/server/internal/storage"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -20,10 +21,13 @@ var newMinIOClient = storage.NewMinIO
 type Server struct {
 	databaseConfigured              bool
 	storageConfigured               bool
+	pouchSyncConfigured             bool
 	db                              *pgxpool.Pool
 	queries                         accountStore
 	auth                            authConfig
 	storage                         *storage.Client
+	pouchSyncCancel                 context.CancelFunc
+	pouchSyncDone                   <-chan struct{}
 	requesterRoleLookup             func(context.Context, pgtype.UUID) (string, error)
 	editorAccessCheck               func(http.ResponseWriter, *http.Request) (pgtype.UUID, bool)
 	editorRoleLookup                func(context.Context, pgtype.UUID) (string, error)
@@ -83,15 +87,21 @@ func New() (*Server, error) {
 		return nil, err
 	}
 
+	pouchSyncConfig, err := resolvePouchSyncConfig()
+	if err != nil {
+		return nil, err
+	}
+
 	importDefaultPassword, err := resolveImportDefaultPassword()
 	if err != nil {
 		return nil, err
 	}
 
 	api := &Server{
-		databaseConfigured: databaseURL != "",
-		storageConfigured:  storageConfig.Enabled(),
-		auth:               auth,
+		databaseConfigured:  databaseURL != "",
+		storageConfigured:   storageConfig.Enabled(),
+		pouchSyncConfigured: pouchSyncConfig.Enabled,
+		auth:                auth,
 	}
 
 	if storageConfig.Enabled() {
@@ -129,6 +139,10 @@ func New() (*Server, error) {
 		return nil, err
 	}
 
+	if pouchSyncConfig.Enabled {
+		api.startPouchSync(pouchSyncConfig)
+	}
+
 	return api, nil
 }
 
@@ -143,9 +157,32 @@ func (s *Server) connectStorage(ctx context.Context, config storage.Config) {
 }
 
 func (s *Server) Close() {
+	if s.pouchSyncCancel != nil {
+		s.pouchSyncCancel()
+	}
+	if s.pouchSyncDone != nil {
+		<-s.pouchSyncDone
+	}
 	if s.db != nil {
 		s.db.Close()
 	}
+}
+
+func (s *Server) startPouchSync(config pouchsync.Config) {
+	runner, err := pouchsync.New(config, s.db)
+	if err != nil {
+		log.Printf("pouchdb sync is configured but unavailable; continuing without it: %v", err)
+		return
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	s.pouchSyncCancel = cancel
+	s.pouchSyncDone = done
+	go func() {
+		defer close(done)
+		runner.Run(ctx)
+	}()
 }
 
 func (s *Server) Handler() http.Handler {
