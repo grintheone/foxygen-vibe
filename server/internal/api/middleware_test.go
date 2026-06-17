@@ -10,7 +10,7 @@ import (
 func TestShouldLogRequestAlwaysLogsNonHealthRequests(t *testing.T) {
 	t.Parallel()
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/sync", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/tickets", nil)
 
 	if !shouldLogRequest(req, http.StatusCreated, time.Now()) {
 		t.Fatal("expected non-health request to be logged")

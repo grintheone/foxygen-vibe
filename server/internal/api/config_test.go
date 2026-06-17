@@ -67,49 +67,6 @@ func TestResolveStorageConfigParsesMinIOSettings(t *testing.T) {
 	}
 }
 
-func TestResolveSyncConfigReturnsDisabledWhenUnset(t *testing.T) {
-	dir := t.TempDir()
-	writeConfigTestEnv(t, dir, "")
-
-	restore := changeWorkingDirectory(t, dir)
-	defer restore()
-
-	cfg, err := resolveSyncConfig()
-	if err != nil {
-		t.Fatalf("resolve sync config: %v", err)
-	}
-
-	if cfg.Enabled() {
-		t.Fatalf("expected sync to be disabled, got %+v", cfg)
-	}
-	if cfg.logFilePath != defaultSyncLogFilePath {
-		t.Fatalf("expected default sync log path %q, got %q", defaultSyncLogFilePath, cfg.logFilePath)
-	}
-}
-
-func TestResolveSyncConfigParsesSecret(t *testing.T) {
-	dir := t.TempDir()
-	writeConfigTestEnv(t, dir, "TICKET_SYNC_SECRET=shared-ticket-secret\nTICKET_SYNC_LOG_FILE=/var/log/foxygen/sync.log\n")
-
-	restore := changeWorkingDirectory(t, dir)
-	defer restore()
-
-	cfg, err := resolveSyncConfig()
-	if err != nil {
-		t.Fatalf("resolve sync config: %v", err)
-	}
-
-	if !cfg.Enabled() {
-		t.Fatal("expected sync to be enabled")
-	}
-	if cfg.sharedSecret != "shared-ticket-secret" {
-		t.Fatalf("expected sync secret to be preserved, got %q", cfg.sharedSecret)
-	}
-	if cfg.logFilePath != "/var/log/foxygen/sync.log" {
-		t.Fatalf("expected sync log path to be preserved, got %q", cfg.logFilePath)
-	}
-}
-
 func changeWorkingDirectory(t *testing.T, dir string) func() {
 	t.Helper()
 

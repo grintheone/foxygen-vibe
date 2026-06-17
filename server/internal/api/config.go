@@ -17,15 +17,6 @@ type authConfig struct {
 	refreshTokenTTL time.Duration
 }
 
-type syncConfig struct {
-	sharedSecret string
-	logFilePath  string
-}
-
-func (c syncConfig) Enabled() bool {
-	return strings.TrimSpace(c.sharedSecret) != ""
-}
-
 func resolveDatabaseURL() (string, error) {
 	fileEnv, err := loadDotEnv(".env")
 	if err != nil {
@@ -159,23 +150,6 @@ func resolveStorageConfig() (storage.Config, error) {
 	}
 
 	return config, nil
-}
-
-func resolveSyncConfig() (syncConfig, error) {
-	fileEnv, err := loadDotEnv(".env")
-	if err != nil {
-		return syncConfig{}, err
-	}
-
-	logFilePath := getConfigValue(fileEnv, "TICKET_SYNC_LOG_FILE")
-	if logFilePath == "" {
-		logFilePath = defaultSyncLogFilePath
-	}
-
-	return syncConfig{
-		sharedSecret: getConfigValue(fileEnv, "TICKET_SYNC_SECRET"),
-		logFilePath:  logFilePath,
-	}, nil
 }
 
 func resolveImportDefaultPassword() (string, error) {

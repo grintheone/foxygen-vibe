@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"log"
 	"net/http"
 	"time"
@@ -24,9 +23,6 @@ type Server struct {
 	db                              *pgxpool.Pool
 	queries                         accountStore
 	auth                            authConfig
-	sync                            syncConfig
-	syncLogCloser                   io.Closer
-	syncLogger                      *log.Logger
 	storage                         *storage.Client
 	requesterRoleLookup             func(context.Context, pgtype.UUID) (string, error)
 	editorAccessCheck               func(http.ResponseWriter, *http.Request) (pgtype.UUID, bool)
@@ -57,10 +53,6 @@ type Server struct {
 	editorTicketUpdater             func(context.Context, pgtype.UUID, any, any, any, any, any, any, any, string, string, string, bool, bool, any, any, any, any, any) (int64, error)
 	profileAccessCheck              func(context.Context, pgtype.UUID, pgtype.UUID) (bool, error)
 	accountDisabledUpdater          func(context.Context, pgtype.UUID, bool) (bool, error)
-	syncClientExists                func(context.Context, pgtype.UUID) (bool, error)
-	syncClientUpserter              func(context.Context, pgtype.UUID, string, string, any, any, any) (bool, error)
-	syncClassificatorUpserter       func(context.Context, pgtype.UUID, string, any, any, json.RawMessage, json.RawMessage, []string, []string) (bool, error)
-	syncContactUpserter             func(context.Context, pgtype.UUID, string, string, string, string, pgtype.UUID) (bool, error)
 }
 
 type accountStore interface {
@@ -91,11 +83,6 @@ func New() (*Server, error) {
 		return nil, err
 	}
 
-	sync, err := resolveSyncConfig()
-	if err != nil {
-		return nil, err
-	}
-
 	importDefaultPassword, err := resolveImportDefaultPassword()
 	if err != nil {
 		return nil, err
@@ -105,15 +92,7 @@ func New() (*Server, error) {
 		databaseConfigured: databaseURL != "",
 		storageConfigured:  storageConfig.Enabled(),
 		auth:               auth,
-		sync:               sync,
 	}
-
-	syncLogger, syncLogCloser, err := newSyncLogger(sync.logFilePath)
-	if err != nil {
-		return nil, err
-	}
-	api.syncLogger = syncLogger
-	api.syncLogCloser = syncLogCloser
 
 	if storageConfig.Enabled() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -167,9 +146,6 @@ func (s *Server) Close() {
 	if s.db != nil {
 		s.db.Close()
 	}
-	if s.syncLogCloser != nil {
-		_ = s.syncLogCloser.Close()
-	}
 }
 
 func (s *Server) Handler() http.Handler {
@@ -207,7 +183,6 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/departments", s.handleDepartments)
 	mux.HandleFunc("/api/departments/members", s.handleDepartmentMembers)
 	mux.HandleFunc("/api/ticket-reasons", s.handleTicketReasons)
-	mux.HandleFunc("/api/v1/sync", s.handleTicketSync)
 	mux.HandleFunc("/api/tickets", s.handleTickets)
 	mux.HandleFunc("/api/tickets/", s.handleTicketByID)
 	mux.HandleFunc("/api/tickets/department", s.handleDepartmentTickets)

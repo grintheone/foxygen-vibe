@@ -41,8 +41,6 @@ services:
             DB_NAME: ${POSTGRES_DB:-foxygendb}
             DB_SSLMODE: ${DB_SSLMODE:-disable}
             JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
-            TICKET_SYNC_SECRET: ${TICKET_SYNC_SECRET:-}
-            TICKET_SYNC_LOG_FILE: ${TICKET_SYNC_LOG_FILE:-/app/logs/sync.log}
             ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL:-15m}
             REFRESH_TOKEN_TTL: ${REFRESH_TOKEN_TTL:-168h}
             MINIO_ENDPOINT: ${MINIO_ENDPOINT:-}
@@ -62,7 +60,6 @@ services:
             BOOTSTRAP_STORAGE_WAIT_INTERVAL: ${BOOTSTRAP_STORAGE_WAIT_INTERVAL:-2s}
         volumes:
             - ./deploy/production/bootstrap:/bootstrap:ro
-            - server-sync-logs:/app/logs
         healthcheck:
             test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/api/health >/dev/null"]
             start_period: 5m
@@ -84,7 +81,6 @@ services:
 volumes:
     postgres-data:
     minio-data:
-    server-sync-logs:
 
 networks:
     default:
