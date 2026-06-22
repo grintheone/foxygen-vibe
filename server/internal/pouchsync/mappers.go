@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -545,6 +546,70 @@ func parseTicketRecord(change changeEvent) (ticketRecord, error) {
 	}, nil
 }
 
+const upsertTicketWithNumberSQL = `INSERT INTO tickets (
+	id,
+	number,
+	created_at,
+	assigned_at,
+	workstarted_at,
+	workfinished_at,
+	planned_start,
+	planned_end,
+	assigned_start,
+	assigned_end,
+	urgent,
+	closed_at,
+	client,
+	device,
+	ticket_type,
+	author,
+	external_author,
+	department,
+	assigned_by,
+	reason,
+	description,
+	contact_person,
+	executor,
+	status,
+	result,
+	used_materials,
+	reference_ticket,
+	double_signed
+)
+OVERRIDING SYSTEM VALUE
+VALUES (
+	$1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+	$11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
+	$21, $22, $23, $24, $25, '{}'::uuid[], NULL, $26
+)
+ON CONFLICT (id) DO UPDATE
+SET created_at = EXCLUDED.created_at,
+    assigned_at = EXCLUDED.assigned_at,
+    workstarted_at = EXCLUDED.workstarted_at,
+    workfinished_at = EXCLUDED.workfinished_at,
+    planned_start = EXCLUDED.planned_start,
+    planned_end = EXCLUDED.planned_end,
+    assigned_start = EXCLUDED.assigned_start,
+    assigned_end = EXCLUDED.assigned_end,
+    urgent = EXCLUDED.urgent,
+    closed_at = EXCLUDED.closed_at,
+    client = EXCLUDED.client,
+    device = EXCLUDED.device,
+    ticket_type = EXCLUDED.ticket_type,
+    author = EXCLUDED.author,
+    external_author = EXCLUDED.external_author,
+    department = EXCLUDED.department,
+    assigned_by = EXCLUDED.assigned_by,
+    reason = EXCLUDED.reason,
+    description = EXCLUDED.description,
+    contact_person = EXCLUDED.contact_person,
+    executor = EXCLUDED.executor,
+    status = EXCLUDED.status,
+    result = EXCLUDED.result,
+    used_materials = EXCLUDED.used_materials,
+    reference_ticket = EXCLUDED.reference_ticket,
+    double_signed = EXCLUDED.double_signed`
+
 func upsertTicketWithNumber(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -563,70 +628,7 @@ func upsertTicketWithNumber(
 ) error {
 	_, err := tx.Exec(
 		ctx,
-		`INSERT INTO tickets (
-			id,
-			number,
-			created_at,
-			assigned_at,
-			workstarted_at,
-			workfinished_at,
-			planned_start,
-			planned_end,
-			assigned_start,
-			assigned_end,
-			urgent,
-			closed_at,
-			client,
-			device,
-			ticket_type,
-			author,
-			external_author,
-			department,
-			assigned_by,
-			reason,
-			description,
-			contact_person,
-			executor,
-			status,
-			result,
-			used_materials,
-			reference_ticket,
-			double_signed
-		)
-		OVERRIDING SYSTEM VALUE
-		VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-			$11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-			$21, $22, $23, $24, $25, '{}'::uuid[], NULL, $26
-		)
-		ON CONFLICT (id) DO UPDATE
-		SET number = EXCLUDED.number,
-		    created_at = EXCLUDED.created_at,
-		    assigned_at = EXCLUDED.assigned_at,
-		    workstarted_at = EXCLUDED.workstarted_at,
-		    workfinished_at = EXCLUDED.workfinished_at,
-		    planned_start = EXCLUDED.planned_start,
-		    planned_end = EXCLUDED.planned_end,
-		    assigned_start = EXCLUDED.assigned_start,
-		    assigned_end = EXCLUDED.assigned_end,
-		    urgent = EXCLUDED.urgent,
-		    closed_at = EXCLUDED.closed_at,
-		    client = EXCLUDED.client,
-		    device = EXCLUDED.device,
-		    ticket_type = EXCLUDED.ticket_type,
-		    author = EXCLUDED.author,
-		    external_author = EXCLUDED.external_author,
-		    department = EXCLUDED.department,
-		    assigned_by = EXCLUDED.assigned_by,
-		    reason = EXCLUDED.reason,
-		    description = EXCLUDED.description,
-		    contact_person = EXCLUDED.contact_person,
-		    executor = EXCLUDED.executor,
-		    status = EXCLUDED.status,
-		    result = EXCLUDED.result,
-		    used_materials = EXCLUDED.used_materials,
-		    reference_ticket = EXCLUDED.reference_ticket,
-		    double_signed = EXCLUDED.double_signed`,
+		upsertTicketWithNumberSQL,
 		item.ID,
 		*item.Number,
 		item.CreatedAt,
@@ -782,6 +784,14 @@ func decodeDoc(change changeEvent, target any) error {
 }
 
 func existsByID(ctx context.Context, tx pgx.Tx, table string, id string) bool {
+	if columnRequiresUUID(table, "id") {
+		normalized, ok := normalizeUUID(id)
+		if !ok {
+			return false
+		}
+		id = normalized
+	}
+
 	var exists bool
 	query := fmt.Sprintf(`SELECT EXISTS (SELECT 1 FROM %s WHERE id = $1)`, table)
 	if err := tx.QueryRow(ctx, query, id).Scan(&exists); err != nil {
@@ -799,6 +809,13 @@ func resolveOptionalID(ctx context.Context, tx pgx.Tx, table string, value strin
 	if len(columns) > 0 && strings.TrimSpace(columns[0]) != "" {
 		column = strings.TrimSpace(columns[0])
 	}
+	if columnRequiresUUID(table, column) {
+		normalized, ok := normalizeUUID(value)
+		if !ok {
+			return nil
+		}
+		value = normalized
+	}
 	if existsByColumn(ctx, tx, table, column, value) {
 		return value
 	}
@@ -810,6 +827,11 @@ func resolveTicketAuthor(ctx context.Context, tx pgx.Tx, value string) (any, any
 	if value == "" {
 		return nil, nil
 	}
+	normalized, ok := normalizeUUID(value)
+	if !ok {
+		return nil, nil
+	}
+	value = normalized
 	if existsByColumn(ctx, tx, "accounts", "user_id", value) {
 		return value, nil
 	}
@@ -828,12 +850,50 @@ func resolveTicketAuthor(ctx context.Context, tx pgx.Tx, value string) (any, any
 }
 
 func existsByColumn(ctx context.Context, tx pgx.Tx, table string, column string, value string) bool {
+	if columnRequiresUUID(table, column) {
+		normalized, ok := normalizeUUID(value)
+		if !ok {
+			return false
+		}
+		value = normalized
+	}
+
 	var exists bool
 	query := fmt.Sprintf(`SELECT EXISTS (SELECT 1 FROM %s WHERE %s = $1)`, table, column)
 	if err := tx.QueryRow(ctx, query, value).Scan(&exists); err != nil {
 		return false
 	}
 	return exists
+}
+
+var uuidColumns = map[string]map[string]struct{}{
+	"accounts":       {"user_id": {}},
+	"classificators": {"id": {}},
+	"clients":        {"id": {}},
+	"contacts":       {"id": {}},
+	"departments":    {"id": {}},
+	"devices":        {"id": {}},
+	"external_users": {"id": {}, "linked_user_id": {}},
+	"manufacturers":  {"id": {}},
+	"regions":        {"id": {}},
+	"research_type":  {"id": {}},
+}
+
+func columnRequiresUUID(table string, column string) bool {
+	columns, ok := uuidColumns[table]
+	if !ok {
+		return false
+	}
+	_, ok = columns[column]
+	return ok
+}
+
+func normalizeUUID(value string) (string, bool) {
+	parsed, err := uuid.Parse(strings.TrimSpace(value))
+	if err != nil {
+		return "", false
+	}
+	return parsed.String(), true
 }
 
 func syncTicketNumberSequence(ctx context.Context, tx pgx.Tx) error {

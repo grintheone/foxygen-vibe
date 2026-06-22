@@ -188,6 +188,7 @@ func resolvePouchSyncConfig() (pouchsync.Config, error) {
 		Username:      getConfigValue(fileEnv, "POUCHDB_USERNAME"),
 		Password:      getConfigValue(fileEnv, "POUCHDB_PASSWORD"),
 		Source:        getConfigValue(fileEnv, "POUCHDB_SOURCE"),
+		Since:         getConfigValue(fileEnv, "POUCHDB_SINCE"),
 		Heartbeat:     heartbeat,
 		RetryMinDelay: retryMinDelay,
 		RetryMaxDelay: retryMaxDelay,

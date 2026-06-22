@@ -25,6 +25,7 @@ type Config struct {
 	Username      string
 	Password      string
 	Source        string
+	Since         string
 	Heartbeat     time.Duration
 	RetryMinDelay time.Duration
 	RetryMaxDelay time.Duration
@@ -33,6 +34,9 @@ type Config struct {
 func (c Config) Normalized() Config {
 	if c.Source == "" {
 		c.Source = defaultSource
+	}
+	if c.Since == "" {
+		c.Since = "now"
 	}
 	if c.Heartbeat <= 0 {
 		c.Heartbeat = 30 * time.Second
@@ -59,6 +63,11 @@ func (c Config) Validate() error {
 	if _, err := url.ParseRequestURI(c.URL); err != nil {
 		return fmt.Errorf("POUCHDB_URL: %w", err)
 	}
+	switch c.Since {
+	case "now", "checkpoint":
+	default:
+		return fmt.Errorf("POUCHDB_SINCE must be either now or checkpoint, got %q", c.Since)
+	}
 	return nil
 }
 
@@ -84,18 +93,27 @@ func New(config Config, db *pgxpool.Pool) (*Runner, error) {
 }
 
 func (r *Runner) Run(ctx context.Context) {
+	if !r.config.Enabled {
+		log.Printf("pouchdb sync: disabled")
+		return
+	}
+
+	log.Printf("pouchdb sync: worker running source=%s url=%s since_mode=%s", r.config.Source, redactURL(r.config.URL), r.config.Since)
 	delay := r.config.RetryMinDelay
+	useInitialSince := true
 	for ctx.Err() == nil {
-		since, err := r.loadCheckpoint(ctx)
+		since, err := r.resolveSince(ctx, useInitialSince)
 		if err != nil {
-			log.Printf("pouchdb sync: load checkpoint: %v", err)
+			log.Printf("pouchdb sync: resolve since: %v", err)
 			sleep(ctx, delay)
 			delay = nextDelay(delay, r.config.RetryMaxDelay)
 			continue
 		}
+		useInitialSince = false
 
+		log.Printf("pouchdb sync: since resolved source=%s since=%s", r.config.Source, since)
 		if err := r.streamChanges(ctx, since); err != nil && ctx.Err() == nil {
-			log.Printf("pouchdb sync: changes feed disconnected: %v", err)
+			log.Printf("pouchdb sync: changes feed disconnected source=%s retry_in=%s error=%v", r.config.Source, delay, err)
 			sleep(ctx, delay)
 			delay = nextDelay(delay, r.config.RetryMaxDelay)
 			continue
@@ -105,17 +123,24 @@ func (r *Runner) Run(ctx context.Context) {
 	}
 }
 
+func (r *Runner) resolveSince(ctx context.Context, useInitialSince bool) (string, error) {
+	if useInitialSince && r.config.Since == "now" {
+		return "now", nil
+	}
+	return r.loadCheckpoint(ctx)
+}
+
 func (r *Runner) loadCheckpoint(ctx context.Context) (string, error) {
 	var seq string
 	err := r.db.QueryRow(ctx, `SELECT last_seq FROM pouchdb_checkpoints WHERE source = $1`, r.config.Source).Scan(&seq)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return "0", nil
+		return "now", nil
 	}
 	if err != nil {
 		return "", err
 	}
 	if strings.TrimSpace(seq) == "" {
-		return "0", nil
+		return "now", nil
 	}
 	return seq, nil
 }
@@ -125,6 +150,7 @@ func (r *Runner) streamChanges(ctx context.Context, since string) error {
 	if err != nil {
 		return err
 	}
+	log.Printf("pouchdb sync: subscribing source=%s changes_url=%s", r.config.Source, redactURL(changesURL))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, changesURL, nil)
 	if err != nil {
@@ -146,7 +172,7 @@ func (r *Runner) streamChanges(ctx context.Context, since string) error {
 		return fmt.Errorf("changes feed returned %s: %s", resp.Status, strings.TrimSpace(string(body)))
 	}
 
-	log.Printf("pouchdb sync: connected source=%s since=%s", r.config.Source, since)
+	log.Printf("pouchdb sync: subscribed source=%s since=%s", r.config.Source, since)
 	decoder := json.NewDecoder(resp.Body)
 	for ctx.Err() == nil {
 		var change changeEvent
@@ -360,4 +386,15 @@ func nextDelay(current, max time.Duration) time.Duration {
 		return max
 	}
 	return next
+}
+
+func redactURL(value string) string {
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return "<invalid-url>"
+	}
+	if parsed.User != nil {
+		parsed.User = url.UserPassword(parsed.User.Username(), "xxxxx")
+	}
+	return parsed.String()
 }

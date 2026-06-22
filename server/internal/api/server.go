@@ -141,6 +141,8 @@ func New() (*Server, error) {
 
 	if pouchSyncConfig.Enabled {
 		api.startPouchSync(pouchSyncConfig)
+	} else {
+		log.Printf("pouchdb sync: not configured; set POUCHDB_URL to enable changes feed subscription")
 	}
 
 	return api, nil
@@ -175,6 +177,7 @@ func (s *Server) startPouchSync(config pouchsync.Config) {
 		return
 	}
 
+	log.Printf("pouchdb sync: starting background changes feed listener source=%s", config.Source)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	s.pouchSyncCancel = cancel
@@ -182,6 +185,7 @@ func (s *Server) startPouchSync(config pouchsync.Config) {
 	go func() {
 		defer close(done)
 		runner.Run(ctx)
+		log.Printf("pouchdb sync: background changes feed listener stopped source=%s", config.Source)
 	}()
 }
 
