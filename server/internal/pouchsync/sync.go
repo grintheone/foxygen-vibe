@@ -94,11 +94,10 @@ func New(config Config, db *pgxpool.Pool) (*Runner, error) {
 
 func (r *Runner) Run(ctx context.Context) {
 	if !r.config.Enabled {
-		log.Printf("pouchdb sync: disabled")
 		return
 	}
 
-	log.Printf("pouchdb sync: worker running source=%s url=%s since_mode=%s", r.config.Source, redactURL(r.config.URL), r.config.Since)
+	log.Printf("pouchdb sync: connecting source=%s url=%s since_mode=%s", r.config.Source, redactURL(r.config.URL), r.config.Since)
 	delay := r.config.RetryMinDelay
 	useInitialSince := true
 	for ctx.Err() == nil {
@@ -111,7 +110,6 @@ func (r *Runner) Run(ctx context.Context) {
 		}
 		useInitialSince = false
 
-		log.Printf("pouchdb sync: since resolved source=%s since=%s", r.config.Source, since)
 		if err := r.streamChanges(ctx, since); err != nil && ctx.Err() == nil {
 			log.Printf("pouchdb sync: changes feed disconnected source=%s retry_in=%s error=%v", r.config.Source, delay, err)
 			sleep(ctx, delay)
@@ -150,7 +148,6 @@ func (r *Runner) streamChanges(ctx context.Context, since string) error {
 	if err != nil {
 		return err
 	}
-	log.Printf("pouchdb sync: subscribing source=%s changes_url=%s", r.config.Source, redactURL(changesURL))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, changesURL, nil)
 	if err != nil {
@@ -172,7 +169,6 @@ func (r *Runner) streamChanges(ctx context.Context, since string) error {
 		return fmt.Errorf("changes feed returned %s: %s", resp.Status, strings.TrimSpace(string(body)))
 	}
 
-	log.Printf("pouchdb sync: subscribed source=%s since=%s", r.config.Source, since)
 	decoder := json.NewDecoder(resp.Body)
 	for ctx.Err() == nil {
 		var change changeEvent
@@ -217,17 +213,6 @@ func (r *Runner) applyChange(ctx context.Context, change changeEvent) error {
 	if seq == "" {
 		return errors.New("change has empty sequence")
 	}
-
-	log.Printf(
-		"pouchdb sync: received change source=%s seq=%s id=%s rev=%s deleted=%t kind=%s doc=%s",
-		r.config.Source,
-		seq,
-		change.ID,
-		change.rev(),
-		change.Deleted,
-		change.kind(),
-		change.docString(),
-	)
 
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
@@ -284,39 +269,6 @@ func (c changeEvent) rev() string {
 		return ""
 	}
 	return c.Changes[0].Rev
-}
-
-func (c changeEvent) docString() string {
-	raw := bytes.TrimSpace(c.Doc)
-	if len(raw) == 0 {
-		return "<empty>"
-	}
-	return string(raw)
-}
-
-func (c changeEvent) kind() string {
-	switch {
-	case strings.HasPrefix(c.ID, "region_"):
-		return "region"
-	case strings.HasPrefix(c.ID, "manufacturer_"):
-		return "manufacturer"
-	case strings.HasPrefix(c.ID, "researchType_"):
-		return "research_type"
-	case strings.HasPrefix(c.ID, "ticketReason_"):
-		return "ticket_reason"
-	case strings.HasPrefix(c.ID, "client_"):
-		return "client"
-	case strings.HasPrefix(c.ID, "contact_"):
-		return "contact"
-	case strings.HasPrefix(c.ID, "classificator_"):
-		return "classificator"
-	case strings.HasPrefix(c.ID, "device_"):
-		return "device"
-	case strings.HasPrefix(c.ID, "ticket_"):
-		return "ticket"
-	default:
-		return "raw_only"
-	}
 }
 
 func mirrorDocument(ctx context.Context, tx pgx.Tx, change changeEvent, seq string) error {
