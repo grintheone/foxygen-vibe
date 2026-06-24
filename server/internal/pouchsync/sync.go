@@ -239,7 +239,12 @@ func (r *Runner) applyChange(ctx context.Context, change changeEvent) error {
 		return fmt.Errorf("update checkpoint: %w", err)
 	}
 
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+
+	log.Printf("pouchdb sync: applied type=%s id=%s", change.entityType(), change.ID)
+	return nil
 }
 
 type changeEvent struct {
@@ -269,6 +274,31 @@ func (c changeEvent) rev() string {
 		return ""
 	}
 	return c.Changes[0].Rev
+}
+
+func (c changeEvent) entityType() string {
+	switch {
+	case strings.HasPrefix(c.ID, "region_"):
+		return "region"
+	case strings.HasPrefix(c.ID, "manufacturer_"):
+		return "manufacturer"
+	case strings.HasPrefix(c.ID, "researchType_"):
+		return "research_type"
+	case strings.HasPrefix(c.ID, "ticketReason_"):
+		return "ticket_reason"
+	case strings.HasPrefix(c.ID, "client_"):
+		return "client"
+	case strings.HasPrefix(c.ID, "contact_"):
+		return "contact"
+	case strings.HasPrefix(c.ID, "classificator_"):
+		return "classificator"
+	case strings.HasPrefix(c.ID, "device_"):
+		return "device"
+	case strings.HasPrefix(c.ID, "ticket_"):
+		return "ticket"
+	default:
+		return "raw"
+	}
 }
 
 func mirrorDocument(ctx context.Context, tx pgx.Tx, change changeEvent, seq string) error {
