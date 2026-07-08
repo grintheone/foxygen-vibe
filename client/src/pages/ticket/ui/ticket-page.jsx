@@ -3,7 +3,6 @@ import { useNavigate, useParams } from "react-router";
 import { useAuth } from "../../../features/auth";
 import { routePaths } from "../../../shared/config/routes";
 import {
-    downloadTicketAttachmentFile,
     useGetTicketByIdQuery,
     usePatchTicketMutation,
     useUploadTicketAttachmentMutation,
@@ -207,18 +206,6 @@ export function TicketPage() {
         }).unwrap();
     }
 
-    async function handleDownloadAttachment(attachment) {
-        if (!ticket?.id || !attachment?.id) {
-            return;
-        }
-
-        await downloadTicketAttachmentFile({
-            attachmentId: attachment.id,
-            fileName: attachment.name,
-            ticketId: ticket.id,
-        });
-    }
-
     return (
         <PageShell>
             <section
@@ -325,7 +312,6 @@ export function TicketPage() {
                             setReportSubmitError("");
                             setIsReportSheetOpen(false);
                         }}
-                        onDownloadAttachment={handleDownloadAttachment}
                         onSubmitClose={handleCloseTicketReport}
                         onUploadAttachment={handleUploadAttachment}
                         resolvedReason={ticket?.resolvedReason}

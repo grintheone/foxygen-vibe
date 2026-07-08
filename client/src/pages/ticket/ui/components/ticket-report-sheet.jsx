@@ -34,12 +34,11 @@ const supportedImageAcceptValue =
 
 function createPreviewItems(files) {
     return files.map((file) => ({
-        downloadUrl: "",
         file,
         id: `${file.name}-${file.lastModified}-${file.size}-${Math.random().toString(36).slice(2)}`,
         previewUrl: URL.createObjectURL(file),
         serverAttachmentId: "",
-        uploadStatus: "pending",
+        uploadStatus: "submitting",
     }));
 }
 
@@ -83,7 +82,7 @@ function resolveUploadStatusLabel(status) {
         return "Ошибка";
     }
 
-    return "Ожидает";
+    return "Загружаем";
 }
 
 export function TicketReportSheet({
@@ -92,7 +91,6 @@ export function TicketReportSheet({
     isOpen,
     isSubmitting,
     onClose,
-    onDownloadAttachment,
     onSubmitClose,
     onUploadAttachment,
     resolvedReason,
@@ -108,6 +106,7 @@ export function TicketReportSheet({
     });
     const [isDoubleSigned, setIsDoubleSigned] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
+    const [isUploadingMedia, setIsUploadingMedia] = useState(false);
     const [localError, setLocalError] = useState("");
     const [mediaPreviews, setMediaPreviews] = useState([]);
     const [recommendationDepartmentId, setRecommendationDepartmentId] = useState("");
@@ -131,6 +130,7 @@ export function TicketReportSheet({
             setLocalError("");
             setIsDoubleSigned(false);
             setIsSubmitted(false);
+            setIsUploadingMedia(false);
             setMediaPreviews((previous) => {
                 previous.forEach((item) => URL.revokeObjectURL(item.previewUrl));
                 return [];
@@ -149,6 +149,66 @@ export function TicketReportSheet({
     const reportSummary = [resolvedReason, deviceName, "в", clientName]
         .filter((part) => Boolean(part && String(part).trim()))
         .join(" ");
+
+    async function uploadPreviewItems(previewItems) {
+        if (previewItems.length === 0) {
+            return true;
+        }
+
+        if (!onUploadAttachment) {
+            setLocalError("Загрузка вложений не настроена.");
+            return false;
+        }
+
+        setIsUploadingMedia(true);
+        setMediaPreviews((previous) =>
+            previous.map((item) =>
+                previewItems.some((preview) => preview.id === item.id)
+                    ? {
+                          ...item,
+                          uploadStatus: "submitting",
+                      }
+                    : item,
+            ),
+        );
+
+        let uploadFailed = false;
+        for (const item of previewItems) {
+            try {
+                const uploadedAttachment = await onUploadAttachment(item.file);
+                setMediaPreviews((previous) =>
+                    previous.map((current) =>
+                        current.id !== item.id
+                            ? current
+                            : {
+                                  ...current,
+                                  serverAttachmentId: uploadedAttachment?.id || "",
+                                  uploadStatus: "uploaded",
+                              },
+                    ),
+                );
+            } catch {
+                uploadFailed = true;
+                setMediaPreviews((previous) =>
+                    previous.map((current) =>
+                        current.id !== item.id
+                            ? current
+                            : {
+                                  ...current,
+                                  uploadStatus: "failed",
+                              },
+                    ),
+                );
+            }
+        }
+
+        setIsUploadingMedia(false);
+        if (uploadFailed) {
+            setLocalError("Не удалось загрузить все вложения.");
+        }
+
+        return !uploadFailed;
+    }
 
     function handleMediaSelect(event) {
         const selectedFiles = Array.from(event.target.files || []);
@@ -174,6 +234,7 @@ export function TicketReportSheet({
         setMediaPreviews((previous) => [...previous, ...previewItems]);
         setIsSubmitted(false);
         event.target.value = "";
+        void uploadPreviewItems(previewItems);
     }
 
     function handleRemovePreview(previewId) {
@@ -187,28 +248,10 @@ export function TicketReportSheet({
         });
     }
 
-    async function handleDownloadPreview(preview) {
-        if (!preview.serverAttachmentId || !onDownloadAttachment) {
-            return;
-        }
-
-        setLocalError("");
-
-        try {
-            await onDownloadAttachment({
-                downloadUrl: preview.downloadUrl,
-                id: preview.serverAttachmentId,
-                name: preview.file.name,
-            });
-        } catch (error) {
-            setLocalError(error?.message || "Не удалось скачать вложение.");
-        }
-    }
-
     async function handleSubmit(event) {
         event.preventDefault();
 
-        if (isSubmitting || isSubmitted) {
+        if (isSubmitting || isUploadingMedia || isSubmitted) {
             return;
         }
 
@@ -231,58 +274,8 @@ export function TicketReportSheet({
 
         setLocalError("");
         setSubmitSuccessMessage("");
-        if (!onUploadAttachment) {
-            setLocalError("Загрузка вложений не настроена.");
-            return;
-        }
-
         const previewsToUpload = mediaPreviewsRef.current.filter((item) => !item.serverAttachmentId);
-        if (previewsToUpload.length > 0) {
-            setMediaPreviews((previous) =>
-                previous.map((item) =>
-                    item.serverAttachmentId
-                        ? item
-                        : {
-                              ...item,
-                              uploadStatus: "submitting",
-                          },
-                ),
-            );
-        }
-
-        let uploadFailed = false;
-        for (const item of previewsToUpload) {
-            try {
-                const uploadedAttachment = await onUploadAttachment(item.file);
-                setMediaPreviews((previous) =>
-                    previous.map((current) =>
-                        current.id !== item.id
-                            ? current
-                            : {
-                                  ...current,
-                                  downloadUrl: uploadedAttachment?.downloadUrl || "",
-                                  serverAttachmentId: uploadedAttachment?.id || "",
-                                  uploadStatus: "uploaded",
-                              },
-                    ),
-                );
-            } catch {
-                uploadFailed = true;
-                setMediaPreviews((previous) =>
-                    previous.map((current) =>
-                        current.id !== item.id
-                            ? current
-                            : {
-                                  ...current,
-                                  uploadStatus: "failed",
-                              },
-                    ),
-                );
-            }
-        }
-
-        if (uploadFailed) {
-            setLocalError("Не удалось загрузить все вложения.");
+        if (!(await uploadPreviewItems(previewsToUpload))) {
             return;
         }
 
@@ -376,7 +369,12 @@ export function TicketReportSheet({
                                     <button
                                         type="button"
                                         onClick={() => handleRemovePreview(item.id)}
-                                        disabled={isSubmitting || isSubmitted || Boolean(item.serverAttachmentId)}
+                                        disabled={
+                                            isSubmitting ||
+                                            isUploadingMedia ||
+                                            isSubmitted ||
+                                            Boolean(item.serverAttachmentId)
+                                        }
                                         className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white transition hover:bg-black/80 disabled:opacity-60"
                                         aria-label={`Удалить ${item.file.name}`}
                                     >
@@ -401,17 +399,6 @@ export function TicketReportSheet({
                                     >
                                         {resolveUploadStatusLabel(item.uploadStatus)}
                                     </span>
-
-                                    {item.serverAttachmentId ? (
-                                        <button
-                                            type="button"
-                                            onClick={() => handleDownloadPreview(item)}
-                                            disabled={isSubmitting}
-                                            className="absolute bottom-2 right-2 rounded-full bg-black/60 px-3 py-1 text-[11px] font-semibold text-white transition hover:bg-black/80 disabled:opacity-60"
-                                        >
-                                            Скачать
-                                        </button>
-                                    ) : null}
                                 </div>
                             ))}
                         </div>
@@ -422,7 +409,7 @@ export function TicketReportSheet({
                             type="file"
                             accept={supportedImageAcceptValue}
                             multiple
-                            disabled={isSubmitting || isSubmitted}
+                            disabled={isSubmitting || isUploadingMedia || isSubmitted}
                             className="sr-only"
                             onChange={handleMediaSelect}
                         />
@@ -496,7 +483,7 @@ export function TicketReportSheet({
                     <div className="sticky -bottom-6 -mx-6 border-t border-white/15 bg-slate-950/95 px-6 py-5 backdrop-blur">
                         <button
                             type="submit"
-                            disabled={isSubmitting || isSubmitted}
+                            disabled={isSubmitting || isUploadingMedia || isSubmitted}
                             className="flex min-h-14 w-full items-center justify-center rounded-2xl bg-emerald-500 px-5 text-base font-semibold text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-emerald-600/70 sm:text-lg"
                         >
                             <span className="mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/20">
@@ -515,7 +502,11 @@ export function TicketReportSheet({
                                 </svg>
                             </span>
                             <span>
-                                {isSubmitting ? "Сохраняем..." : isSubmitted ? "Тикет закрыт" : "Закрыть тикет"}
+                                {isSubmitting || isUploadingMedia
+                                    ? "Сохраняем..."
+                                    : isSubmitted
+                                      ? "Тикет закрыт"
+                                      : "Закрыть тикет"}
                             </span>
                         </button>
 

@@ -78,7 +78,7 @@ function DisabledBadgeIcon() {
     );
 }
 
-function MemberCard({ latestClientAddress, member, to, totalTickets }) {
+function MemberCard({ latestClientName, member, to, totalTickets }) {
     const status = member.latestTicketStatus;
     const isDisabled = member.isDisabled || status === "disabled";
     const isInWork = status === "inWork";
@@ -133,11 +133,11 @@ function MemberCard({ latestClientAddress, member, to, totalTickets }) {
                     <p className={statusTextClass}>Временно недоступен</p>
                 ) : isInWork ? (
                     <p className={`${statusTextClass} line-clamp-2`}>
-                        {latestClientAddress?.trim() || "Адрес клиента не указан"}
+                        {latestClientName?.trim() || "Клиент не указан"}
                     </p>
                 ) : isDone ? (
                     <p className={`${statusTextClass} line-clamp-2`}>
-                        {latestClientAddress?.trim() || "Адрес клиента не указан"}
+                        {latestClientName?.trim() || "Клиент не указан"}
                     </p>
                 ) : (
                     <p className={statusTextClass}>{`${totalTickets} тикетов`}</p>
@@ -221,10 +221,10 @@ export function CoordinatorDashboard({ department }) {
         }, {});
     }, [departmentTickets]);
 
-    const latestClientAddressByMemberId = useMemo(() => {
+    const latestClientNameByMemberId = useMemo(() => {
         return departmentMembers.reduce((accumulator, member) => {
             const latestTicket = member.latestTicket ? latestDepartmentTicketById[member.latestTicket] : null;
-            const latestAddressTicket =
+            const latestClientTicket =
                 latestTicket?.status === "inWork" || latestTicket?.status === "worksDone"
                     ? latestTicket
                     : member.latestTicketStatus === "inWork"
@@ -233,7 +233,7 @@ export function CoordinatorDashboard({ department }) {
                         ? worksDoneTicketByExecutor[member.id]
                         : null;
 
-            accumulator[member.id] = latestAddressTicket?.clientAddress || "";
+            accumulator[member.id] = latestClientTicket?.clientName || "";
             return accumulator;
         }, {});
     }, [departmentMembers, inWorkTicketByExecutor, latestDepartmentTicketById, worksDoneTicketByExecutor]);
@@ -270,7 +270,7 @@ export function CoordinatorDashboard({ department }) {
                         {departmentMembers.map((member) => (
                             <MemberCard
                                 key={member.id}
-                                latestClientAddress={latestClientAddressByMemberId[member.id]}
+                                latestClientName={latestClientNameByMemberId[member.id]}
                                 member={member}
                                 to={routePaths.profileById(member.id)}
                                 totalTickets={ticketsByExecutor[member.id] || 0}

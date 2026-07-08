@@ -453,30 +453,6 @@ export const ticketsApi = createApi({
   }),
 });
 
-export async function downloadTicketAttachmentFile({ attachmentId, fileName, ticketId }) {
-  const response = await fetchWithAuth(
-    `/api/tickets/${ticketId}/attachments/${attachmentId}/download`,
-  );
-
-  if (!response.ok) {
-    throw new Error(await readError(response, "Не удалось скачать вложение."));
-  }
-
-  const blob = await response.blob();
-  const objectUrl = window.URL.createObjectURL(blob);
-  const link = document.createElement("a");
-
-  link.href = objectUrl;
-  link.download = fileName || "attachment";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-
-  window.setTimeout(() => {
-    window.URL.revokeObjectURL(objectUrl);
-  }, 0);
-}
-
 export async function loadTicketAttachmentPreviewUrl(downloadUrl) {
   if (!downloadUrl) {
     return null;

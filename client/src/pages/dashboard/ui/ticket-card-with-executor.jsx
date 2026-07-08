@@ -31,7 +31,6 @@ export function TicketCardWithExecutor({ ticket, executor, onOpenTicket }) {
         `до ${deadlineDisplay.dateValue}`
     );
     const statusIcon = statusIconByType[ticket.status] || ticketAssignedIcon;
-    const detailsValue = ticket.status === "closed" ? ticket.result : ticket.description;
     const shouldShowGradient = !deadlineDisplay.isFinishedDate && (deadlineDisplay.isOverdue || ticket.urgent);
     const shouldShowUrgencyBadge = !deadlineDisplay.isFinishedDate && ticket.urgent;
     const gradientClassName = deadlineDisplay.isOverdue
@@ -65,7 +64,10 @@ export function TicketCardWithExecutor({ ticket, executor, onOpenTicket }) {
                         <p className="truncate text-sm font-semibold text-slate-100">{reasonValue}</p>
                     </div>
                     <p className="text-base font-semibold text-white">{ticket.deviceName}</p>
-                    <p className="text-sm text-slate-300">{detailsValue || "Не указано"}</p>
+                    <p className="text-sm font-semibold text-white">
+                        С/Н: {ticket.deviceSerialNumber || "Не указан"}
+                    </p>
+                    <p className="pt-1 text-sm text-slate-300">{ticket.clientName || "Клиент не указан"}</p>
                 </div>
                 <div className="flex flex-col items-end">
                     <p className="text-sm font-semibold text-slate-200">{deadlineValue}</p>
