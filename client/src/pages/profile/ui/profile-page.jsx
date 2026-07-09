@@ -165,9 +165,9 @@ function ProfileAvatar({ canUpload = false, isUploading = false, logo, name, onU
             className="group relative inline-flex rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:cursor-wait"
         >
             {avatarContent}
-            <span className="absolute inset-x-2 bottom-2 inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950/75 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-white opacity-100 shadow-lg shadow-black/30 transition sm:opacity-0 sm:group-hover:opacity-100">
-                <CameraIcon className="h-3.5 w-3.5" />
-                <span>{isUploading ? "Загрузка" : "Сменить фото"}</span>
+            <span className="absolute bottom-2 right-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-950/75 text-white opacity-100 shadow-lg shadow-black/30 transition sm:inset-x-2 sm:right-auto sm:h-auto sm:w-auto sm:gap-2 sm:rounded-2xl sm:px-3 sm:py-2 sm:text-[10px] sm:font-semibold sm:uppercase sm:tracking-[0.16em] sm:opacity-0 sm:group-hover:opacity-100">
+                <CameraIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 lg:h-5 lg:w-5" />
+                <span className="hidden sm:inline">{isUploading ? "Загрузка" : "Сменить фото"}</span>
             </span>
         </button>
     );
@@ -613,13 +613,6 @@ export function ProfilePage() {
                                                 onUploadClick={handleAvatarUploadClick}
                                             />
 
-                                            {canUploadAvatar ? (
-                                                <p className="max-w-32 text-center text-xs font-medium text-slate-300">
-                                                    {isAvatarUploading
-                                                        ? "Загружаем фото..."
-                                                        : "Нажмите на фото, чтобы обновить аватар"}
-                                                </p>
-                                            ) : null}
                                         </div>
 
                                         <div className="min-w-0">
