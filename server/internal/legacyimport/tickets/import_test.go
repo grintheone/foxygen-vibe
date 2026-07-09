@@ -56,6 +56,22 @@ func TestLoadLegacyTickets(t *testing.T) {
 	        "actualInterval": {"start": 1704164645000, "end": 1704168245000},
 	        "result": ""
 	      }
+	    },
+	    {
+	      "doc": {
+	        "_id": "ticket_1_cccccccc-cccc-cccc-cccc-cccccccccccc",
+	        "createdAt": "2024-01-07T03:04:05",
+	        "number": "000000124",
+	        "client": "client-3",
+	        "device": "device-3",
+	        "ticketType": "external",
+	        "author": "user-5",
+	        "department": "dept-3",
+	        "reason": "repairs",
+	        "description": "cancelled by legacy shape",
+	        "executor": null,
+	        "status": "assigned"
+	      }
 	    }
 	  ]
 	}`
@@ -69,8 +85,8 @@ func TestLoadLegacyTickets(t *testing.T) {
 		t.Fatalf("loadLegacyTickets: %v", err)
 	}
 
-	if len(items) != 2 {
-		t.Fatalf("expected 2 tickets, got %d", len(items))
+	if len(items) != 3 {
+		t.Fatalf("expected 3 tickets, got %d", len(items))
 	}
 
 	if items[0].ID != "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" {
@@ -89,27 +105,31 @@ func TestLoadLegacyTickets(t *testing.T) {
 		t.Fatalf("expected closed ticket to derive closed_at, got status=%q closed_at=%v", items[0].Status, items[0].ClosedAt)
 	}
 
-	if items[1].Number != nil {
-		t.Fatalf("expected blank number to stay nil, got %#v", items[1].Number)
+	if items[1].Status != "cancelled" || items[1].ExecutorID != "" {
+		t.Fatalf("expected assigned ticket without executor to map to cancelled, got status=%q executor=%q", items[1].Status, items[1].ExecutorID)
 	}
 
-	if items[1].TicketType != "internal" {
-		t.Fatalf("expected fast to map to internal, got %q", items[1].TicketType)
+	if items[2].Number != nil {
+		t.Fatalf("expected blank number to stay nil, got %#v", items[2].Number)
 	}
 
-	if items[1].Status != "worksDone" {
-		t.Fatalf("expected finished to map to worksDone, got %q", items[1].Status)
+	if items[2].TicketType != "internal" {
+		t.Fatalf("expected fast to map to internal, got %q", items[2].TicketType)
 	}
 
-	if items[1].ReasonID != "maintanence" {
-		t.Fatalf("expected maintenance to map to maintanence, got %q", items[1].ReasonID)
+	if items[2].Status != "worksDone" {
+		t.Fatalf("expected finished to map to worksDone, got %q", items[2].Status)
 	}
 
-	if items[1].Description != "beta desc" || items[1].Result != "done" {
-		t.Fatalf("expected text trimmed, got desc=%q result=%q", items[1].Description, items[1].Result)
+	if items[2].ReasonID != "maintanence" {
+		t.Fatalf("expected maintenance to map to maintanence, got %q", items[2].ReasonID)
 	}
 
-	if stats.PreservedNumbers != 1 || stats.GeneratedNumbers != 1 || stats.MappedFastToInternal != 1 || stats.MappedFinishedStatus != 1 {
+	if items[2].Description != "beta desc" || items[2].Result != "done" {
+		t.Fatalf("expected text trimmed, got desc=%q result=%q", items[2].Description, items[2].Result)
+	}
+
+	if stats.PreservedNumbers != 2 || stats.GeneratedNumbers != 1 || stats.MappedFastToInternal != 1 || stats.MappedFinishedStatus != 1 {
 		t.Fatalf("unexpected stats %#v", stats)
 	}
 }

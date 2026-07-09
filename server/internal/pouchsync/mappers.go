@@ -488,7 +488,8 @@ func parseTicketRecord(change changeEvent) (ticketRecord, error) {
 	}
 
 	ticketType, _ := normalizeTicketType(parseString(doc["ticketType"]))
-	status, _ := normalizeTicketStatus(parseString(doc["status"]))
+	executorID := parseString(doc["executor"])
+	status, _ := normalizeTicketStatus(parseString(doc["status"]), executorID)
 	reason, _ := normalizeTicketReason(parseString(doc["reason"]))
 
 	createdAt, err := parseFlexibleTimestamp(doc["createdAt"])
@@ -538,7 +539,7 @@ func parseTicketRecord(change changeEvent) (ticketRecord, error) {
 		ReasonID:       reason,
 		Description:    strings.TrimSpace(parseString(doc["description"])),
 		ContactPerson:  parseString(doc["contactPerson"]),
-		ExecutorID:     parseString(doc["executor"]),
+		ExecutorID:     executorID,
 		Status:         status,
 		Result:         strings.TrimSpace(parseString(doc["result"])),
 		Urgent:         parseBool(doc["urgent"]),
@@ -1081,12 +1082,17 @@ func normalizeTicketType(value string) (string, bool) {
 	}
 }
 
-func normalizeTicketStatus(value string) (string, bool) {
-	switch strings.TrimSpace(value) {
+func normalizeTicketStatus(value string, executorID string) (string, bool) {
+	status := strings.TrimSpace(value)
+	if status == "assigned" && strings.TrimSpace(executorID) == "" {
+		return "cancelled", false
+	}
+
+	switch status {
 	case "finished":
 		return "worksDone", true
 	case "assigned", "cancelled", "closed", "created", "inWork", "worksDone":
-		return strings.TrimSpace(value), false
+		return status, false
 	default:
 		return "", false
 	}

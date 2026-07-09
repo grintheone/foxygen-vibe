@@ -46,6 +46,25 @@ func TestTextLookupsDoNotRequireUUID(t *testing.T) {
 	}
 }
 
+func TestParseTicketRecordMapsAssignedWithoutExecutorToCancelled(t *testing.T) {
+	item, err := parseTicketRecord(changeEvent{
+		ID: "ticket_1_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+		Doc: []byte(`{
+			"createdAt": "2024-01-02T03:04:05",
+			"ticketType": "external",
+			"executor": null,
+			"status": "assigned"
+		}`),
+	})
+	if err != nil {
+		t.Fatalf("parseTicketRecord: %v", err)
+	}
+
+	if item.Status != "cancelled" || item.ExecutorID != "" {
+		t.Fatalf("expected assigned ticket without executor to map to cancelled, got status=%q executor=%q", item.Status, item.ExecutorID)
+	}
+}
+
 type panicQueryTx struct{}
 
 func (panicQueryTx) Begin(context.Context) (pgx.Tx, error) {
