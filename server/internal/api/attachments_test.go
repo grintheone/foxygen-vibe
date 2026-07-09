@@ -1,6 +1,9 @@
 package api
 
-import "testing"
+import (
+	"encoding/binary"
+	"testing"
+)
 
 func TestIsSupportedImageUploadMediaType(t *testing.T) {
 	t.Parallel()
@@ -61,18 +64,23 @@ func TestDetectSupportedImageUploadMediaType(t *testing.T) {
 		},
 		{
 			name:      "detects avif",
-			fileBytes: []byte{0, 0, 0, 24, 'f', 't', 'y', 'p', 'a', 'v', 'i', 'f', 0, 0, 0, 0},
+			fileBytes: testISOBMFFFileTypeBox("avif"),
 			want:      "image/avif",
 		},
 		{
 			name:      "detects heic",
-			fileBytes: []byte{0, 0, 0, 24, 'f', 't', 'y', 'p', 'h', 'e', 'i', 'c', 0, 0, 0, 0},
+			fileBytes: testISOBMFFFileTypeBox("heic"),
 			want:      "image/heic",
 		},
 		{
 			name:      "detects heif",
-			fileBytes: []byte{0, 0, 0, 24, 'f', 't', 'y', 'p', 'm', 'i', 'f', '1', 0, 0, 0, 0},
+			fileBytes: testISOBMFFFileTypeBox("mif1"),
 			want:      "image/heif",
+		},
+		{
+			name:      "detects heic when file type box follows a leading box",
+			fileBytes: append([]byte{0, 0, 0, 8, 'f', 'r', 'e', 'e'}, testISOBMFFFileTypeBox("test", "heic")...),
+			want:      "image/heic",
 		},
 	}
 
@@ -90,4 +98,18 @@ func TestDetectSupportedImageUploadMediaType(t *testing.T) {
 			}
 		})
 	}
+}
+
+func testISOBMFFFileTypeBox(majorBrand string, compatibleBrands ...string) []byte {
+	boxSize := 16 + len(compatibleBrands)*4
+	fileBytes := make([]byte, boxSize)
+	binary.BigEndian.PutUint32(fileBytes[:4], uint32(boxSize))
+	copy(fileBytes[4:8], "ftyp")
+	copy(fileBytes[8:12], majorBrand)
+
+	for index, brand := range compatibleBrands {
+		copy(fileBytes[16+index*4:20+index*4], brand)
+	}
+
+	return fileBytes
 }

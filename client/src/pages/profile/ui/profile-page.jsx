@@ -15,6 +15,37 @@ import { ProfileTicketCard } from "../../../shared/ui/profile-ticket-card";
 import { PageShell } from "../../../shared/ui/page-shell";
 import { StatusMessage } from "../../../shared/ui/status-message";
 
+const supportedAvatarImageMimeTypes = new Set([
+    "image/avif",
+    "image/bmp",
+    "image/gif",
+    "image/heic",
+    "image/heic-sequence",
+    "image/heif",
+    "image/heif-sequence",
+    "image/jpeg",
+    "image/png",
+    "image/svg+xml",
+    "image/tiff",
+    "image/webp",
+]);
+const supportedAvatarImageExtensions = new Set([
+    "avif",
+    "bmp",
+    "gif",
+    "heic",
+    "heif",
+    "jpeg",
+    "jpg",
+    "png",
+    "svg",
+    "tif",
+    "tiff",
+    "webp",
+]);
+const supportedAvatarImageAcceptValue =
+    ".avif,.bmp,.gif,.heic,.heif,.jpeg,.jpg,.png,.svg,.tif,.tiff,.webp,image/avif,image/bmp,image/gif,image/heic,image/heic-sequence,image/heif,image/heif-sequence,image/jpeg,image/png,image/svg+xml,image/tiff,image/webp";
+
 function resolveErrorMessage(error, fallbackMessage) {
     if (typeof error?.data === "string" && error.data.trim()) {
         return error.data;
@@ -25,6 +56,17 @@ function resolveErrorMessage(error, fallbackMessage) {
     }
 
     return fallbackMessage;
+}
+
+function isSupportedAvatarImageFile(file) {
+    const normalizedType = String(file?.type || "").trim().toLowerCase();
+    if (normalizedType && supportedAvatarImageMimeTypes.has(normalizedType)) {
+        return true;
+    }
+
+    const fileName = String(file?.name || "");
+    const ext = fileName.includes(".") ? fileName.split(".").pop().trim().toLowerCase() : "";
+    return supportedAvatarImageExtensions.has(ext);
 }
 
 function PersonIcon({ className }) {
@@ -436,10 +478,10 @@ export function ProfilePage() {
             return;
         }
 
-        if (!selectedFile.type.startsWith("image/")) {
+        if (!isSupportedAvatarImageFile(selectedFile)) {
             setAvatarFeedback({
                 tone: "error",
-                message: "Можно загружать только изображения.",
+                message: "Можно загружать только изображения AVIF, BMP, GIF, HEIC, HEIF, JPG, PNG, SVG, TIFF и WebP.",
             });
             return;
         }
@@ -553,7 +595,7 @@ export function ProfilePage() {
                         <input
                             ref={avatarInputRef}
                             type="file"
-                            accept="image/png,image/jpeg,image/gif,image/webp"
+                            accept={supportedAvatarImageAcceptValue}
                             className="hidden"
                             onChange={handleAvatarFileChange}
                         />

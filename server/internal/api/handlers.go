@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"io"
@@ -461,23 +462,79 @@ func isTIFFImage(fileBytes []byte) bool {
 }
 
 func detectISOBMFFImageMediaType(fileBytes []byte) (string, bool) {
-	if len(fileBytes) < 16 || string(fileBytes[4:8]) != "ftyp" {
+	const inspectLimit = 4096
+
+	limit := len(fileBytes)
+	if limit > inspectLimit {
+		limit = inspectLimit
+	}
+	if limit < 16 {
 		return "", false
 	}
 
-	for start := 8; start+4 <= len(fileBytes); start += 4 {
-		brand := string(fileBytes[start : start+4])
-		switch brand {
-		case "avif", "avis":
-			return "image/avif", true
-		case "heic", "heix", "hevc", "hevx":
-			return "image/heic", true
-		case "heif", "mif1", "msf1":
-			return "image/heif", true
+	for offset := 0; offset+8 <= limit; {
+		boxSize := uint64(binary.BigEndian.Uint32(fileBytes[offset : offset+4]))
+		boxType := string(fileBytes[offset+4 : offset+8])
+		headerSize := uint64(8)
+
+		if boxSize == 1 {
+			if offset+16 > limit {
+				return "", false
+			}
+			boxSize = binary.BigEndian.Uint64(fileBytes[offset+8 : offset+16])
+			headerSize = 16
+		} else if boxSize == 0 {
+			boxSize = uint64(len(fileBytes) - offset)
+		}
+
+		if boxSize < headerSize || uint64(offset)+boxSize > uint64(len(fileBytes)) {
+			return "", false
+		}
+
+		boxEnd := offset + int(boxSize)
+		if boxEnd > limit {
+			boxEnd = limit
+		}
+
+		if boxType == "ftyp" {
+			return detectISOBMFFImageMediaTypeFromFileTypeBox(fileBytes[offset+int(headerSize) : boxEnd])
+		}
+
+		offset += int(boxSize)
+	}
+
+	return "", false
+}
+
+func detectISOBMFFImageMediaTypeFromFileTypeBox(payload []byte) (string, bool) {
+	if len(payload) < 8 {
+		return "", false
+	}
+
+	if mediaType, ok := detectISOBMFFImageBrand(string(payload[:4])); ok {
+		return mediaType, true
+	}
+
+	for start := 8; start+4 <= len(payload); start += 4 {
+		if mediaType, ok := detectISOBMFFImageBrand(string(payload[start : start+4])); ok {
+			return mediaType, true
 		}
 	}
 
 	return "", false
+}
+
+func detectISOBMFFImageBrand(brand string) (string, bool) {
+	switch brand {
+	case "avif", "avis":
+		return "image/avif", true
+	case "heic", "heix", "hevc", "hevx":
+		return "image/heic", true
+	case "heif", "mif1", "msf1":
+		return "image/heif", true
+	default:
+		return "", false
+	}
 }
 
 func (s *Server) handleProfileAvatarUpload(w http.ResponseWriter, r *http.Request) {

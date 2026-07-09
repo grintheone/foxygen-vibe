@@ -8,7 +8,9 @@ const supportedImageMimeTypes = new Set([
     "image/bmp",
     "image/gif",
     "image/heic",
+    "image/heic-sequence",
     "image/heif",
+    "image/heif-sequence",
     "image/jpeg",
     "image/png",
     "image/svg+xml",
@@ -30,7 +32,7 @@ const supportedImageExtensions = new Set([
     "webp",
 ]);
 const supportedImageAcceptValue =
-    ".avif,.bmp,.gif,.heic,.heif,.jpeg,.jpg,.png,.svg,.tif,.tiff,.webp,image/avif,image/bmp,image/gif,image/heic,image/heif,image/jpeg,image/png,image/svg+xml,image/tiff,image/webp";
+    ".avif,.bmp,.gif,.heic,.heif,.jpeg,.jpg,.png,.svg,.tif,.tiff,.webp,image/avif,image/bmp,image/gif,image/heic,image/heic-sequence,image/heif,image/heif-sequence,image/jpeg,image/png,image/svg+xml,image/tiff,image/webp";
 
 function createPreviewItems(files) {
     return files.map((file) => ({
