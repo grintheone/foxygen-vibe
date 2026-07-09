@@ -91,6 +91,7 @@ export function TicketReportSheet({
     isOpen,
     isSubmitting,
     onClose,
+    onCloseSuccess,
     onSubmitClose,
     onUploadAttachment,
     resolvedReason,
@@ -294,6 +295,7 @@ export function TicketReportSheet({
                     : "Тикет закрыт, вложения загружены.",
             );
             setIsSubmitted(true);
+            onCloseSuccess?.(response);
         } catch {
             return;
         }
@@ -439,7 +441,7 @@ export function TicketReportSheet({
                             >
                                 Рекомендация
                             </label>
-                            <p className="max-w-xl text-lg leading-8 text-slate-300">
+                            <p className="max-w-xl text-lg leading-7 text-slate-300">
                                 Если требуется дополнительная работа других сотрудников, направьте рекомендацию в
                                 соответствующий отдел.
                             </p>

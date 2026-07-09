@@ -195,6 +195,17 @@ export function TicketPage() {
         }
     }
 
+    function handleTicketReportCloseSuccess(response) {
+        const resolvedTicketId = response?.id || ticket?.id;
+
+        setReportSubmitError("");
+        setIsReportSheetOpen(false);
+
+        if (resolvedTicketId) {
+            navigate(routePaths.ticketById(resolvedTicketId), { replace: true });
+        }
+    }
+
     async function handleUploadAttachment(file) {
         if (!ticket?.id) {
             return null;
@@ -312,6 +323,7 @@ export function TicketPage() {
                             setReportSubmitError("");
                             setIsReportSheetOpen(false);
                         }}
+                        onCloseSuccess={handleTicketReportCloseSuccess}
                         onSubmitClose={handleCloseTicketReport}
                         onUploadAttachment={handleUploadAttachment}
                         resolvedReason={ticket?.resolvedReason}
