@@ -4,22 +4,22 @@ import { formatWorkDuration } from "../lib/dashboard-formatters";
 
 const sliderStatusConfigByType = {
   inWork: {
-    cardClassName: "border-emerald-300/30 bg-emerald-500/20 hover:border-emerald-100/60 hover:bg-emerald-500/25",
-    footerClassName: "border-emerald-950/25 bg-emerald-950/40",
+    cardClassName: "border-emerald-300/35 bg-emerald-500/30 hover:border-emerald-100/65 hover:bg-emerald-500/35",
+    footerClassName: "border-emerald-950/30 bg-emerald-950/50",
     icon: ticketInWorkIcon,
     markerClassName: "bg-emerald-50",
     pingClassName: "bg-emerald-100",
     statusLabel: "На выезде",
-    toneBlockClassName: "bg-emerald-700/25",
+    toneBlockClassName: "bg-emerald-700/35",
   },
   worksDone: {
-    cardClassName: "border-fuchsia-300/30 bg-fuchsia-500/20 hover:border-fuchsia-100/60 hover:bg-fuchsia-500/25",
-    footerClassName: "border-fuchsia-950/25 bg-fuchsia-950/40",
+    cardClassName: "border-fuchsia-300/35 bg-fuchsia-500/30 hover:border-fuchsia-100/65 hover:bg-fuchsia-500/35",
+    footerClassName: "border-fuchsia-950/30 bg-fuchsia-950/50",
     icon: ticketDoneIcon,
     markerClassName: "bg-fuchsia-50",
     pingClassName: "bg-fuchsia-100",
     statusLabel: "Работы завершены",
-    toneBlockClassName: "bg-fuchsia-700/25",
+    toneBlockClassName: "bg-fuchsia-700/35",
   },
 };
 

@@ -10,6 +10,7 @@ export function EngineerDashboard({ executorId }) {
   const [activeSlide, setActiveSlide] = useState(0);
   const pointerStartXRef = useRef(null);
   const suppressClickRef = useRef(false);
+  const touchStartRef = useRef(null);
   const { tickets, assignedTickets, isLoading, isError } = useDashboardTickets(executorId);
 
   useEffect(() => {
@@ -26,29 +27,71 @@ export function EngineerDashboard({ executorId }) {
     setActiveSlide((prev) => (prev + 1) % tickets.length);
   }
 
+  function applySwipe(deltaX, deltaY = 0) {
+    const swipeThreshold = 45;
+    const isHorizontalSwipe = Math.abs(deltaX) >= swipeThreshold && Math.abs(deltaX) > Math.abs(deltaY);
+
+    if (!isHorizontalSwipe) {
+      return;
+    }
+
+    suppressClickRef.current = true;
+    if (deltaX > 0) {
+      goToPreviousSlide();
+    } else {
+      goToNextSlide();
+    }
+  }
+
   function handlePointerDown(event) {
+    if (event.pointerType === "touch") {
+      return;
+    }
+
     pointerStartXRef.current = event.clientX;
     suppressClickRef.current = false;
   }
 
   function handlePointerUp(event) {
+    if (event.pointerType === "touch") {
+      return;
+    }
+
     if (pointerStartXRef.current === null) {
       return;
     }
 
     const deltaX = event.clientX - pointerStartXRef.current;
-    const swipeThreshold = 45;
+    applySwipe(deltaX);
+    pointerStartXRef.current = null;
+  }
 
-    if (Math.abs(deltaX) >= swipeThreshold) {
-      suppressClickRef.current = true;
-      if (deltaX > 0) {
-        goToPreviousSlide();
-      } else {
-        goToNextSlide();
-      }
+  function handleTouchStart(event) {
+    const [touch] = event.changedTouches;
+    if (!touch) {
+      return;
     }
 
-    pointerStartXRef.current = null;
+    touchStartRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+    };
+    suppressClickRef.current = false;
+  }
+
+  function handleTouchEnd(event) {
+    if (!touchStartRef.current) {
+      return;
+    }
+
+    const [touch] = event.changedTouches;
+    if (!touch) {
+      touchStartRef.current = null;
+      return;
+    }
+
+    applySwipe(touch.clientX - touchStartRef.current.x, touch.clientY - touchStartRef.current.y);
+    touchStartRef.current = null;
   }
 
   function handleOpenTicket(ticketId) {
@@ -75,11 +118,16 @@ export function EngineerDashboard({ executorId }) {
       {!isLoading && !isError && tickets.length > 0 ? (
         <>
           <div
-            className="overflow-hidden rounded-3xl"
+            className="touch-pan-y overflow-hidden rounded-3xl"
             onPointerDown={handlePointerDown}
             onPointerUp={handlePointerUp}
             onPointerCancel={() => {
               pointerStartXRef.current = null;
+            }}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+            onTouchCancel={() => {
+              touchStartRef.current = null;
             }}
           >
             <div
