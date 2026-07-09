@@ -1,4 +1,5 @@
 import { configureStore } from "@reduxjs/toolkit";
+import { setupListeners } from "@reduxjs/toolkit/query";
 import { authReducer } from "../../features/auth";
 import { editorApi } from "../../shared/api/editor-api";
 import { ticketsApi } from "../../shared/api/tickets-api";
@@ -14,4 +15,5 @@ export const store = configureStore({
     getDefaultMiddleware().concat(ticketsApi.middleware, editorApi.middleware),
 });
 
+setupListeners(store.dispatch);
 registerAuthDispatch(store.dispatch);

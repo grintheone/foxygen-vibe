@@ -1,9 +1,14 @@
 import { useMemo } from "react";
 import { useGetMyTicketsQuery } from "../../../shared/api/tickets-api";
+import { LIVE_DASHBOARD_POLLING_INTERVAL_MS } from "./dashboard-refresh";
 
 export function useDashboardTickets(executorId) {
-  const { data = [], isError, isFetching, isLoading } = useGetMyTicketsQuery(executorId, {
+  const { data = [], isError, isLoading } = useGetMyTicketsQuery(executorId, {
+    pollingInterval: LIVE_DASHBOARD_POLLING_INTERVAL_MS,
+    refetchOnFocus: true,
+    refetchOnReconnect: true,
     skip: !executorId,
+    skipPollingIfUnfocused: true,
   });
 
   const tickets = useMemo(
@@ -24,7 +29,7 @@ export function useDashboardTickets(executorId) {
   return {
     assignedTickets,
     isError,
-    isLoading: isLoading || isFetching,
+    isLoading,
     tickets,
   };
 }

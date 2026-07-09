@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router";
 import { routePaths } from "../../../shared/config/routes";
 import { useGetDepartmentMembersQuery, useGetDepartmentTicketsQuery } from "../../../shared/api/tickets-api";
 import { ProfileTicketCard } from "../../../shared/ui/profile-ticket-card";
+import { LIVE_DASHBOARD_POLLING_INTERVAL_MS } from "../lib/dashboard-refresh";
 import { TicketCardWithExecutor } from "./ticket-card-with-executor";
 
 function toTimestampOrMin(value) {
@@ -150,17 +151,23 @@ function MemberCard({ latestClientName, member, to, totalTickets }) {
 export function CoordinatorDashboard({ department }) {
     const navigate = useNavigate();
     const normalizedDepartment = (department || "").trim();
-    const { data: departmentTickets = [], isError, isFetching, isLoading } = useGetDepartmentTicketsQuery(
+    const dashboardQueryOptions = {
+        pollingInterval: LIVE_DASHBOARD_POLLING_INTERVAL_MS,
+        refetchOnFocus: true,
+        refetchOnReconnect: true,
+        skip: !normalizedDepartment,
+        skipPollingIfUnfocused: true,
+    };
+    const { data: departmentTickets = [], isError, isLoading } = useGetDepartmentTicketsQuery(
         normalizedDepartment || "__no_department__",
-        { skip: !normalizedDepartment },
+        dashboardQueryOptions,
     );
     const {
         data: departmentMembers = [],
         isError: isDepartmentMembersError,
-        isFetching: isDepartmentMembersFetching,
         isLoading: isDepartmentMembersLoading,
     } = useGetDepartmentMembersQuery(undefined, {
-        skip: !normalizedDepartment,
+        ...dashboardQueryOptions,
     });
 
     const unassignedTickets = useMemo(() => {
@@ -257,7 +264,7 @@ export function CoordinatorDashboard({ department }) {
     return (
         <section className="space-y-6">
             <section className="space-y-3">
-                {isDepartmentMembersLoading || isDepartmentMembersFetching ? (
+                {isDepartmentMembersLoading ? (
                     <div className="app-subtle-notice">
                         Загружаем сотрудников...
                     </div>
@@ -286,7 +293,7 @@ export function CoordinatorDashboard({ department }) {
 
             <section className="space-y-3">
                 <h2 className="text-base font-semibold tracking-[0.02em] text-slate-200">{`Ждут распределения (${unassignedTickets.length})`}</h2>
-                {isLoading || isFetching ? (
+                {isLoading ? (
                     <div className="app-subtle-notice">
                         Загружаем тикеты...
                     </div>
@@ -309,7 +316,7 @@ export function CoordinatorDashboard({ department }) {
 
             <section className="space-y-3">
                 <h2 className="text-base font-semibold tracking-[0.02em] text-slate-200">{`Назначены и в работе (${activeDepartmentTickets.length})`}</h2>
-                {isLoading || isFetching ? (
+                {isLoading ? (
                     <div className="app-subtle-notice">
                         Загружаем тикеты...
                     </div>
