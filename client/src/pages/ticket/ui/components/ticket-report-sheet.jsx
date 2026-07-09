@@ -482,7 +482,7 @@ export function TicketReportSheet({
                         </div>
                     </div>
 
-                    <div className="sticky -bottom-6 -mx-6 border-t border-white/15 bg-slate-950/95 px-6 py-5 backdrop-blur">
+                    <div className="sticky bottom-[calc(-1.5rem-env(safe-area-inset-bottom))] -mx-6 border-t border-white/15 bg-slate-950/95 px-6 pt-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] backdrop-blur">
                         <button
                             type="submit"
                             disabled={isSubmitting || isUploadingMedia || isSubmitted}

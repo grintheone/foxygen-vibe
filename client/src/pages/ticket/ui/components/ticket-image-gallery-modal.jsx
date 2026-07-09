@@ -118,7 +118,7 @@ export function TicketImageGalleryModal({ activeIndex, images, onClose, onSelect
                 role="dialog"
                 aria-modal="true"
                 aria-label={activeImage.name || "Просмотр изображения"}
-                className="absolute inset-0 flex items-center justify-center px-3 py-6 sm:px-6"
+                className="absolute inset-0 flex items-center justify-center pl-[calc(0.75rem+env(safe-area-inset-left))] pr-[calc(0.75rem+env(safe-area-inset-right))] pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:pl-[calc(1.5rem+env(safe-area-inset-left))] sm:pr-[calc(1.5rem+env(safe-area-inset-right))]"
             >
                 <div
                     className="relative flex h-full w-full max-w-6xl flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-slate-950/85 shadow-2xl shadow-black/50"

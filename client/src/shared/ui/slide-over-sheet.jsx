@@ -36,7 +36,7 @@ export function SlideOverSheet({
       />
 
       <aside
-        className={`absolute right-0 top-0 h-full w-full overflow-y-auto border-l border-white/10 bg-slate-950/95 p-6 shadow-2xl shadow-black/50 backdrop-blur md:w-[78%] lg:w-[33.333%] ${panelClassName}`.trim()}
+        className={`absolute right-0 top-0 h-full w-full overflow-y-auto border-l border-white/10 bg-slate-950/95 px-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-[calc(1.5rem+env(safe-area-inset-top))] shadow-2xl shadow-black/50 backdrop-blur md:w-[78%] lg:w-[33.333%] ${panelClassName}`.trim()}
       >
         {(eyebrow || title) ? (
           <div className="flex items-start justify-between gap-4">

@@ -7,7 +7,7 @@ export function BottomPageAction({
   type = "button",
 }) {
   return (
-    <div className="fixed bottom-4 left-1/2 z-40 flex w-[min(56rem,calc(100%-2rem))] -translate-x-1/2 flex-col gap-2 sm:bottom-6">
+    <div className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 z-40 flex w-[min(56rem,calc(100%-2rem))] -translate-x-1/2 flex-col gap-2 sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom))]">
       <button
         type={type}
         disabled={disabled}
