@@ -692,6 +692,11 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 			Connected  bool   `json:"connected"`
 			Bucket     string `json:"bucket,omitempty"`
 		} `json:"storage"`
+		Moleculer struct {
+			Configured bool `json:"configured"`
+			Connected  bool `json:"connected"`
+			Nodes      int  `json:"nodes"`
+		} `json:"moleculer"`
 	}
 
 	if r.Method != http.MethodGet {
@@ -706,6 +711,14 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	payload.Storage.Connected = s.storage != nil
 	if s.storage != nil {
 		payload.Storage.Bucket = s.storage.Bucket()
+	}
+	payload.Moleculer.Configured = s.moleculerConfigured
+	if s.moleculer != nil {
+		registry, err := s.moleculer.ProbeRegistry(r.Context())
+		if err == nil {
+			payload.Moleculer.Connected = true
+			payload.Moleculer.Nodes = registry.NodeCount
+		}
 	}
 
 	writeJSON(w, http.StatusOK, payload)

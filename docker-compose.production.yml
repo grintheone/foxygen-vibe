@@ -25,6 +25,22 @@ services:
         volumes:
             - minio-data:/data
 
+    sidecar:
+        image: foxygen-moleculer-sidecar
+        build:
+            context: .
+            dockerfile: sidecar/Dockerfile
+        restart: unless-stopped
+        environment:
+            SIDECAR_PORT: 5103
+            NAMESPACE: ${MOLECULER_NAMESPACE:-veamosl-services}
+            TRANSPORTER: ${MOLECULER_TRANSPORTER:-nats://192.168.101.121:4222}
+            NODEID: ${MOLECULER_NODE_ID:-foxygen-sidecar}
+            SERIALIZER: ${MOLECULER_SERIALIZER:-CBOR}
+            LOGLEVEL: ${MOLECULER_LOG_LEVEL:-info}
+        expose:
+            - "5103"
+
     server:
         build:
             context: .
@@ -33,6 +49,8 @@ services:
         depends_on:
             postgres:
                 condition: service_healthy
+            sidecar:
+                condition: service_started
         environment:
             DB_HOST: postgres
             DB_PORT: 5432
@@ -52,6 +70,8 @@ services:
             POUCHDB_HEARTBEAT: ${POUCHDB_HEARTBEAT:-30s}
             POUCHDB_RETRY_MIN_DELAY: ${POUCHDB_RETRY_MIN_DELAY:-1s}
             POUCHDB_RETRY_MAX_DELAY: ${POUCHDB_RETRY_MAX_DELAY:-30s}
+            MOLECULER_SIDECAR_URL: ${MOLECULER_SIDECAR_URL:-http://sidecar:5103}
+            MOLECULER_SIDECAR_TIMEOUT: ${MOLECULER_SIDECAR_TIMEOUT:-2s}
             MINIO_ENDPOINT: ${MINIO_ENDPOINT:-}
             MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-}
             MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-}

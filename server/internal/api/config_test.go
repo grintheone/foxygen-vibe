@@ -67,6 +67,56 @@ func TestResolveStorageConfigParsesMinIOSettings(t *testing.T) {
 	}
 }
 
+func TestResolveMoleculerConfigReturnsDisabledWhenUnset(t *testing.T) {
+	dir := t.TempDir()
+	writeConfigTestEnv(t, dir, "")
+
+	restore := changeWorkingDirectory(t, dir)
+	defer restore()
+
+	cfg, err := resolveMoleculerConfig()
+	if err != nil {
+		t.Fatalf("resolve Moleculer config: %v", err)
+	}
+	if cfg.Enabled {
+		t.Fatal("expected Moleculer integration to be disabled")
+	}
+}
+
+func TestResolveMoleculerConfigParsesSidecarSettings(t *testing.T) {
+	dir := t.TempDir()
+	writeConfigTestEnv(t, dir, "MOLECULER_SIDECAR_URL=http://sidecar:5103\nMOLECULER_SIDECAR_TIMEOUT=3s\n")
+
+	restore := changeWorkingDirectory(t, dir)
+	defer restore()
+
+	cfg, err := resolveMoleculerConfig()
+	if err != nil {
+		t.Fatalf("resolve Moleculer config: %v", err)
+	}
+	if !cfg.Enabled {
+		t.Fatal("expected Moleculer integration to be enabled")
+	}
+	if cfg.URL != "http://sidecar:5103" {
+		t.Fatalf("unexpected sidecar URL %q", cfg.URL)
+	}
+	if cfg.Timeout.String() != "3s" {
+		t.Fatalf("unexpected sidecar timeout %s", cfg.Timeout)
+	}
+}
+
+func TestResolveMoleculerConfigRequiresURLWhenExplicitlyEnabled(t *testing.T) {
+	dir := t.TempDir()
+	writeConfigTestEnv(t, dir, "MOLECULER_SIDECAR_ENABLED=true\n")
+
+	restore := changeWorkingDirectory(t, dir)
+	defer restore()
+
+	if _, err := resolveMoleculerConfig(); err == nil {
+		t.Fatal("expected enabled Moleculer integration without URL to fail")
+	}
+}
+
 func changeWorkingDirectory(t *testing.T, dir string) func() {
 	t.Helper()
 

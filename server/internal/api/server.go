@@ -9,6 +9,7 @@ import (
 
 	appdb "foxygen-vibe/server/internal/db"
 	"foxygen-vibe/server/internal/dbinit"
+	"foxygen-vibe/server/internal/moleculer"
 	"foxygen-vibe/server/internal/pouchsync"
 	"foxygen-vibe/server/internal/storage"
 
@@ -22,10 +23,12 @@ type Server struct {
 	databaseConfigured              bool
 	storageConfigured               bool
 	pouchSyncConfigured             bool
+	moleculerConfigured             bool
 	db                              *pgxpool.Pool
 	queries                         accountStore
 	auth                            authConfig
 	storage                         *storage.Client
+	moleculer                       *moleculer.Client
 	pouchSyncCancel                 context.CancelFunc
 	pouchSyncDone                   <-chan struct{}
 	requesterRoleLookup             func(context.Context, pgtype.UUID) (string, error)
@@ -92,6 +95,11 @@ func New() (*Server, error) {
 		return nil, err
 	}
 
+	moleculerConfig, err := resolveMoleculerConfig()
+	if err != nil {
+		return nil, err
+	}
+
 	importDefaultPassword, err := resolveImportDefaultPassword()
 	if err != nil {
 		return nil, err
@@ -101,7 +109,13 @@ func New() (*Server, error) {
 		databaseConfigured:  databaseURL != "",
 		storageConfigured:   storageConfig.Enabled(),
 		pouchSyncConfigured: pouchSyncConfig.Enabled,
+		moleculerConfigured: moleculerConfig.Enabled,
 		auth:                auth,
+	}
+
+	api.moleculer, err = moleculer.New(moleculerConfig)
+	if err != nil {
+		return nil, err
 	}
 
 	if storageConfig.Enabled() {

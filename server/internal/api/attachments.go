@@ -89,7 +89,7 @@ func (s *Server) handleTicketAttachmentUpload(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, maxTicketAttachmentUploadSize)
+	r.Body = http.MaxBytesReader(w, r.Body, maxTicketAttachmentUploadSize+(1<<20))
 
 	file, fileHeader, err := r.FormFile("file")
 	if err != nil {
@@ -111,6 +111,10 @@ func (s *Server) handleTicketAttachmentUpload(w http.ResponseWriter, r *http.Req
 	}
 	if len(fileBytes) == 0 {
 		http.Error(w, "file must not be empty", http.StatusBadRequest)
+		return
+	}
+	if len(fileBytes) > maxTicketAttachmentUploadSize {
+		http.Error(w, "attachment must not exceed 25 MB", http.StatusRequestEntityTooLarge)
 		return
 	}
 

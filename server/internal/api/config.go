@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"foxygen-vibe/server/internal/moleculer"
 	"foxygen-vibe/server/internal/pouchsync"
 	"foxygen-vibe/server/internal/storage"
 )
@@ -197,6 +198,39 @@ func resolvePouchSyncConfig() (pouchsync.Config, error) {
 	if err := config.Validate(); err != nil {
 		return pouchsync.Config{}, err
 	}
+	return config, nil
+}
+
+func resolveMoleculerConfig() (moleculer.Config, error) {
+	fileEnv, err := loadDotEnv(".env")
+	if err != nil {
+		return moleculer.Config{}, err
+	}
+
+	sidecarURL := getConfigValue(fileEnv, "MOLECULER_SIDECAR_URL")
+	enabled := sidecarURL != ""
+	if value := getConfigValue(fileEnv, "MOLECULER_SIDECAR_ENABLED"); value != "" {
+		parsed, err := strconv.ParseBool(value)
+		if err != nil {
+			return moleculer.Config{}, fmt.Errorf("MOLECULER_SIDECAR_ENABLED: parse bool: %w", err)
+		}
+		enabled = parsed
+	}
+
+	timeout, err := resolveDuration(fileEnv, "MOLECULER_SIDECAR_TIMEOUT", 2*time.Second)
+	if err != nil {
+		return moleculer.Config{}, err
+	}
+
+	config := moleculer.Config{
+		Enabled: enabled,
+		URL:     sidecarURL,
+		Timeout: timeout,
+	}
+	if err := config.Validate(); err != nil {
+		return moleculer.Config{}, fmt.Errorf("Moleculer config: %w", err)
+	}
+
 	return config, nil
 }
 

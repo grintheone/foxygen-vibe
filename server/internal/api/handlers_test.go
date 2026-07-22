@@ -11,6 +11,7 @@ import (
 	"time"
 
 	appdb "foxygen-vibe/server/internal/db"
+	"foxygen-vibe/server/internal/moleculer"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -153,6 +154,7 @@ func TestHealthEndpointReturnsStatus(t *testing.T) {
 		`"configured":true`,
 		`"connected":false`,
 		`"storage":{"configured":false,"connected":false}`,
+		`"moleculer":{"configured":false,"connected":false,"nodes":0}`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("expected response body to contain %q, got %s", want, body)
@@ -164,6 +166,42 @@ func TestHealthEndpointReturnsStatus(t *testing.T) {
 	}
 	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "*" {
 		t.Fatalf("expected CORS header to be set, got %q", got)
+	}
+}
+
+func TestHealthEndpointReportsMoleculerRegistry(t *testing.T) {
+	t.Parallel()
+
+	sidecar := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/registry/nodes" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[{"id":"foxygen-sidecar"},{"id":"onec-service"}]`))
+	}))
+	defer sidecar.Close()
+
+	client, err := moleculer.New(moleculer.Config{
+		Enabled: true,
+		URL:     sidecar.URL,
+		Timeout: time.Second,
+	})
+	if err != nil {
+		t.Fatalf("create Moleculer client: %v", err)
+	}
+
+	srv := &Server{moleculerConfigured: true, moleculer: client}
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if want := `"moleculer":{"configured":true,"connected":true,"nodes":2}`; !strings.Contains(rec.Body.String(), want) {
+		t.Fatalf("expected response body to contain %q, got %s", want, rec.Body.String())
 	}
 }
 

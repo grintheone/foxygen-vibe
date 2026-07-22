@@ -107,6 +107,29 @@ For stronger disaster recovery, sync the backup directory to external storage af
 
 The server reads `server/.env` for `DB_*` settings and builds a PostgreSQL connection string from that file. Explicit shell environment variables still override values from `.env`, and `DATABASE_URL` still takes precedence over the split fields.
 
+## Connect to the Moleculer network through Sidecar
+
+The Sidecar is configured for the `veamosl-services` namespace and the NATS transporter at `nats://192.168.101.121:4222`. The network uses Moleculer's CBOR serializer, so the local image combines the pinned upstream Sidecar service with a newer Moleculer 0.14 release that supports CBOR. It is currently used only for a read-only registry probe; the application does not call actions, emit events, or publish ticket data.
+
+1. Start the Sidecar:
+   `docker compose up -d sidecar`
+2. When running the Go server directly on the host, add these values to `server/.env`:
+   `MOLECULER_SIDECAR_URL=http://localhost:5103`
+   `MOLECULER_SIDECAR_TIMEOUT=2s`
+3. Start the Go server and inspect `GET /api/health`.
+
+The `moleculer` health object reports whether the Sidecar registry endpoint is reachable and how many Moleculer nodes it can currently see. A node count of one normally means only the Sidecar itself is visible; a larger count confirms that it has discovered other nodes in the namespace.
+
+Configuration overrides:
+
+- `MOLECULER_NAMESPACE`
+- `MOLECULER_TRANSPORTER`
+- `MOLECULER_NODE_ID`
+- `MOLECULER_SERIALIZER`
+- `MOLECULER_LOG_LEVEL`
+- `MOLECULER_SIDECAR_URL`
+- `MOLECULER_SIDECAR_TIMEOUT`
+
 ## Enable MinIO object storage
 
 The backend now supports the MinIO Go SDK for S3-compatible object storage. Storage stays disabled unless `MINIO_*` variables are configured.

@@ -1,0 +1,25 @@
+{
+  "name": "foxygen-moleculer-sidecar",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pinned Moleculer Sidecar bridge for the Foxygen Go API",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "cbor-x": "1.6.0",
+    "moleculer": "0.14.35",
+    "moleculer-sidecar": "https://github.com/moleculerjs/sidecar/archive/a2cc0ba6e3152e1bfc9f147bcce804fcd7fd3a8c.tar.gz"
+  },
+  "overrides": {
+    "protobufjs": "7.6.3",
+    "thrift": "0.23.0",
+    "tmp": "0.2.7",
+    "url-parse": "1.5.10",
+    "uuid": "11.1.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

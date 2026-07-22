@@ -22,6 +22,22 @@ services:
         volumes:
             - minio-data:/data
 
+    sidecar:
+        image: foxygen-moleculer-sidecar
+        build:
+            context: .
+            dockerfile: sidecar/Dockerfile
+        restart: unless-stopped
+        environment:
+            SIDECAR_PORT: 5103
+            NAMESPACE: ${MOLECULER_NAMESPACE:-veamosl-services}
+            TRANSPORTER: ${MOLECULER_TRANSPORTER:-nats://192.168.101.121:4222}
+            NODEID: ${MOLECULER_NODE_ID:-foxygen-sidecar}
+            SERIALIZER: ${MOLECULER_SERIALIZER:-CBOR}
+            LOGLEVEL: ${MOLECULER_LOG_LEVEL:-info}
+        ports:
+            - "127.0.0.1:${MOLECULER_SIDECAR_PORT:-5103}:5103"
+
 volumes:
     postgres-data:
     minio-data:
