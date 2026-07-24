@@ -35,6 +35,12 @@ services:
             NODEID: ${MOLECULER_NODE_ID:-foxygen-sidecar}
             SERIALIZER: ${MOLECULER_SERIALIZER:-CBOR}
             LOGLEVEL: ${MOLECULER_LOG_LEVEL:-info}
+            DB_HOST: postgres
+            DB_PORT: 5432
+            DB_USER: grintheone
+            DB_PASSWORD: gtoadmin
+            DB_NAME: foxygendb
+            DB_SSLMODE: disable
         ports:
             - "127.0.0.1:${MOLECULER_SIDECAR_PORT:-5103}:5103"
 

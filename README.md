@@ -109,7 +109,7 @@ The server reads `server/.env` for `DB_*` settings and builds a PostgreSQL conne
 
 ## Connect to the Moleculer network through Sidecar
 
-The Sidecar is configured for the `veamosl-services` namespace and the NATS transporter at `nats://192.168.101.121:4222`. The network uses Moleculer's CBOR serializer, so the local image combines the pinned upstream Sidecar service with a newer Moleculer 0.14 release that supports CBOR. It is currently used only for a read-only registry probe; the application does not call actions, emit events, or publish ticket data.
+The Sidecar is configured for the `veamosl-services` namespace and the NATS transporter at `nats://192.168.101.121:4222`. The network uses Moleculer's CBOR serializer, so the local image combines the pinned upstream Sidecar service with a newer Moleculer 0.14 release that supports CBOR. It exposes the read-only `foxygen.latestTicket` action, which returns the most recently created ticket or `null` when there are no tickets.
 
 1. Start the Sidecar:
    `docker compose up -d sidecar`
@@ -119,6 +119,16 @@ The Sidecar is configured for the `veamosl-services` namespace and the NATS tran
 3. Start the Go server and inspect `GET /api/health`.
 
 The `moleculer` health object reports whether the Sidecar registry endpoint is reachable and how many Moleculer nodes it can currently see. A node count of one normally means only the Sidecar itself is visible; a larger count confirms that it has discovered other nodes in the namespace.
+
+Call the latest-ticket action through the Sidecar HTTP interface:
+
+```sh
+curl -X POST http://localhost:5103/v1/call/foxygen.latestTicket \
+  -H 'Content-Type: application/json' \
+  -d '{}'
+```
+
+The ticket is returned in the response's `response` field.
 
 Configuration overrides:
 

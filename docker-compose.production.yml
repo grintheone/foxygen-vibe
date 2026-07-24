@@ -38,6 +38,12 @@ services:
             NODEID: ${MOLECULER_NODE_ID:-foxygen-sidecar}
             SERIALIZER: ${MOLECULER_SERIALIZER:-CBOR}
             LOGLEVEL: ${MOLECULER_LOG_LEVEL:-info}
+            DB_HOST: postgres
+            DB_PORT: 5432
+            DB_USER: ${POSTGRES_USER:-grintheone}
+            DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+            DB_NAME: ${POSTGRES_DB:-foxygendb}
+            DB_SSLMODE: ${DB_SSLMODE:-disable}
         expose:
             - "5103"
 

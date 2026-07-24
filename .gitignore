@@ -2,6 +2,7 @@
 .cache
 client/node_modules
 client/dist
+sidecar/node_modules
 server/bin
 server/server
 server/.env

@@ -2,6 +2,8 @@
 
 const { ServiceBroker } = require("moleculer");
 const SidecarService = require("moleculer-sidecar");
+const { Pool } = require("pg");
+const { createLatestTicketService, databasePoolOptions } = require("./latest-ticket");
 
 const broker = new ServiceBroker({
 	namespace: process.env.NAMESPACE || "",
@@ -12,12 +14,18 @@ const broker = new ServiceBroker({
 	logLevel: process.env.LOGLEVEL || "info"
 });
 
+const databasePool = new Pool(databasePoolOptions(process.env));
+
 broker.createService(SidecarService);
+broker.createService(createLatestTicketService(databasePool));
 
 async function stop(signal) {
 	broker.logger.info(`Received ${signal}; stopping Moleculer Sidecar...`);
-	await broker.stop();
-	process.exit(0);
+	try {
+		await broker.stop();
+	} finally {
+		await databasePool.end();
+	}
 }
 
 process.once("SIGINT", () => void stop("SIGINT"));
@@ -25,5 +33,7 @@ process.once("SIGTERM", () => void stop("SIGTERM"));
 
 broker.start().catch(err => {
 	console.error("Unable to start Moleculer Sidecar", err);
-	process.exit(1);
+	return databasePool.end().finally(() => {
+		process.exitCode = 1;
+	});
 });

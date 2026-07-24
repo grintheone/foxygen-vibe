@@ -12,7 +12,7 @@ RUN npm ci --omit=dev \
     --fetch-retry-maxtimeout=120000 \
     --fetch-timeout=120000
 
-COPY sidecar/index.js ./
+COPY sidecar/index.js sidecar/latest-ticket.js ./
 
 EXPOSE 5103
 
