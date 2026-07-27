@@ -2504,6 +2504,8 @@ func (s *Server) handleEditorTicketPatch(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
+	s.publishTicketUpdated(ticketID)
+
 	writeJSON(w, http.StatusOK, response)
 }
 

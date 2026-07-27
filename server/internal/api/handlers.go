@@ -3978,6 +3978,8 @@ func (s *Server) handleTicketsCreate(w http.ResponseWriter, r *http.Request, req
 		return
 	}
 
+	s.publishTicketCreated(createdTicketID)
+
 	writeJSON(w, http.StatusCreated, createTicketResponse{
 		AssignedAt:    timestampToRFC3339(assignedAt),
 		AssignedEnd:   timestampToRFC3339(storedEnd),
@@ -4837,6 +4839,16 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 			log.Printf("commit patch ticket transaction failed: %v", err)
 			http.Error(w, "failed to update ticket", http.StatusInternalServerError)
 			return
+		}
+	}
+
+	s.publishTicketUpdated(ticketID)
+	if response.FollowUpTicket != nil {
+		var followUpTicketID pgtype.UUID
+		if err := followUpTicketID.Scan(response.FollowUpTicket.ID); err != nil {
+			log.Printf("parse follow-up ticket id for event failed: %v", err)
+		} else {
+			s.publishTicketCreated(followUpTicketID)
 		}
 	}
 

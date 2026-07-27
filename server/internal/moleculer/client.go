@@ -1,6 +1,7 @@
 package moleculer
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,7 +13,10 @@ import (
 	"time"
 )
 
-const registryNodesPath = "/v1/registry/nodes"
+const (
+	registryNodesPath  = "/v1/registry/nodes"
+	broadcastEventPath = "/v1/broadcast/"
+)
 
 type Config struct {
 	Enabled bool
@@ -55,6 +59,10 @@ type Client struct {
 
 type RegistryStatus struct {
 	NodeCount int
+}
+
+type broadcastEventRequest struct {
+	Params any `json:"params"`
 }
 
 func New(config Config) (*Client, error) {
@@ -106,4 +114,49 @@ func (c *Client) ProbeRegistry(ctx context.Context) (RegistryStatus, error) {
 	}
 
 	return RegistryStatus{NodeCount: len(nodes)}, nil
+}
+
+func (c *Client) BroadcastEvent(ctx context.Context, event string, params any) error {
+	if c == nil {
+		return errors.New("Moleculer sidecar client is not configured")
+	}
+
+	event = strings.TrimSpace(event)
+	if event == "" {
+		return errors.New("Moleculer event name is required")
+	}
+
+	body, err := json.Marshal(broadcastEventRequest{Params: params})
+	if err != nil {
+		return fmt.Errorf("encode Moleculer event %q: %w", event, err)
+	}
+
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		c.baseURL+broadcastEventPath+url.PathEscape(event),
+		bytes.NewReader(body),
+	)
+	if err != nil {
+		return fmt.Errorf("create Moleculer event request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("broadcast Moleculer event %q: %w", event, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		responseBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		message := strings.TrimSpace(string(responseBody))
+		if message == "" {
+			message = resp.Status
+		}
+		return fmt.Errorf("sidecar broadcast %q returned %s: %s", event, resp.Status, message)
+	}
+
+	return nil
 }

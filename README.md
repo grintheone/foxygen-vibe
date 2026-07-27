@@ -130,6 +130,17 @@ curl -X POST http://localhost:5103/v1/call/foxygen.latestTicket \
 
 The ticket is returned in the response's `response` field.
 
+Ticket mutations made through the Foxygen app are broadcast through the Sidecar after
+the database change succeeds:
+
+- `foxygen.ticket.created` for app-created tickets, including recommendation follow-ups
+- `foxygen.ticket.updated` for lifecycle transitions and editor changes
+
+Each event contains `operation`, `source` (`app`), `occurredAt`, and a current `ticket`
+snapshot. Legacy dump imports and PouchDB synchronization write directly to PostgreSQL
+and intentionally do not publish these events. Broadcast failures are logged by the API
+but do not change the result of a ticket mutation that has already committed.
+
 Configuration overrides:
 
 - `MOLECULER_NAMESPACE`
