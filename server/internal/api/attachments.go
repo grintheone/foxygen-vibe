@@ -37,6 +37,9 @@ func buildTicketAttachmentDownloadURL(ticketID string, attachmentID string) stri
 }
 
 func (s *Server) loadTicketAttachments(ctx context.Context, ticketID pgtype.UUID) ([]ticketAttachmentResponse, error) {
+	if s.ticketAttachmentsLoader != nil {
+		return s.ticketAttachmentsLoader(ctx, ticketID)
+	}
 	rows, err := s.db.Query(ctx, `
 		SELECT id, name, media_type, ext, size_bytes, uploaded_at
 		FROM attachments
@@ -174,6 +177,8 @@ func (s *Server) handleTicketAttachmentUpload(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	s.publishTicketUpdated(ticketID)
+
 	writeJSON(w, http.StatusCreated, ticketAttachmentResponse{
 		ID:          attachmentID,
 		Name:        fileName,
@@ -241,7 +246,9 @@ func (s *Server) handleTicketAttachmentDownload(w http.ResponseWriter, r *http.R
 		fileName = attachmentID
 	}
 
-	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": fileName}))
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("inline", map[string]string{"filename": fileName}))
+	w.Header().Set("Content-Security-Policy", "sandbox")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Type", mediaType)
 	if info.Size >= 0 {
 		w.Header().Set("Content-Length", strconv.FormatInt(info.Size, 10))
@@ -273,4 +280,71 @@ func (s *Server) canUploadTicketAttachment(ctx context.Context, ticketID pgtype.
 	}
 
 	return false, ticketExists, nil
+}
+
+// Delete storage first so a storage failure leaves the database record available
+// for retry. MinIO removal is idempotent, including after a database commit fails.
+func deleteTicketAttachment(ctx context.Context, tx pgx.Tx, removeObject func(context.Context, string) error, ticketID, userID pgtype.UUID, attachmentID string) (int, error) {
+	var allowed bool
+	err := tx.QueryRow(ctx, `
+		SELECT COALESCE(executor = $2, false) AND COALESCE(status, '') IN ('worksDone', 'closed')
+		FROM tickets WHERE id = $1 FOR UPDATE
+	`, ticketID, userID).Scan(&allowed)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return http.StatusNotFound, fmt.Errorf("ticket not found")
+	}
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+	if !allowed {
+		return http.StatusConflict, fmt.Errorf("ticket must be assigned to you and in worksDone or closed status")
+	}
+
+	var objectKey string
+	err = tx.QueryRow(ctx, `SELECT id FROM attachments WHERE ref_id = $1 AND id = $2 FOR UPDATE`, ticketID, attachmentID).Scan(&objectKey)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// A repeated request after a successful deletion is also successful.
+		return http.StatusNoContent, nil
+	}
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+	if err := removeObject(ctx, objectKey); err != nil {
+		return http.StatusBadGateway, err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM attachments WHERE ref_id = $1 AND id = $2`, ticketID, attachmentID); err != nil {
+		return http.StatusInternalServerError, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return http.StatusInternalServerError, err
+	}
+	return http.StatusNoContent, nil
+}
+
+func (s *Server) handleTicketAttachmentDelete(w http.ResponseWriter, r *http.Request, ticketID, userID pgtype.UUID, attachmentID string) {
+	if s.db == nil || s.storage == nil {
+		http.Error(w, "attachment storage not configured", http.StatusServiceUnavailable)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
+	defer cancel()
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		http.Error(w, "failed to delete attachment", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback(context.Background())
+
+	status, err := deleteTicketAttachment(ctx, tx, s.storage.RemoveObject, ticketID, userID, attachmentID)
+	if err != nil {
+		log.Printf("delete ticket attachment failed: %v", err)
+		message := "failed to delete attachment"
+		if status == http.StatusNotFound || status == http.StatusConflict {
+			message = err.Error()
+		}
+		http.Error(w, message, status)
+		return
+	}
+	s.publishTicketUpdated(ticketID)
+	w.WriteHeader(status)
 }

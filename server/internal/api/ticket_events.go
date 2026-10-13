@@ -18,10 +18,20 @@ const (
 )
 
 type ticketEventPayload struct {
-	OccurredAt time.Time                  `json:"occurredAt"`
-	Operation  string                     `json:"operation"`
-	Source     string                     `json:"source"`
-	Ticket     editorTicketDetailResponse `json:"ticket"`
+	OccurredAt time.Time           `json:"occurredAt"`
+	Operation  string              `json:"operation"`
+	Source     string              `json:"source"`
+	Ticket     ticketEventSnapshot `json:"ticket"`
+}
+
+type ticketEventSnapshot struct {
+	editorTicketDetailResponse
+	Attachments []ticketEventAttachment `json:"attachments"`
+}
+
+type ticketEventAttachment struct {
+	ID   string `json:"id"`
+	Path string `json:"path"`
 }
 
 func (s *Server) publishTicketCreated(ticketID pgtype.UUID) {
@@ -63,10 +73,29 @@ func (s *Server) broadcastTicketEvent(
 		return errors.New("load ticket event snapshot: ticket not found")
 	}
 
+	attachments, err := s.loadTicketAttachments(ctx, ticketID)
+	if err != nil {
+		return fmt.Errorf("load ticket event attachments: %w", err)
+	}
+	eventAttachments := make([]ticketEventAttachment, 0, len(attachments))
+	for _, attachment := range attachments {
+		downloadURL, err := s.ticketAttachmentEventURL(ticketID.String(), attachment.ID)
+		if err != nil {
+			return fmt.Errorf("create ticket event attachment URL: %w", err)
+		}
+		eventAttachments = append(eventAttachments, ticketEventAttachment{
+			ID:   attachment.ID,
+			Path: downloadURL,
+		})
+	}
+
 	return s.moleculer.BroadcastEvent(ctx, eventName, ticketEventPayload{
 		OccurredAt: time.Now().UTC(),
 		Operation:  operation,
 		Source:     "app",
-		Ticket:     ticket,
+		Ticket: ticketEventSnapshot{
+			editorTicketDetailResponse: ticket,
+			Attachments:                eventAttachments,
+		},
 	})
 }

@@ -96,6 +96,7 @@ export function TicketReportSheet({
     onCloseSuccess,
     onSubmitClose,
     onUploadAttachment,
+    onDeleteAttachment,
     resolvedReason,
     submitError,
     ticketNumber,
@@ -110,6 +111,8 @@ export function TicketReportSheet({
     const [isDoubleSigned, setIsDoubleSigned] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
     const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+    const [removingPreviewId, setRemovingPreviewId] = useState("");
+    const removalInFlightRef = useRef(false);
     const [localError, setLocalError] = useState("");
     const [mediaPreviews, setMediaPreviews] = useState([]);
     const [recommendationDepartmentId, setRecommendationDepartmentId] = useState("");
@@ -240,21 +243,39 @@ export function TicketReportSheet({
         void uploadPreviewItems(previewItems);
     }
 
-    function handleRemovePreview(previewId) {
-        setMediaPreviews((previous) => {
-            const previewToRemove = previous.find((item) => item.id === previewId);
-            if (previewToRemove) {
-                URL.revokeObjectURL(previewToRemove.previewUrl);
-            }
+    async function handleRemovePreview(previewId) {
+        if (isSubmitting || isUploadingMedia || Boolean(removingPreviewId) || isSubmitted || removalInFlightRef.current) {
+            return;
+        }
+        const preview = mediaPreviews.find((item) => item.id === previewId);
+        if (!preview) {
+            return;
+        }
 
-            return previous.filter((item) => item.id !== previewId);
-        });
+        removalInFlightRef.current = true;
+        setRemovingPreviewId(previewId);
+        setLocalError("");
+        try {
+            if (preview.serverAttachmentId) {
+                if (!onDeleteAttachment) {
+                    throw new Error("Attachment deletion is not configured");
+                }
+                await onDeleteAttachment(preview.serverAttachmentId);
+            }
+            URL.revokeObjectURL(preview.previewUrl);
+            setMediaPreviews((previous) => previous.filter((item) => item.id !== previewId));
+        } catch {
+            setLocalError("Не удалось удалить вложение. Попробуйте ещё раз.");
+        } finally {
+            removalInFlightRef.current = false;
+            setRemovingPreviewId("");
+        }
     }
 
     async function handleSubmit(event) {
         event.preventDefault();
 
-        if (isSubmitting || isUploadingMedia || isSubmitted) {
+        if (isSubmitting || isUploadingMedia || Boolean(removingPreviewId) || isSubmitted) {
             return;
         }
 
@@ -306,7 +327,9 @@ export function TicketReportSheet({
     return (
         <SlideOverSheet
             isOpen={isOpen}
-            onClose={onClose}
+            onClose={() => {
+                if (!removalInFlightRef.current) onClose();
+            }}
             closeLabel="Закрыть панель отчета"
             eyebrow="Закрытие тикета"
             title={`Отчет по заявке #${ticketNumber || "—"}`}
@@ -377,7 +400,7 @@ export function TicketReportSheet({
                                             isSubmitting ||
                                             isUploadingMedia ||
                                             isSubmitted ||
-                                            Boolean(item.serverAttachmentId)
+                                            Boolean(removingPreviewId)
                                         }
                                         className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white transition hover:bg-black/80 disabled:opacity-60"
                                         aria-label={`Удалить ${item.file.name}`}
@@ -401,7 +424,7 @@ export function TicketReportSheet({
                                     <span
                                         className={`absolute bottom-2 left-2 rounded-full px-2 py-1 text-[11px] font-semibold text-white ${resolveUploadStatusClassName(item.uploadStatus)}`}
                                     >
-                                        {resolveUploadStatusLabel(item.uploadStatus)}
+                                        {removingPreviewId === item.id ? "Удаляем" : resolveUploadStatusLabel(item.uploadStatus)}
                                     </span>
                                 </div>
                             ))}
@@ -413,7 +436,7 @@ export function TicketReportSheet({
                             type="file"
                             accept={supportedImageAcceptValue}
                             multiple
-                            disabled={isSubmitting || isUploadingMedia || isSubmitted}
+                            disabled={isSubmitting || isUploadingMedia || Boolean(removingPreviewId) || isSubmitted}
                             className="sr-only"
                             onChange={handleMediaSelect}
                         />
@@ -487,7 +510,7 @@ export function TicketReportSheet({
                     <div className="sticky bottom-[calc(-1.5rem-env(safe-area-inset-bottom))] -mx-6 border-t border-white/15 bg-slate-950/95 px-6 pt-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] backdrop-blur">
                         <button
                             type="submit"
-                            disabled={isSubmitting || isUploadingMedia || isSubmitted}
+                            disabled={isSubmitting || isUploadingMedia || Boolean(removingPreviewId) || isSubmitted}
                             className="flex min-h-14 w-full items-center justify-center rounded-2xl bg-emerald-500 px-5 text-base font-semibold text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-emerald-600/70 sm:text-lg"
                         >
                             <span className="mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/20">

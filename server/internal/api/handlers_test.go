@@ -1313,3 +1313,37 @@ func TestRequesterTicketExecutorFilterSkipsCoordinatorRole(t *testing.T) {
 		t.Fatalf("expected no executor filter for coordinator role, got %s", filter.String())
 	}
 }
+
+func TestParseTicketListFiltersClientID(t *testing.T) {
+	const clientID = "123e4567-e89b-12d3-a456-426614174000"
+	for _, tc := range []struct {
+		name      string
+		query     string
+		wantValid bool
+		wantErr   bool
+	}{
+		{name: "all clients"},
+		{name: "selected client", query: "?clientId=" + clientID, wantValid: true},
+		{name: "trim whitespace", query: "?clientId=%20" + clientID + "%20", wantValid: true},
+		{name: "invalid client", query: "?clientId=invalid", wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			filters, err := parseTicketListFilters(httptest.NewRequest(http.MethodGet, "/tickets"+tc.query, nil))
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("error = %v, wantErr %v", err, tc.wantErr)
+			}
+			if tc.wantErr {
+				return
+			}
+			if filters.ClientID.Valid != tc.wantValid {
+				t.Fatalf("client valid = %v, want %v", filters.ClientID.Valid, tc.wantValid)
+			}
+			if tc.wantValid && filters.ClientID.String() != clientID {
+				t.Fatalf("unexpected client: %s", filters.ClientID.String())
+			}
+			if filters.SortBy != "newest" {
+				t.Fatalf("default sort changed: %s", filters.SortBy)
+			}
+		})
+	}
+}

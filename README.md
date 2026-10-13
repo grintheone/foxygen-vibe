@@ -134,12 +134,24 @@ Ticket mutations made through the Foxygen app are broadcast through the Sidecar 
 the database change succeeds:
 
 - `foxygen.ticket.created` for app-created tickets, including recommendation follow-ups
-- `foxygen.ticket.updated` for lifecycle transitions and editor changes
+- `foxygen.ticket.updated` for lifecycle transitions, editor changes, and successful attachment uploads
 
 Each event contains `operation`, `source` (`app`), `occurredAt`, and a current `ticket`
 snapshot. Legacy dump imports and PouchDB synchronization write directly to PostgreSQL
 and intentionally do not publish these events. Broadcast failures are logged by the API
 but do not change the result of a ticket mutation that has already committed.
+
+The event's `ticket.attachments` array contains objects with only `id` and `path`.
+The `path` is an absolute download URL that works without an app login. Set `PUBLIC_BASE_URL`
+to the externally reachable Foxygen origin (for example, `https://foxygen.example.com`)
+in `server/.env` or the production environment. These links have no time-based
+expiration: each contains a signature granting read access to that attachment.
+They remain valid while the file exists, the public URL is reachable, and `JWT_SECRET`
+is unchanged; rotating that secret invalidates previously issued links. The MinIO
+bucket can remain private. The regular ticket detail API keeps its authenticated
+download URLs. Tickets without attachments emit `attachments: []`. If attachments
+exist but `PUBLIC_BASE_URL` is missing, the event fails with a logged configuration
+error instead of emitting unusable URLs.
 
 Configuration overrides:
 

@@ -6,6 +6,7 @@ import {
     useGetTicketByIdQuery,
     usePatchTicketMutation,
     useUploadTicketAttachmentMutation,
+    useDeleteTicketAttachmentMutation,
 } from "../../../shared/api/tickets-api";
 import { PageShell } from "../../../shared/ui/page-shell";
 import { useTicketViewModel } from "../lib/use-ticket-view-model";
@@ -73,6 +74,7 @@ export function TicketPage() {
     } = useTicketViewModel(ticket);
     const [patchTicket, { isLoading: isPatching }] = usePatchTicketMutation();
     const [uploadTicketAttachment, { isLoading: isUploadingAttachment }] = useUploadTicketAttachmentMutation();
+    const [deleteTicketAttachment] = useDeleteTicketAttachmentMutation();
     const hasWorkResult = Boolean(ticket?.result?.trim());
     const historySectionTicket = import.meta.env.DEV && ticket ? { ...ticket, ...mockHistoryTicketData } : ticket;
 
@@ -206,6 +208,10 @@ export function TicketPage() {
         }
     }
 
+    async function handleDeleteAttachment(attachmentId) {
+        return deleteTicketAttachment({ ticketId: ticket.id, attachmentId }).unwrap();
+    }
+
     async function handleUploadAttachment(file) {
         if (!ticket?.id) {
             return null;
@@ -326,6 +332,7 @@ export function TicketPage() {
                         onCloseSuccess={handleTicketReportCloseSuccess}
                         onSubmitClose={handleCloseTicketReport}
                         onUploadAttachment={handleUploadAttachment}
+                        onDeleteAttachment={handleDeleteAttachment}
                         resolvedReason={ticket?.resolvedReason}
                         deviceName={ticket?.deviceName}
                         clientName={ticket?.clientName}

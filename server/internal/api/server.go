@@ -20,6 +20,7 @@ import (
 var newMinIOClient = storage.NewMinIO
 
 type Server struct {
+	publicBaseURL                   string
 	databaseConfigured              bool
 	storageConfigured               bool
 	pouchSyncConfigured             bool
@@ -40,6 +41,7 @@ type Server struct {
 	editorContactDetailLoader       func(context.Context, pgtype.UUID) (editorContactDetailResponse, bool, error)
 	editorDeviceDetailLoader        func(context.Context, pgtype.UUID) (editorDeviceDetailResponse, bool, error)
 	editorTicketDetailLoader        func(context.Context, pgtype.UUID) (editorTicketDetailResponse, bool, error)
+	ticketAttachmentsLoader         func(context.Context, pgtype.UUID) ([]ticketAttachmentResponse, error)
 	editorRegionExists              func(context.Context, pgtype.UUID) (bool, error)
 	editorClientExists              func(context.Context, pgtype.UUID) (bool, error)
 	editorDeviceExists              func(context.Context, pgtype.UUID) (bool, error)
@@ -100,12 +102,18 @@ func New() (*Server, error) {
 		return nil, err
 	}
 
+	publicBaseURL, err := resolvePublicBaseURL()
+	if err != nil {
+		return nil, err
+	}
+
 	importDefaultPassword, err := resolveImportDefaultPassword()
 	if err != nil {
 		return nil, err
 	}
 
 	api := &Server{
+		publicBaseURL:       publicBaseURL,
 		databaseConfigured:  databaseURL != "",
 		storageConfigured:   storageConfig.Enabled(),
 		pouchSyncConfigured: pouchSyncConfig.Enabled,
@@ -235,6 +243,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/departments/members", s.handleDepartmentMembers)
 	mux.HandleFunc("/api/ticket-reasons", s.handleTicketReasons)
 	mux.HandleFunc("/api/tickets", s.handleTickets)
+	mux.HandleFunc("/api/attachment-download/", s.handleSharedTicketAttachmentDownload)
 	mux.HandleFunc("/api/tickets/", s.handleTicketByID)
 	mux.HandleFunc("/api/tickets/department", s.handleDepartmentTickets)
 

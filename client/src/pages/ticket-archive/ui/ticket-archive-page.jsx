@@ -371,6 +371,7 @@ function PeriodDateField({ max, min, name, onChange, value }) {
 }
 
 function ArchiveFilterSheet({
+    clientOptions,
     deviceOptions,
     draftFilters,
     entityTitle,
@@ -495,6 +496,23 @@ function ArchiveFilterSheet({
                                 <option key={option} value={option}>
                                     {option}
                                 </option>
+                            ))}
+                        </SelectField>
+                    </FilterSection>
+                ) : null}
+
+                {!isClientArchive ? (
+                    <FilterSection title="Клиент" description="Показать тикеты выбранного клиента.">
+                        <label className="sr-only" htmlFor="archive_client">Клиент</label>
+                        <SelectField
+                            id="archive_client"
+                            name="archive_client"
+                            onChange={(event) => onDraftChange("clientFilterId", event.target.value)}
+                            value={draftFilters.clientFilterId}
+                        >
+                            <option value="">Все клиенты</option>
+                            {clientOptions.map((option) => (
+                                <option key={option.id} value={option.id}>{option.title}</option>
                             ))}
                         </SelectField>
                     </FilterSection>
@@ -754,10 +772,12 @@ export function TicketArchivePage({ entityType }) {
     const { clientId, deviceId, userId } = useParams();
     const [activeTab, setActiveTab] = useState("closed");
     const [activeGrouping, setActiveGrouping] = useState("months");
+    const [activeClientId, setActiveClientId] = useState("");
     const [activeDeviceName, setActiveDeviceName] = useState("");
     const [activeSortBy, setActiveSortBy] = useState("newest");
     const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
     const [filterDraft, setFilterDraft] = useState({
+        clientFilterId: "",
         deviceName: "",
         endDate: "",
         groupBy: "months",
@@ -836,6 +856,7 @@ export function TicketArchivePage({ entityType }) {
         isLoading: isDeviceTicketsLoading,
     } = useGetDeviceTicketsPageQuery(
         {
+            clientFilterId: activeClientId,
             deviceId: entityId,
             deviceName: activeDeviceName,
             endDate: activeEndDate,
@@ -857,6 +878,7 @@ export function TicketArchivePage({ entityType }) {
         isLoading: isProfileTicketsLoading,
     } = useGetProfileTicketsPageQuery(
         {
+            clientFilterId: activeClientId,
             deviceName: activeDeviceName,
             endDate: activeEndDate,
             limit: ARCHIVE_PAGE_SIZE,
@@ -890,6 +912,7 @@ export function TicketArchivePage({ entityType }) {
         data: deviceArchiveFacets,
     } = useGetDeviceTicketArchiveFacetsQuery(
         {
+            clientFilterId: filterDraft.clientFilterId,
             deviceId: entityId,
             endDate: draftEndDate,
             reasonTitle: filterDraft.reasonTitle,
@@ -904,6 +927,7 @@ export function TicketArchivePage({ entityType }) {
         data: profileArchiveFacets,
     } = useGetProfileTicketArchiveFacetsQuery(
         {
+            clientFilterId: filterDraft.clientFilterId,
             deviceName: filterDraft.deviceName,
             endDate: draftEndDate,
             reasonTitle: filterDraft.reasonTitle,
@@ -960,6 +984,20 @@ export function TicketArchivePage({ entityType }) {
           : entity?.serialNumber?.trim()
             ? `С/Н: ${entity.serialNumber.trim()}`
             : "Серийный номер не указан";
+    const clientOptionsCache = useRef(new Map());
+    const clientOptionsScope = `${entityType}:${entityId}`;
+    if (clientOptionsCache.current.scope !== clientOptionsScope) {
+        clientOptionsCache.current = new Map();
+        clientOptionsCache.current.scope = clientOptionsScope;
+    }
+    for (const option of archiveFacets?.clients || []) {
+        clientOptionsCache.current.set(option.id, option);
+    }
+    const clientOptions = [...(archiveFacets?.clients || [])];
+    const selectedClient = clientOptionsCache.current.get(filterDraft.clientFilterId);
+    if (selectedClient && !clientOptions.some((option) => option.id === selectedClient.id)) {
+        clientOptions.unshift(selectedClient);
+    }
     const reasonOptions = includeSelectedOption(archiveFacets?.reasonTitles || [], filterDraft.reasonTitle);
     const deviceOptions = includeSelectedOption(archiveFacets?.deviceNames || [], filterDraft.deviceName);
     const groupedTickets = groupTickets(tickets, activeGrouping);
@@ -967,6 +1005,7 @@ export function TicketArchivePage({ entityType }) {
     useEffect(() => {
         setPage(1);
     }, [
+        activeClientId,
         activeDeviceName,
         activeEndDate,
         activeReasonTitle,
@@ -996,6 +1035,7 @@ export function TicketArchivePage({ entityType }) {
 
     function handleResetDraft() {
         setFilterDraft({
+            clientFilterId: "",
             deviceName: "",
             endDate: "",
             groupBy: "months",
@@ -1007,6 +1047,7 @@ export function TicketArchivePage({ entityType }) {
     }
 
     function handleApplyDraft() {
+        setActiveClientId(filterDraft.clientFilterId);
         setActiveDeviceName(filterDraft.deviceName);
         setActiveGrouping(filterDraft.groupBy);
         setActiveSortBy(filterDraft.sortBy);
@@ -1065,6 +1106,7 @@ export function TicketArchivePage({ entityType }) {
             </section>
 
             <ArchiveFilterSheet
+                clientOptions={clientOptions}
                 deviceOptions={deviceOptions}
                 draftFilters={filterDraft}
                 entityTitle={entityTitle}

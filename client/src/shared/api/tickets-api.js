@@ -15,13 +15,14 @@ function normalizeTicketItems(response) {
   return response?.items || [];
 }
 
-function buildTicketListParams({ deviceName, endDate, limit, offset, reasonTitle, sortBy, startDate, status }) {
+function buildTicketListParams({ clientFilterId, deviceName, endDate, limit, offset, reasonTitle, sortBy, startDate, status }) {
   return {
     ...(limit ? { limit } : {}),
     ...(offset ? { offset } : {}),
     ...(status ? { status } : {}),
     ...(reasonTitle ? { reasonTitle } : {}),
     ...(deviceName ? { deviceName } : {}),
+    ...(clientFilterId ? { clientId: clientFilterId } : {}),
     ...(sortBy ? { sortBy } : {}),
     ...(startDate ? { startDate } : {}),
     ...(endDate ? { endDate } : {}),
@@ -264,37 +265,37 @@ export const ticketsApi = createApi({
       providesTags: (_, __, { clientId }) => [{ type: "Client", id: clientId }],
     }),
     getDeviceTickets: builder.query({
-      query: ({ deviceId, deviceName, endDate, limit, offset, reasonTitle, sortBy, startDate, status }) => ({
-        params: buildTicketListParams({ deviceName, endDate, limit, offset, reasonTitle, sortBy, startDate, status }),
+      query: ({ clientFilterId, deviceId, deviceName, endDate, limit, offset, reasonTitle, sortBy, startDate, status }) => ({
+        params: buildTicketListParams({ clientFilterId, deviceName, endDate, limit, offset, reasonTitle, sortBy, startDate, status }),
         url: `api/devices/${deviceId}/tickets`,
       }),
       transformResponse: normalizeTicketItems,
       providesTags: (_, __, { deviceId }) => [{ type: "Device", id: deviceId }],
     }),
     getDeviceTicketsPage: builder.query({
-      query: ({ deviceId, deviceName, endDate, limit, offset = 0, reasonTitle, sortBy, startDate, status }) => ({
-        params: buildTicketListParams({ deviceName, endDate, limit, offset, reasonTitle, sortBy, startDate, status }),
+      query: ({ clientFilterId, deviceId, deviceName, endDate, limit, offset = 0, reasonTitle, sortBy, startDate, status }) => ({
+        params: buildTicketListParams({ clientFilterId, deviceName, endDate, limit, offset, reasonTitle, sortBy, startDate, status }),
         url: `api/devices/${deviceId}/tickets`,
       }),
       providesTags: (_, __, { deviceId }) => [{ type: "Device", id: deviceId }],
     }),
     getDeviceTicketArchiveFacets: builder.query({
-      query: ({ deviceId, endDate, reasonTitle, startDate, status }) => ({
-        params: buildTicketListParams({ endDate, reasonTitle, startDate, status }),
+      query: ({ clientFilterId, deviceId, endDate, reasonTitle, startDate, status }) => ({
+        params: buildTicketListParams({ clientFilterId, endDate, reasonTitle, startDate, status }),
         url: `api/devices/${deviceId}/tickets/facets`,
       }),
       providesTags: (_, __, { deviceId }) => [{ type: "Device", id: deviceId }],
     }),
     getProfileTicketsPage: builder.query({
-      query: ({ deviceName, endDate, limit, offset = 0, reasonTitle, sortBy, startDate, status, userId }) => ({
-        params: buildTicketListParams({ deviceName, endDate, limit, offset, reasonTitle, sortBy, startDate, status }),
+      query: ({ clientFilterId, deviceName, endDate, limit, offset = 0, reasonTitle, sortBy, startDate, status, userId }) => ({
+        params: buildTicketListParams({ clientFilterId, deviceName, endDate, limit, offset, reasonTitle, sortBy, startDate, status }),
         url: `api/profile/${userId}/tickets`,
       }),
       providesTags: (_, __, { userId }) => [{ type: "Profile", id: userId }],
     }),
     getProfileTicketArchiveFacets: builder.query({
-      query: ({ deviceName, endDate, reasonTitle, startDate, status, userId }) => ({
-        params: buildTicketListParams({ deviceName, endDate, reasonTitle, startDate, status }),
+      query: ({ clientFilterId, deviceName, endDate, reasonTitle, startDate, status, userId }) => ({
+        params: buildTicketListParams({ clientFilterId, deviceName, endDate, reasonTitle, startDate, status }),
         url: `api/profile/${userId}/tickets/facets`,
       }),
       providesTags: (_, __, { userId }) => [{ type: "Profile", id: userId }],
@@ -437,6 +438,13 @@ export const ticketsApi = createApi({
         ...(result?.user_id ? [{ type: "Profile", id: result.user_id }] : []),
       ],
     }),
+    deleteTicketAttachment: builder.mutation({
+      query: ({ ticketId, attachmentId }) => ({
+        method: "DELETE",
+        url: `api/tickets/${ticketId}/attachments/${encodeURIComponent(attachmentId)}`,
+      }),
+      invalidatesTags: (_, __, { ticketId }) => [{ type: "Ticket", id: ticketId }],
+    }),
     uploadTicketAttachment: builder.mutation({
       query: ({ file, ticketId }) => {
         const body = new FormData();
@@ -498,4 +506,5 @@ export const {
   usePatchTicketMutation,
   useUploadProfileAvatarMutation,
   useUploadTicketAttachmentMutation,
+  useDeleteTicketAttachmentMutation,
 } = ticketsApi;
