@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -76,6 +77,7 @@ type ticketInterval struct {
 }
 
 type ticketRecord struct {
+	AppVersion     int64
 	ID             string
 	Number         *int
 	CreatedAt      *time.Time
@@ -404,7 +406,7 @@ func applyDevice(ctx context.Context, tx pgx.Tx, change changeEvent) error {
 
 func applyTicket(ctx context.Context, tx pgx.Tx, change changeEvent) error {
 	if change.Deleted {
-		_, err := tx.Exec(ctx, `DELETE FROM tickets WHERE id = $1`, trimLegacyPrefix(change.ID))
+		_, err := tx.Exec(ctx, `DELETE FROM tickets WHERE id = $1 AND app_version = 0`, trimLegacyPrefix(change.ID))
 		return err
 	}
 
@@ -482,6 +484,11 @@ func parseTicketRecord(change changeEvent) (ticketRecord, error) {
 		return ticketRecord{}, nil
 	}
 
+	appVersion, err := parseTicketAppVersion(doc["appVersion"])
+	if err != nil {
+		return ticketRecord{}, fmt.Errorf("parse appVersion %s: %w", change.ID, err)
+	}
+
 	number, _, err := parseTicketNumber(doc["number"])
 	if err != nil {
 		return ticketRecord{}, fmt.Errorf("parse ticket number %s: %w", change.ID, err)
@@ -519,6 +526,7 @@ func parseTicketRecord(change changeEvent) (ticketRecord, error) {
 	}
 
 	return ticketRecord{
+		AppVersion:     appVersion,
 		ID:             id,
 		Number:         number,
 		CreatedAt:      createdAt.Time,
@@ -575,13 +583,14 @@ const upsertTicketWithNumberSQL = `INSERT INTO tickets (
 	result,
 	used_materials,
 	reference_ticket,
-	double_signed
+	double_signed,
+	app_version
 )
 OVERRIDING SYSTEM VALUE
 VALUES (
 	$1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
 	$11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-	$21, $22, $23, $24, $25, '{}'::uuid[], NULL, $26
+	$21, $22, $23, $24, $25, '{}'::uuid[], NULL, $26, $27
 )
 ON CONFLICT (id) DO UPDATE
 SET created_at = EXCLUDED.created_at,
@@ -609,7 +618,8 @@ SET created_at = EXCLUDED.created_at,
     result = EXCLUDED.result,
     used_materials = EXCLUDED.used_materials,
     reference_ticket = EXCLUDED.reference_ticket,
-    double_signed = EXCLUDED.double_signed`
+    double_signed = EXCLUDED.double_signed
+WHERE tickets.app_version = EXCLUDED.app_version`
 
 func upsertTicketWithNumber(
 	ctx context.Context,
@@ -627,7 +637,7 @@ func upsertTicketWithNumber(
 	executorID any,
 	status any,
 ) error {
-	_, err := tx.Exec(
+	tag, err := tx.Exec(
 		ctx,
 		upsertTicketWithNumberSQL,
 		item.ID,
@@ -656,9 +666,13 @@ func upsertTicketWithNumber(
 		status,
 		item.Result,
 		item.DoubleSigned,
+		item.AppVersion,
 	)
 	if err != nil {
 		return fmt.Errorf("upsert ticket %s with number: %w", item.ID, err)
+	}
+	if tag.RowsAffected() == 0 {
+		log.Printf("pouchdb sync: skipped stale ticket id=%s appVersion=%d", item.ID, item.AppVersion)
 	}
 	return nil
 }
@@ -679,7 +693,7 @@ func upsertTicketWithoutNumber(
 	executorID any,
 	status any,
 ) error {
-	_, err := tx.Exec(
+	tag, err := tx.Exec(
 		ctx,
 		`INSERT INTO tickets (
 			id,
@@ -708,12 +722,13 @@ func upsertTicketWithoutNumber(
 			result,
 			used_materials,
 			reference_ticket,
-			double_signed
+			double_signed,
+			app_version
 		)
 		VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, $9,
 			$10, $11, $12, $13, $14, $15, $16, $17, $18, $19,
-			$20, $21, $22, $23, $24, '{}'::uuid[], NULL, $25
+			$20, $21, $22, $23, $24, '{}'::uuid[], NULL, $25, $26
 		)
 		ON CONFLICT (id) DO UPDATE
 		SET created_at = EXCLUDED.created_at,
@@ -741,7 +756,8 @@ func upsertTicketWithoutNumber(
 		    result = EXCLUDED.result,
 		    used_materials = EXCLUDED.used_materials,
 		    reference_ticket = EXCLUDED.reference_ticket,
-		    double_signed = EXCLUDED.double_signed`,
+		    double_signed = EXCLUDED.double_signed
+		WHERE tickets.app_version = EXCLUDED.app_version`,
 		item.ID,
 		item.CreatedAt,
 		item.AssignedAt,
@@ -767,9 +783,13 @@ func upsertTicketWithoutNumber(
 		status,
 		item.Result,
 		item.DoubleSigned,
+		item.AppVersion,
 	)
 	if err != nil {
 		return fmt.Errorf("upsert ticket %s without number: %w", item.ID, err)
+	}
+	if tag.RowsAffected() == 0 {
+		log.Printf("pouchdb sync: skipped stale ticket id=%s appVersion=%d", item.ID, item.AppVersion)
 	}
 	return nil
 }
@@ -1129,4 +1149,20 @@ func trimLegacyPrefix(value string) string {
 		return strings.TrimSpace(value)
 	}
 	return strings.TrimSpace(parts[len(parts)-1])
+}
+
+// Missing versions belong to the legacy baseline. Invalid versions fail the feed
+// rather than silently treating a malformed version as an unprotected update.
+func parseTicketAppVersion(raw json.RawMessage) (int64, error) {
+	if len(raw) == 0 {
+		return 0, nil
+	}
+	var version int64
+	if strings.TrimSpace(string(raw)) == "null" {
+		return 0, fmt.Errorf("must be a non-negative integer")
+	}
+	if err := json.Unmarshal(raw, &version); err != nil || version < 0 {
+		return 0, fmt.Errorf("must be a non-negative integer")
+	}
+	return version, nil
 }

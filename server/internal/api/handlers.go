@@ -4003,7 +4003,8 @@ func (s *Server) handleTicketsCreate(w http.ResponseWriter, r *http.Request, req
 			description,
 			contact_person,
 			executor,
-			status
+			status,
+			app_version
 		)
 		VALUES (
 			(NOW() AT TIME ZONE 'UTC'),
@@ -4019,7 +4020,8 @@ func (s *Server) handleTicketsCreate(w http.ResponseWriter, r *http.Request, req
 			$10,
 			$11,
 			$12,
-			'assigned'
+			'assigned',
+			1
 		)
 		RETURNING id, number, COALESCE(status, ''), assigned_at, assigned_start, assigned_end
 	`, assignedStart, assignedEnd, input.Urgent, clientID, deviceID, requesterID, requesterDepartment, requesterID, resolvedReason, input.Description, nullableUUID(contactID), executorID).Scan(
@@ -4685,7 +4687,8 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 		conflictMessage = "ticket must belong to your department and be in created status"
 		result, err = tx.Exec(ctx, `
 			UPDATE tickets
-			SET status = $1,
+			SET app_version = app_version + 1,
+				status = $1,
 				description = $2,
 				reason = $3,
 				contact_person = $4,
@@ -4730,7 +4733,8 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 		expectedCurrentStatus = "assigned"
 		result, err = tx.Exec(ctx, `
 			UPDATE tickets
-			SET status = $1,
+			SET app_version = app_version + 1,
+				status = $1,
 				workstarted_at = $2
 			WHERE id = $3
 			  AND executor = $4
@@ -4756,7 +4760,8 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 		expectedCurrentStatus = "inWork"
 		result, err = tx.Exec(ctx, `
 			UPDATE tickets
-			SET status = $1,
+			SET app_version = app_version + 1,
+				status = $1,
 				workfinished_at = $2
 			WHERE id = $3
 			  AND executor = $4
@@ -4790,7 +4795,8 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 		expectedCurrentStatus = "worksDone"
 		result, err = tx.Exec(ctx, `
 			UPDATE tickets
-			SET status = $1,
+			SET app_version = app_version + 1,
+				status = $1,
 				closed_at = $2,
 				result = $3,
 				double_signed = $4
@@ -4844,7 +4850,8 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 				contact_person,
 				status,
 				urgent,
-				reference_ticket
+				reference_ticket,
+				app_version
 			)
 			SELECT
 				client,
@@ -4857,7 +4864,8 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 				contact_person,
 				'created',
 				urgent,
-				id
+				id,
+				1
 			FROM tickets
 			WHERE id = $3
 			RETURNING id, number, COALESCE(status, '')

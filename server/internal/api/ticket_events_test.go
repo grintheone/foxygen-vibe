@@ -66,6 +66,7 @@ func TestBroadcastTicketEventSendsCurrentAppTicketSnapshot(t *testing.T) {
 			return editorTicketDetailResponse{
 				ID:          ticketID.String(),
 				Number:      42,
+				AppVersion:  3,
 				Status:      "inWork",
 				Description: "Repair analyzer",
 			}, true, nil
@@ -97,6 +98,7 @@ func TestBroadcastTicketEventSendsCurrentAppTicketSnapshot(t *testing.T) {
 
 	if received.Ticket.ID != ticketID.String() ||
 		received.Ticket.Number != 42 ||
+		received.Ticket.AppVersion != 3 ||
 		received.Ticket.Status != "inWork" {
 		t.Fatalf("unexpected ticket snapshot: %#v", received.Ticket)
 	}

@@ -186,6 +186,7 @@ type editorTicketListItemResponse struct {
 }
 
 type editorTicketDetailResponse struct {
+	AppVersion         int64   `json:"appVersion"`
 	AssignedEnd        *string `json:"assignedEnd"`
 	AssignedStart      *string `json:"assignedStart"`
 	Client             *string `json:"client"`
@@ -2904,6 +2905,7 @@ func (s *Server) loadEditorTicketDetail(ctx context.Context, ticketID pgtype.UUI
 	row := s.db.QueryRow(ctx, `
 		SELECT
 			t.id,
+			t.app_version,
 			t.number,
 			COALESCE(t.status, ''),
 			COALESCE(ts.title, ''),
@@ -2958,6 +2960,7 @@ func (s *Server) loadEditorTicketDetail(ctx context.Context, ticketID pgtype.UUI
 	`, ticketID)
 
 	var (
+		appVersion         int64
 		id                 pgtype.UUID
 		number             pgtype.Int4
 		status             string
@@ -2991,6 +2994,7 @@ func (s *Server) loadEditorTicketDetail(ctx context.Context, ticketID pgtype.UUI
 
 	if err := row.Scan(
 		&id,
+		&appVersion,
 		&number,
 		&status,
 		&statusTitle,
@@ -3028,6 +3032,7 @@ func (s *Server) loadEditorTicketDetail(ctx context.Context, ticketID pgtype.UUI
 	}
 
 	return editorTicketDetailResponse{
+		AppVersion:         appVersion,
 		AssignedEnd:        timestampToRFC3339(assignedEnd),
 		AssignedStart:      timestampToRFC3339(assignedStart),
 		Client:             nullableUUIDToString(clientID),
@@ -3414,7 +3419,8 @@ func (s *Server) updateEditorTicketRecord(
 
 	tag, err := s.db.Exec(ctx, `
 		UPDATE tickets
-		SET client = $1,
+		SET app_version = app_version + 1,
+			client = $1,
 			device = $2,
 			ticket_type = $3,
 			department = $4,
