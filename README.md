@@ -52,6 +52,7 @@ Useful notes:
 - The first-start import is controlled by `BOOTSTRAP_IMPORT_ENABLED=true|false`.
 - Imported users receive the temporary password from `IMPORT_DEFAULT_PASSWORD`.
 - If the database already contains app data, the bootstrap step skips the import and starts the API normally.
+- On every API startup, `server/db/schema/024_account_access_policy.sql` disables accounts outside `Сервис ВББ`, `Сервис А78`, and `Сервис КПД`, except the test accounts `ivanova.anna.01` and `petrov.ivan.02`. Accounts without a department are also disabled. Exempt accounts keep their current status. This runs after the seeds and is included in rebuilt API images; changing the policy requires updating this SQL file.
 - Use the local `with-minio` profile only when you are not connecting to an existing S3-compatible storage service.
 - Before deployment, ask infrastructure which RFC1918 ranges are already in use on that host and pick a Docker subnet outside them.
 
