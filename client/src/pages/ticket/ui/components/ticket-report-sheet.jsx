@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useGetDepartmentsQuery } from "../../../../shared/api/tickets-api";
 import { SelectField } from "../../../../shared/ui/select-field";
+import { prepareAttachmentImage } from "../../lib/prepare-attachment-image";
+import { TicketImageEditorModal } from "./ticket-image-editor-modal";
 import { SlideOverSheet } from "../../../../shared/ui/slide-over-sheet";
 
 const supportedImageMimeTypes = new Set([
@@ -37,10 +39,12 @@ const supportedImageAcceptValue =
 function createPreviewItems(files) {
     return files.map((file) => ({
         file,
+        originalFile: file,
+        quarterTurns: 0,
         id: `${file.name}-${file.lastModified}-${file.size}-${Math.random().toString(36).slice(2)}`,
         previewUrl: URL.createObjectURL(file),
         serverAttachmentId: "",
-        uploadStatus: "submitting",
+        uploadStatus: "pending",
     }));
 }
 
@@ -84,7 +88,7 @@ function resolveUploadStatusLabel(status) {
         return "Ошибка";
     }
 
-    return "Загружаем";
+    return "Готово к загрузке";
 }
 
 export function TicketReportSheet({
@@ -110,9 +114,12 @@ export function TicketReportSheet({
     });
     const [isDoubleSigned, setIsDoubleSigned] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
+    const [isPreparingMedia, setIsPreparingMedia] = useState(false);
     const [isUploadingMedia, setIsUploadingMedia] = useState(false);
     const [removingPreviewId, setRemovingPreviewId] = useState("");
     const removalInFlightRef = useRef(false);
+    const [editingPreviewId, setEditingPreviewId] = useState("");
+    const uploadInFlightRef = useRef(false);
     const [localError, setLocalError] = useState("");
     const [mediaPreviews, setMediaPreviews] = useState([]);
     const [recommendationDepartmentId, setRecommendationDepartmentId] = useState("");
@@ -133,6 +140,7 @@ export function TicketReportSheet({
 
     useEffect(() => {
         if (!isOpen) {
+            setEditingPreviewId("");
             setLocalError("");
             setIsDoubleSigned(false);
             setIsSubmitted(false);
@@ -166,6 +174,7 @@ export function TicketReportSheet({
             return false;
         }
 
+        uploadInFlightRef.current = true;
         setIsUploadingMedia(true);
         setMediaPreviews((previous) =>
             previous.map((item) =>
@@ -208,6 +217,7 @@ export function TicketReportSheet({
             }
         }
 
+        uploadInFlightRef.current = false;
         setIsUploadingMedia(false);
         if (uploadFailed) {
             setLocalError("Не удалось загрузить все вложения.");
@@ -216,12 +226,14 @@ export function TicketReportSheet({
         return !uploadFailed;
     }
 
-    function handleMediaSelect(event) {
+    async function handleMediaSelect(event) {
+        if (uploadInFlightRef.current || isSubmitting || isSubmitted) return;
         const selectedFiles = Array.from(event.target.files || []);
         if (selectedFiles.length === 0) {
             return;
         }
 
+        event.target.value = "";
         const validFiles = selectedFiles.filter((file) => isSupportedImageFile(file));
         const rejectedFilesCount = selectedFiles.length - validFiles.length;
 
@@ -232,19 +244,32 @@ export function TicketReportSheet({
         }
 
         if (validFiles.length === 0) {
-            event.target.value = "";
             return;
         }
 
-        const previewItems = createPreviewItems(validFiles);
-        setMediaPreviews((previous) => [...previous, ...previewItems]);
-        setIsSubmitted(false);
-        event.target.value = "";
-        void uploadPreviewItems(previewItems);
+        uploadInFlightRef.current = true;
+        setIsPreparingMedia(true);
+        const errors = [];
+        try {
+            for (const file of validFiles) {
+                try {
+                    const preparedFile = await prepareAttachmentImage(file);
+                    const [preview] = createPreviewItems([preparedFile]);
+                    setMediaPreviews((previous) => [...previous, preview]);
+                } catch (error) {
+                    errors.push(`${file.name}: ${error?.message?.includes("25 МБ") ? error.message : "Не удалось подготовить фото. Попробуйте экспортировать его в JPEG."}`);
+                }
+            }
+            setIsSubmitted(false);
+            if (errors.length) setLocalError(errors.join(" "));
+        } finally {
+            uploadInFlightRef.current = false;
+            setIsPreparingMedia(false);
+        }
     }
 
     async function handleRemovePreview(previewId) {
-        if (isSubmitting || isUploadingMedia || Boolean(removingPreviewId) || isSubmitted || removalInFlightRef.current) {
+        if (isSubmitting || isPreparingMedia || isUploadingMedia || Boolean(removingPreviewId) || isSubmitted || removalInFlightRef.current) {
             return;
         }
         const preview = mediaPreviews.find((item) => item.id === previewId);
@@ -275,7 +300,7 @@ export function TicketReportSheet({
     async function handleSubmit(event) {
         event.preventDefault();
 
-        if (isSubmitting || isUploadingMedia || Boolean(removingPreviewId) || isSubmitted) {
+        if (isSubmitting || isPreparingMedia || isUploadingMedia || uploadInFlightRef.current || editingPreviewId || Boolean(removingPreviewId) || isSubmitted) {
             return;
         }
 
@@ -328,7 +353,7 @@ export function TicketReportSheet({
         <SlideOverSheet
             isOpen={isOpen}
             onClose={() => {
-                if (!removalInFlightRef.current) onClose();
+                if (!removalInFlightRef.current && !uploadInFlightRef.current && !isSubmitting && !editingPreviewId) onClose();
             }}
             closeLabel="Закрыть панель отчета"
             eyebrow="Закрытие тикета"
@@ -388,17 +413,22 @@ export function TicketReportSheet({
                                     key={item.id}
                                     className="relative h-40 w-40 overflow-hidden rounded-2xl border border-slate-400/35 bg-slate-900/60"
                                 >
-                                    <img
-                                        src={item.previewUrl}
-                                        alt={item.file.name}
-                                        className="h-full w-full object-cover"
-                                    />
+                                    <button
+                                        type="button"
+                                        className="h-full w-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400 disabled:cursor-default"
+                                        onClick={() => setEditingPreviewId(item.id)}
+                                        disabled={isSubmitting || isPreparingMedia || isUploadingMedia || isSubmitted || Boolean(removingPreviewId) || Boolean(item.serverAttachmentId)}
+                                        aria-label={`Просмотреть и повернуть ${item.file.name}`}
+                                    >
+                                        <img src={item.previewUrl} alt={item.file.name} className="h-full w-full object-cover" />
+                                        {!item.serverAttachmentId && <span className="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-1 text-xs font-semibold text-white">↻ Повернуть</span>}
+                                    </button>
                                     <button
                                         type="button"
                                         onClick={() => handleRemovePreview(item.id)}
                                         disabled={
                                             isSubmitting ||
-                                            isUploadingMedia ||
+                                            isPreparingMedia || isUploadingMedia ||
                                             isSubmitted ||
                                             Boolean(removingPreviewId)
                                         }
@@ -430,13 +460,15 @@ export function TicketReportSheet({
                             ))}
                         </div>
 
+                        <p className="text-sm text-slate-400">Нажмите на фото, чтобы повернуть его. Фотографии загрузятся при закрытии тикета. Фото iPhone (HEIC/HEIF) автоматически преобразуются в JPEG.</p>
+                        {isPreparingMedia && <p role="status" className="text-sm text-slate-300">Подготавливаем фотографии...</p>}
                         <input
                             id="ticket-report-media"
                             name="media"
                             type="file"
                             accept={supportedImageAcceptValue}
                             multiple
-                            disabled={isSubmitting || isUploadingMedia || Boolean(removingPreviewId) || isSubmitted}
+                            disabled={isSubmitting || isPreparingMedia || isUploadingMedia || Boolean(removingPreviewId) || isSubmitted}
                             className="sr-only"
                             onChange={handleMediaSelect}
                         />
@@ -510,7 +542,7 @@ export function TicketReportSheet({
                     <div className="sticky bottom-[calc(-1.5rem-env(safe-area-inset-bottom))] -mx-6 border-t border-white/15 bg-slate-950/95 px-6 pt-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] backdrop-blur">
                         <button
                             type="submit"
-                            disabled={isSubmitting || isUploadingMedia || Boolean(removingPreviewId) || isSubmitted}
+                            disabled={isSubmitting || isPreparingMedia || isUploadingMedia || Boolean(removingPreviewId) || isSubmitted}
                             className="flex min-h-14 w-full items-center justify-center rounded-2xl bg-emerald-500 px-5 text-base font-semibold text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-emerald-600/70 sm:text-lg"
                         >
                             <span className="mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/20">
@@ -529,7 +561,9 @@ export function TicketReportSheet({
                                 </svg>
                             </span>
                             <span>
-                                {isSubmitting || isUploadingMedia
+                                {isPreparingMedia
+                                    ? "Подготавливаем фото..."
+                                    : isSubmitting || isUploadingMedia
                                     ? "Сохраняем..."
                                     : isSubmitted
                                       ? "Тикет закрыт"
@@ -544,6 +578,24 @@ export function TicketReportSheet({
                         ) : null}
                     </div>
                 </form>
+                {editingPreviewId && mediaPreviews.find((item) => item.id === editingPreviewId) ? (
+                    <TicketImageEditorModal
+                        key={editingPreviewId}
+                        item={mediaPreviews.find((item) => item.id === editingPreviewId)}
+                        onClose={() => setEditingPreviewId("")}
+                        onSave={(file, quarterTurns) => {
+                            const previewUrl = URL.createObjectURL(file);
+                            const previous = mediaPreviewsRef.current.find((item) => item.id === editingPreviewId);
+                            const next = mediaPreviewsRef.current.map((item) => item.id === editingPreviewId
+                                ? { ...item, file, quarterTurns, previewUrl, uploadStatus: "pending" }
+                                : item);
+                            mediaPreviewsRef.current = next;
+                            setMediaPreviews(next);
+                            if (previous) URL.revokeObjectURL(previous.previewUrl);
+                            setEditingPreviewId("");
+                        }}
+                    />
+                ) : null}
         </SlideOverSheet>
     );
 }
