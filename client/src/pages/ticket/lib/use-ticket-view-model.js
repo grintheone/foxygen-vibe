@@ -1,19 +1,9 @@
+import { formatAppDate } from "../../../shared/lib/date-time";
 import { formatWorkDuration, resolveTicketDeadlineDisplay } from "../../dashboard/lib/dashboard-formatters";
 import { FALLBACK_STATUS_ICON, statusIconByType } from "../model/ticket-page-model";
 
 function formatMonthDay(value) {
-    if (!value) {
-        return null;
-    }
-
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
-        return null;
-    }
-
-    const day = String(date.getDate()).padStart(2, "0");
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    return `${day}.${month}`;
+  return formatAppDate(value, { includeYear: false });
 }
 
 function normalizePhoneValue(phone) {

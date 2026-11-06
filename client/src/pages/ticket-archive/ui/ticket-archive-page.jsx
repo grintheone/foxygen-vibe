@@ -1,3 +1,4 @@
+import { APP_TIME_ZONE, parseTimestamp } from "../../../shared/lib/date-time";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import {
@@ -180,19 +181,9 @@ function resolveEmptyMessage(config, activeTab) {
 }
 
 function formatDateFieldValue(value) {
-    if (!value) {
-        return "";
-    }
-
-    const date = new Date(`${value}T00:00:00`);
-    if (Number.isNaN(date.getTime())) {
-        return "";
-    }
-
-    const day = String(date.getDate()).padStart(2, "0");
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const year = date.getFullYear();
-
+    // A date filter is a calendar date, not a timestamp.
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value || "")) return "";
+    const [year, month, day] = value.split("-");
     return `${day}.${month}.${year}`;
 }
 
@@ -222,13 +213,14 @@ function resolveTicketGroupLabel(ticket, activeGrouping) {
         return "Без даты";
     }
 
-    const date = new Date(timelineDate);
+    const date = parseTimestamp(timelineDate);
     if (Number.isNaN(date.getTime())) {
         return "Без даты";
     }
 
     return capitalizeFirstLetter(
         new Intl.DateTimeFormat("ru-RU", {
+            timeZone: APP_TIME_ZONE,
             month: "long",
             year: "numeric",
         }).format(date),

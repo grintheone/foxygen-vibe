@@ -181,17 +181,20 @@ func parseTicketListFilters(r *http.Request) (ticketListFilters, error) {
 	}, nil
 }
 
+var appTimeZone = time.FixedZone("MSK", 3*60*60)
+
 func parseArchiveDate(rawValue string) (*time.Time, error) {
 	if rawValue == "" {
 		return nil, nil
 	}
 
-	parsedDate, err := time.Parse("2006-01-02", rawValue)
+	parsedDate, err := time.ParseInLocation("2006-01-02", rawValue, appTimeZone)
 	if err != nil {
 		return nil, errors.New("date filters must use YYYY-MM-DD")
 	}
 
-	return &parsedDate, nil
+	utcDate := parsedDate.UTC()
+	return &utcDate, nil
 }
 
 func queryArchiveClients(ctx context.Context, db *pgxpool.Pool, executorID, deviceID *pgtype.UUID, filters ticketListFilters) ([]ticketArchiveClientOption, error) {
@@ -1657,12 +1660,12 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 			COUNT(*) FILTER (
 				WHERE COALESCE(status, '') NOT IN ('closed', 'canceled', 'cancelled')
 				  AND assigned_end IS NOT NULL
-				  AND assigned_end::date <= (NOW() AT TIME ZONE 'UTC')::date
+				  AND (assigned_end AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Moscow')::date <= (NOW() AT TIME ZONE 'Europe/Moscow')::date
 			) AS overdue_count,
 			COUNT(*) FILTER (
 				WHERE COALESCE(status, '') = 'closed'
-				  AND closed_at >= date_trunc('month', NOW() AT TIME ZONE 'UTC')
-				  AND closed_at < date_trunc('month', NOW() AT TIME ZONE 'UTC') + INTERVAL '1 month'
+				  AND closed_at >= (date_trunc('month', NOW() AT TIME ZONE 'Europe/Moscow') AT TIME ZONE 'Europe/Moscow' AT TIME ZONE 'UTC')
+				  AND closed_at < ((date_trunc('month', NOW() AT TIME ZONE 'Europe/Moscow') + INTERVAL '1 month') AT TIME ZONE 'Europe/Moscow' AT TIME ZONE 'UTC')
 			) AS closed_this_month_count
 		FROM tickets
 		WHERE executor = $1
@@ -2034,7 +2037,7 @@ func (s *Server) handleComments(w http.ResponseWriter, r *http.Request) {
 		row := s.db.QueryRow(ctx, `
 			WITH inserted AS (
 				INSERT INTO comments (author_id, reference_id, text, created_at)
-				VALUES ($1, $2, $3, NOW())
+				VALUES ($1, $2, $3, (NOW() AT TIME ZONE 'UTC'))
 				RETURNING id, author_id, reference_id, text, created_at
 			)
 			SELECT
@@ -3485,7 +3488,7 @@ func parseTicketDateInput(value string) (time.Time, error) {
 	}
 
 	if parsedDate, err := time.Parse("2006-01-02", value); err == nil {
-		return time.Date(parsedDate.Year(), parsedDate.Month(), parsedDate.Day(), 12, 0, 0, 0, time.UTC), nil
+		return time.Date(parsedDate.Year(), parsedDate.Month(), parsedDate.Day(), 12, 0, 0, 0, appTimeZone).UTC(), nil
 	}
 
 	parsedTimestamp, err := time.Parse(time.RFC3339Nano, value)

@@ -1,5 +1,7 @@
+import { APP_TIME_ZONE } from "../../../shared/lib/date-time";
 export function DashboardHeader({ department, onOpenProfile }) {
   const today = new Intl.DateTimeFormat("ru-RU", {
+    timeZone: APP_TIME_ZONE,
     day: "numeric",
     month: "long",
   }).format(new Date());

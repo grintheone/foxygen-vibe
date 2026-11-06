@@ -1,3 +1,4 @@
+import { parseTimestamp, formatAppDate, toAppDateValue } from "../../../shared/lib/date-time";
 export function resolveTicketReason(ticket) {
   const resolvedReason = ticket?.resolvedReason?.trim();
   if (resolvedReason) {
@@ -22,8 +23,8 @@ export function formatWorkDuration(startedAt, finishedAt) {
     return "Не указано";
   }
 
-  const start = new Date(startedAt).getTime();
-  const finish = new Date(finishedAt).getTime();
+  const start = parseTimestamp(startedAt).getTime();
+  const finish = parseTimestamp(finishedAt).getTime();
   if (Number.isNaN(start) || Number.isNaN(finish) || finish < start) {
     return "Не указано";
   }
@@ -40,35 +41,12 @@ export function formatWorkDuration(startedAt, finishedAt) {
 }
 
 export function formatDateDayMonth(value) {
-  if (!value) {
-    return "--.--";
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "--.--";
-  }
-
-  const day = String(date.getDate()).padStart(2, "0");
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  return `${day}.${month}`;
+  return formatAppDate(value, { includeYear: false }) ?? "--.--";
 }
 
 export function isTodayOrPast(value) {
-  if (!value) {
-    return false;
-  }
-
-  const target = new Date(value);
-  if (Number.isNaN(target.getTime())) {
-    return false;
-  }
-
-  const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const targetStart = new Date(target.getFullYear(), target.getMonth(), target.getDate()).getTime();
-
-  return todayStart >= targetStart;
+  const target = toAppDateValue(value);
+  return Boolean(target) && toAppDateValue(new Date()) >= target;
 }
 
 export function resolveTicketDeadlineDisplay(ticket) {

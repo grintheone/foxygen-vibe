@@ -1,3 +1,4 @@
+import { parseTimestamp } from "../../../shared/lib/date-time";
 import { useMemo } from "react";
 import { Link, useNavigate } from "react-router";
 import { routePaths } from "../../../shared/config/routes";
@@ -11,7 +12,7 @@ function toTimestampOrMin(value) {
         return Number.NEGATIVE_INFINITY;
     }
 
-    const timestamp = new Date(value).getTime();
+    const timestamp = parseTimestamp(value).getTime();
     if (Number.isNaN(timestamp)) {
         return Number.NEGATIVE_INFINITY;
     }

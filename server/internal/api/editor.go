@@ -276,7 +276,7 @@ func (s *Server) handleEditorAgreements(w http.ResponseWriter, r *http.Request) 
 			OR COALESCE(actual_client.title, '') ILIKE '%' || $1 || '%'
 			OR COALESCE(distributor.title, '') ILIKE '%' || $1 || '%'
 			OR COALESCE(cls.title, '') ILIKE '%' || $1 || '%'
-			OR COALESCE(d.serial_number, '') ILIKE '%' || $1 || '%'
+			OR starts_with(LOWER(COALESCE(d.serial_number, '')), LOWER($1))
 		)
 		ORDER BY
 			COALESCE(a.is_active, FALSE) DESC,
@@ -680,7 +680,7 @@ func (s *Server) handleEditorDevices(w http.ResponseWriter, r *http.Request) {
 		WHERE (
 			$1 = ''
 			OR COALESCE(cls.title, '') ILIKE '%' || $1 || '%'
-			OR COALESCE(d.serial_number, '') ILIKE '%' || $1 || '%'
+			OR starts_with(LOWER(COALESCE(d.serial_number, '')), LOWER($1))
 			OR COALESCE(c.title, '') ILIKE '%' || $1 || '%'
 		)
 		ORDER BY
@@ -782,7 +782,7 @@ func (s *Server) handleEditorDeviceOptions(w http.ResponseWriter, r *http.Reques
 		WHERE (
 			$1 = ''
 			OR COALESCE(cls.title, '') ILIKE '%' || $1 || '%'
-			OR COALESCE(d.serial_number, '') ILIKE '%' || $1 || '%'
+			OR starts_with(LOWER(COALESCE(d.serial_number, '')), LOWER($1))
 		)
 		ORDER BY
 			CASE WHEN COALESCE(cls.title, '') = '' THEN 1 ELSE 0 END ASC,
@@ -894,7 +894,7 @@ func (s *Server) handleEditorTickets(w http.ResponseWriter, r *http.Request) {
 			OR COALESCE(tr.title, '') ILIKE '%' || $1 || '%'
 			OR COALESCE(c.title, '') ILIKE '%' || $1 || '%'
 			OR COALESCE(cls.title, '') ILIKE '%' || $1 || '%'
-			OR COALESCE(d.serial_number, '') ILIKE '%' || $1 || '%'
+			OR starts_with(LOWER(COALESCE(d.serial_number, '')), LOWER($1))
 			OR COALESCE(t.description, '') ILIKE '%' || $1 || '%'
 		)
 		ORDER BY

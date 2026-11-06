@@ -1,3 +1,4 @@
+import { appDateTimeToISO, formatAppDateTime, toAppDateTimeValue } from "../../../shared/lib/date-time";
 import { useDeferredValue, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import {
@@ -47,54 +48,15 @@ function EditorCheckboxField({ checked, label, name, onChange }) {
 }
 
 function formatAgreementDateTime(value) {
-    if (!value) {
-        return "Не указано";
-    }
-
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
-        return "Некорректная дата";
-    }
-
-    const day = String(date.getDate()).padStart(2, "0");
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const year = date.getFullYear();
-    const hours = String(date.getHours()).padStart(2, "0");
-    const minutes = String(date.getMinutes()).padStart(2, "0");
-    return `${day}.${month}.${year} ${hours}:${minutes}`;
+  return formatAppDateTime(value) ?? (value ? "Некорректная дата" : "Не указано");
 }
 
 function toDateTimeLocalValue(value) {
-    if (!value) {
-        return "";
-    }
-
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
-        return "";
-    }
-
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    const hours = String(date.getHours()).padStart(2, "0");
-    const minutes = String(date.getMinutes()).padStart(2, "0");
-
-    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  return toAppDateTimeValue(value);
 }
 
 function toIsoDateTimeValue(value) {
-    const normalizedValue = value.trim();
-    if (!normalizedValue) {
-        return "";
-    }
-
-    const date = new Date(normalizedValue);
-    if (Number.isNaN(date.getTime())) {
-        return null;
-    }
-
-    return date.toISOString();
+  return appDateTimeToISO(value);
 }
 
 function getDeviceOptionLabel(device) {

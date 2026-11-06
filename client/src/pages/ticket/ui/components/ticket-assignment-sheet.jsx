@@ -1,3 +1,4 @@
+import { toAppDateValue } from "../../../../shared/lib/date-time";
 import { useEffect, useRef, useState } from "react";
 import {
   useGetClientContactsQuery,
@@ -8,16 +9,7 @@ import { SelectField } from "../../../../shared/ui/select-field";
 import { SlideOverSheet } from "../../../../shared/ui/slide-over-sheet";
 
 function formatTicketDateForInput(value) {
-  if (!value) {
-    return "";
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  return date.toISOString().slice(0, 10);
+  return toAppDateValue(value);
 }
 
 function openDatePicker(inputRef) {

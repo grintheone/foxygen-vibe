@@ -1,3 +1,4 @@
+import { formatAppDate, formatAppTime } from "../../../../shared/lib/date-time";
 import ticketAssignedIcon from "../../../../assets/icons/ticket-assigned.svg";
 import ticketClosedIcon from "../../../../assets/icons/ticket-closed.svg";
 import ticketDoneIcon from "../../../../assets/icons/ticket-done.svg";
@@ -5,36 +6,11 @@ import ticketInWorkIcon from "../../../../assets/icons/ticket-inwork.svg";
 import { UserAvatar } from "../../../../shared/ui/user-avatar";
 
 function formatHistoryDate(value) {
-    if (!value) {
-        return null;
-    }
-
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
-        return null;
-    }
-
-    const day = String(date.getDate()).padStart(2, "0");
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const year = String(date.getFullYear()).slice(-2);
-
-    return `${day}.${month}.${year}`;
+  return formatAppDate(value, { shortYear: true });
 }
 
 function formatHistoryTime(value) {
-    if (!value) {
-        return null;
-    }
-
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
-        return null;
-    }
-
-    const hours = String(date.getHours()).padStart(2, "0");
-    const minutes = String(date.getMinutes()).padStart(2, "0");
-
-    return `${hours}:${minutes}`;
+  return formatAppTime(value);
 }
 
 function buildHistoryEntries(ticket) {
