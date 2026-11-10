@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestLoadLegacyTickets(t *testing.T) {
@@ -87,6 +88,23 @@ func TestLoadLegacyTickets(t *testing.T) {
 
 	if len(items) != 3 {
 		t.Fatalf("expected 3 tickets, got %d", len(items))
+	}
+
+	// The importer must use the same timestamp contract as the live feed.
+	for _, item := range items {
+		if item.ID == "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb" {
+			if got := item.CreatedAt.Format(time.RFC3339); got != "2024-01-02T00:04:05Z" {
+				t.Fatalf("offset-free creation time = %s, want Moscow converted to UTC", got)
+			}
+			if got := item.PlannedStart.Format(time.RFC3339); got != "2024-01-02T21:00:00Z" {
+				t.Fatalf("planned Moscow midnight = %s", got)
+			}
+		}
+		if item.ID == "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" {
+			if got := item.CreatedAt.Format(time.RFC3339); got != "2024-01-02T03:04:05Z" {
+				t.Fatalf("Unix timestamp must stay unchanged: %s", got)
+			}
+		}
 	}
 
 	if items[0].ID != "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" {

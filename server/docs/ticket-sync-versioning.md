@@ -44,3 +44,31 @@ TICKET_VERSION_TEST_DATABASE_URL='postgres://user@localhost:5432/testdb?sslmode=
 
 The PostgreSQL test creates a schema within a transaction and rolls it back.
 Without this variable the PostgreSQL test skips; parser and event tests still run.
+
+## Timestamp contract
+
+PostgreSQL ticket timestamp columns contain UTC wall-clock values. API events
+broadcast through Sidecar and `foxygen.latestTicket` emit these instants with a
+`Z` suffix. Consumers must preserve the instant: retain `Z`/an explicit offset,
+or use Unix milliseconds. Do not strip `Z` and then echo the UTC clock value as
+an offset-free local time.
+
+Live PouchDB sync and the legacy dump importer share a parser:
+
+- Unix milliseconds and strings with `Z` or an explicit offset preserve their instant.
+- Offset-free strings and date-only strings represent Moscow Standard Time
+  (UTC+03:00), and are converted to UTC before storage.
+- This applies to creation, assignment, planned/assigned intervals, work start/end,
+  and closure derived from the actual interval.
+
+For example, legacy `2026-11-09T12:00:00` is stored as `09:00:00` UTC and emitted
+as `2026-11-09T09:00:00Z`; the app displays `12:00` Moscow time. The previous
+parser stored it as `12:00:00` UTC, causing the app to display `15:00`.
+
+Deploying the parser corrects subsequent imports and sync writes. It does not
+rewrite existing rows or rewind the sync checkpoint. Historical repair must
+compare each affected field with its original source value and respect app
+versions/edits. Do not subtract three hours from all rows: Unix/offset-bearing
+source values and app-created timestamps were already absolute UTC instants.
+A full legacy reimport can overwrite later app edits and must not be used as a
+blanket timestamp repair.

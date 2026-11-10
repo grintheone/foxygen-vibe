@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"foxygen-vibe/server/internal/legacytime"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
@@ -1030,40 +1032,11 @@ func parseBool(raw json.RawMessage) bool {
 }
 
 func parseFlexibleTimestamp(raw json.RawMessage) (ticketTimestamp, error) {
-	if len(raw) == 0 || string(raw) == "null" {
-		return ticketTimestamp{}, nil
+	value, err := legacytime.Parse(raw)
+	if err != nil {
+		return ticketTimestamp{}, err
 	}
-
-	var unixMillis int64
-	if err := json.Unmarshal(raw, &unixMillis); err == nil {
-		t := time.UnixMilli(unixMillis).UTC()
-		return ticketTimestamp{Time: &t, Valid: true}, nil
-	}
-
-	var value string
-	if err := json.Unmarshal(raw, &value); err == nil {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			return ticketTimestamp{}, nil
-		}
-
-		layouts := []string{
-			"2006-01-02T15:04:05",
-			time.RFC3339,
-			"2006-01-02 15:04:05",
-			"2006-01-02",
-		}
-		for _, layout := range layouts {
-			if t, err := time.Parse(layout, value); err == nil {
-				utc := t.UTC()
-				return ticketTimestamp{Time: &utc, Valid: true}, nil
-			}
-		}
-
-		return ticketTimestamp{}, fmt.Errorf("unsupported time string %q", value)
-	}
-
-	return ticketTimestamp{}, fmt.Errorf("unsupported timestamp payload %s", string(raw))
+	return ticketTimestamp{Time: value, Valid: value != nil}, nil
 }
 
 func parseInterval(raw json.RawMessage) (ticketInterval, error) {

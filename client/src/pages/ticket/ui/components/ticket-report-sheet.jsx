@@ -112,7 +112,7 @@ export function TicketReportSheet({
     } = useGetDepartmentsQuery(undefined, {
         skip: !isOpen,
     });
-    const [isDoubleSigned, setIsDoubleSigned] = useState(false);
+    const [isDoubleSigned, setIsDoubleSigned] = useState(true);
     const [isSubmitted, setIsSubmitted] = useState(false);
     const [isPreparingMedia, setIsPreparingMedia] = useState(false);
     const [isUploadingMedia, setIsUploadingMedia] = useState(false);
@@ -142,7 +142,7 @@ export function TicketReportSheet({
         if (!isOpen) {
             setEditingPreviewId("");
             setLocalError("");
-            setIsDoubleSigned(false);
+            setIsDoubleSigned(true);
             setIsSubmitted(false);
             setIsUploadingMedia(false);
             setMediaPreviews((previous) => {

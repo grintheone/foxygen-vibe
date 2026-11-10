@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -109,4 +110,32 @@ func (panicQueryTx) QueryRow(context.Context, string, ...any) pgx.Row {
 
 func (panicQueryTx) Conn() *pgx.Conn {
 	panic("unexpected Conn")
+}
+
+func TestParseTicketRecordNormalizesEveryTimestamp(t *testing.T) {
+	item, err := parseTicketRecord(changeEvent{
+		ID: "ticket_1_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+		Doc: []byte(`{
+   "createdAt":"2026-11-09T12:00:00",
+   "assignedAt":"2026-11-09T12:00:00+03:00",
+   "plannedInterval":{"start":"2026-11-09T12:00:00","end":"2026-11-09T12:00:00"},
+   "assignedInterval":{"start":"2026-11-09T12:00:00","end":"2026-11-09T09:00:00Z"},
+   "actualInterval":{"start":"2026-11-09T12:00:00","end":"2026-11-09T12:00:00"},
+   "status":"closed"
+  }`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for field, value := range map[string]*time.Time{
+		"created": item.CreatedAt, "assigned": item.AssignedAt,
+		"planned start": item.PlannedStart, "planned end": item.PlannedEnd,
+		"assigned start": item.AssignedStart, "assigned end": item.AssignedEnd,
+		"work started": item.WorkStartedAt, "work finished": item.WorkFinishedAt,
+		"closed": item.ClosedAt,
+	} {
+		if value == nil || value.Format(time.RFC3339) != "2026-11-09T09:00:00Z" {
+			t.Errorf("%s = %v, want 09:00 UTC (12:00 Moscow)", field, value)
+		}
+	}
 }
