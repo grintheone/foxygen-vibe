@@ -7,6 +7,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -65,17 +66,66 @@ func (s *Server) broadcastTicketEvent(
 		return nil
 	}
 
-	ticket, found, err := s.loadTicketDetail(ctx, ticketID, false)
+	if s.db == nil {
+		// Loader-backed servers are used by snapshot unit tests.
+		attachments, err := s.loadTicketAttachments(ctx, ticketID)
+		if err != nil {
+			return fmt.Errorf("load ticket event attachments: %w", err)
+		}
+		return s.sendTicketEvent(ctx, eventName, operation, ticketID, attachments, s.db)
+	}
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(context.Background())
+	return deliverTicketAttachments(ctx, tx, ticketID, func(attachments []ticketAttachmentResponse) error {
+		return s.sendTicketEvent(ctx, eventName, operation, ticketID, attachments, tx)
+	})
+}
+
+// Serialize delivery per ticket across API instances. Only acknowledge files
+// after a successful sidecar response; failed sends remain eligible for retry.
+func deliverTicketAttachments(ctx context.Context, tx pgx.Tx, ticketID pgtype.UUID, send func([]ticketAttachmentResponse) error) error {
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, "ticket-attachments:"+ticketID.String()); err != nil {
+		return err
+	}
+	var ids []string
+	if err := tx.QueryRow(ctx, `
+		SELECT COALESCE(array_agg(a.id ORDER BY a.uploaded_at, a.id), ARRAY[]::text[])
+		FROM attachments a
+		WHERE a.ref_id = $1 AND NOT EXISTS (
+			SELECT 1 FROM ticket_attachment_deliveries d
+			WHERE d.ticket_id = a.ref_id AND d.attachment_id = a.id
+		)
+	`, ticketID).Scan(&ids); err != nil {
+		return fmt.Errorf("load ticket event attachments: %w", err)
+	}
+	attachments := make([]ticketAttachmentResponse, 0, len(ids))
+	for _, id := range ids {
+		attachments = append(attachments, ticketAttachmentResponse{ID: id})
+	}
+	if err := send(attachments); err != nil {
+		return err
+	}
+	if len(ids) > 0 {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO ticket_attachment_deliveries (ticket_id, attachment_id)
+			SELECT $1, unnest($2::text[]) ON CONFLICT DO NOTHING
+		`, ticketID, ids); err != nil {
+			return fmt.Errorf("record ticket attachment delivery: %w", err)
+		}
+	}
+	return tx.Commit(ctx)
+}
+
+func (s *Server) sendTicketEvent(ctx context.Context, eventName, operation string, ticketID pgtype.UUID, attachments []ticketAttachmentResponse, query ticketDetailQuerier) error {
+	ticket, found, err := s.loadTicketDetailUsing(ctx, query, ticketID, false)
 	if err != nil {
 		return fmt.Errorf("load ticket event snapshot: %w", err)
 	}
 	if !found {
 		return errors.New("load ticket event snapshot: ticket not found")
-	}
-
-	attachments, err := s.loadTicketAttachments(ctx, ticketID)
-	if err != nil {
-		return fmt.Errorf("load ticket event attachments: %w", err)
 	}
 	eventAttachments := make([]ticketEventAttachment, 0, len(attachments))
 	for _, attachment := range attachments {

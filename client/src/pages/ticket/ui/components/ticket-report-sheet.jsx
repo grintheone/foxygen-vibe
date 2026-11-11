@@ -120,6 +120,7 @@ export function TicketReportSheet({
     const removalInFlightRef = useRef(false);
     const [editingPreviewId, setEditingPreviewId] = useState("");
     const uploadInFlightRef = useRef(false);
+    const submitInFlightRef = useRef(false);
     const [localError, setLocalError] = useState("");
     const [mediaPreviews, setMediaPreviews] = useState([]);
     const [recommendationDepartmentId, setRecommendationDepartmentId] = useState("");
@@ -191,17 +192,16 @@ export function TicketReportSheet({
         for (const item of previewItems) {
             try {
                 const uploadedAttachment = await onUploadAttachment(item.file);
-                setMediaPreviews((previous) =>
-                    previous.map((current) =>
-                        current.id !== item.id
-                            ? current
-                            : {
-                                  ...current,
-                                  serverAttachmentId: uploadedAttachment?.id || "",
-                                  uploadStatus: "uploaded",
-                              },
-                    ),
+                if (!uploadedAttachment?.id) throw new Error("Missing attachment ID");
+                const next = mediaPreviewsRef.current.map((current) =>
+                    current.id !== item.id ? current : {
+                        ...current,
+                        serverAttachmentId: uploadedAttachment.id,
+                        uploadStatus: "uploaded",
+                    },
                 );
+                mediaPreviewsRef.current = next;
+                setMediaPreviews(next);
             } catch {
                 uploadFailed = true;
                 setMediaPreviews((previous) =>
@@ -300,7 +300,7 @@ export function TicketReportSheet({
     async function handleSubmit(event) {
         event.preventDefault();
 
-        if (isSubmitting || isPreparingMedia || isUploadingMedia || uploadInFlightRef.current || editingPreviewId || Boolean(removingPreviewId) || isSubmitted) {
+        if (submitInFlightRef.current || isSubmitting || isPreparingMedia || isUploadingMedia || uploadInFlightRef.current || editingPreviewId || Boolean(removingPreviewId) || isSubmitted) {
             return;
         }
 
@@ -323,12 +323,12 @@ export function TicketReportSheet({
 
         setLocalError("");
         setSubmitSuccessMessage("");
-        const previewsToUpload = mediaPreviewsRef.current.filter((item) => !item.serverAttachmentId);
-        if (!(await uploadPreviewItems(previewsToUpload))) {
-            return;
-        }
-
+        submitInFlightRef.current = true;
         try {
+            const previewsToUpload = mediaPreviewsRef.current.filter((item) => !item.serverAttachmentId);
+            if (!(await uploadPreviewItems(previewsToUpload))) {
+                return;
+            }
             const response = await onSubmitClose({
                 closed_at: new Date().toISOString(),
                 double_signed: isDoubleSigned,
@@ -346,6 +346,8 @@ export function TicketReportSheet({
             onCloseSuccess?.(response);
         } catch {
             return;
+        } finally {
+            submitInFlightRef.current = false;
         }
     }
 
@@ -353,7 +355,7 @@ export function TicketReportSheet({
         <SlideOverSheet
             isOpen={isOpen}
             onClose={() => {
-                if (!removalInFlightRef.current && !uploadInFlightRef.current && !isSubmitting && !editingPreviewId) onClose();
+                if (!submitInFlightRef.current && !removalInFlightRef.current && !uploadInFlightRef.current && !isSubmitting && !editingPreviewId) onClose();
             }}
             closeLabel="Закрыть панель отчета"
             eyebrow="Закрытие тикета"

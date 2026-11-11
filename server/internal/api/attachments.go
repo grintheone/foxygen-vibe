@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -16,7 +17,9 @@ import (
 
 	"foxygen-vibe/server/internal/storage"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -132,62 +135,99 @@ func (s *Server) handleTicketAttachmentUpload(w http.ResponseWriter, r *http.Req
 	ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
 	defer cancel()
 
-	canUpload, ticketExists, err := s.canUploadTicketAttachment(ctx, ticketID, userID)
+	tx, err := s.db.Begin(ctx)
 	if err != nil {
-		log.Printf("check upload permissions failed: %v", err)
 		http.Error(w, "failed to upload attachment", http.StatusInternalServerError)
 		return
 	}
-	if !ticketExists {
-		http.Error(w, "ticket not found", http.StatusNotFound)
-		return
-	}
-	if !canUpload {
-		http.Error(w, "ticket must be assigned to you and in worksDone or closed status", http.StatusConflict)
-		return
-	}
-
-	var attachmentID string
-	if err := s.db.QueryRow(ctx, `SELECT gen_random_uuid()::text`).Scan(&attachmentID); err != nil {
-		log.Printf("generate attachment id failed: %v", err)
-		http.Error(w, "failed to upload attachment", http.StatusInternalServerError)
-		return
-	}
-
-	objectKey := storage.TicketAttachmentObjectKey(ticketID.String(), attachmentID, fileName)
-	uploaded, err := s.storage.PutObject(ctx, objectKey, bytes.NewReader(fileBytes), int64(len(fileBytes)), mediaType)
+	defer tx.Rollback(context.Background())
+	digest := fmt.Sprintf("%x", sha256.Sum256(fileBytes))
+	attachment, status, err := uploadTicketAttachment(ctx, tx, ticketID, userID, fileName, mediaType, ext, digest,
+		func(ctx context.Context, attachmentID string) (int64, error) {
+			objectKey := storage.TicketAttachmentObjectKey(ticketID.String(), attachmentID, fileName)
+			uploaded, err := s.storage.PutObject(ctx, objectKey, bytes.NewReader(fileBytes), int64(len(fileBytes)), mediaType)
+			return uploaded.Size, err
+		}, s.storage.RemoveObject)
 	if err != nil {
-		log.Printf("upload attachment to MinIO failed: %v", err)
-		http.Error(w, "failed to upload attachment", http.StatusBadGateway)
+		log.Printf("upload ticket attachment failed: %v", err)
+		message := "failed to upload attachment"
+		if status == http.StatusNotFound || status == http.StatusConflict {
+			message = err.Error()
+		}
+		http.Error(w, message, status)
 		return
+	}
+
+	// A retry also retries any undelivered event; delivery receipts exclude files
+	// already accepted by the sidecar.
+	s.publishTicketUpdated(ticketID)
+	writeJSON(w, status, attachment)
+}
+
+// The ticket lock serializes identical uploads (including requests handled by
+// different API instances) and deletion. A retry returns the original metadata.
+func uploadTicketAttachment(ctx context.Context, tx pgx.Tx, ticketID, userID pgtype.UUID,
+	name, mediaType, ext, digest string, put func(context.Context, string) (int64, error), remove func(context.Context, string) error,
+) (ticketAttachmentResponse, int, error) {
+	var attachment ticketAttachmentResponse
+	var allowed bool
+	err := tx.QueryRow(ctx, `
+		SELECT COALESCE(executor = $2, false) AND COALESCE(status, '') IN ('worksDone', 'closed')
+		FROM tickets WHERE id = $1 FOR UPDATE
+	`, ticketID, userID).Scan(&allowed)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return attachment, http.StatusNotFound, fmt.Errorf("ticket not found")
+	}
+	if err != nil {
+		return attachment, http.StatusInternalServerError, err
+	}
+	if !allowed {
+		return attachment, http.StatusConflict, fmt.Errorf("ticket must be assigned to you and in worksDone or closed status")
 	}
 
 	var uploadedAt pgtype.Timestamptz
-	if err := s.db.QueryRow(ctx, `
-		INSERT INTO attachments (id, name, media_type, ext, ref_id, size_bytes)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING uploaded_at
-	`, attachmentID, fileName, mediaType, ext, ticketID, uploaded.Size).Scan(&uploadedAt); err != nil {
-		if cleanupErr := s.storage.RemoveObject(context.Background(), objectKey); cleanupErr != nil {
-			log.Printf("cleanup orphaned attachment object failed: %v", cleanupErr)
+	err = tx.QueryRow(ctx, `
+		SELECT id, name, media_type, ext, size_bytes, uploaded_at
+		FROM attachments WHERE ref_id = $1 AND content_sha256 = $2
+	`, ticketID, digest).Scan(&attachment.ID, &attachment.Name, &attachment.MediaType, &attachment.Ext, &attachment.SizeBytes, &uploadedAt)
+	status := http.StatusOK
+	if errors.Is(err, pgx.ErrNoRows) {
+		status = http.StatusCreated
+		// A stable object key also makes retries after an interrupted storage
+		// write overwrite the same object instead of leaving another copy.
+		attachment.ID = uuid.NewSHA1(uuid.NameSpaceOID, []byte("ticket-attachment:"+ticketID.String()+":"+digest)).String()
+		size, err := put(ctx, attachment.ID)
+		if err != nil {
+			return attachment, http.StatusBadGateway, err
 		}
-
-		log.Printf("insert attachment failed: %v", err)
-		http.Error(w, "failed to upload attachment", http.StatusInternalServerError)
-		return
+		attachment.Name, attachment.MediaType, attachment.Ext, attachment.SizeBytes = name, mediaType, ext, size
+		err = tx.QueryRow(ctx, `
+			INSERT INTO attachments (id, name, media_type, ext, ref_id, size_bytes, content_sha256)
+			VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING uploaded_at
+		`, attachment.ID, name, mediaType, ext, ticketID, size, digest).Scan(&uploadedAt)
+		if err != nil {
+			// A PostgreSQL error leaves this transaction holding the ticket
+			// lock. On connection loss the lock may already be released and a
+			// retry may be writing the same key, so leave the object intact.
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) {
+				if cleanupErr := remove(ctx, attachment.ID); cleanupErr != nil {
+					log.Printf("cleanup orphaned attachment object failed: %v", cleanupErr)
+				}
+			}
+			return attachment, http.StatusInternalServerError, err
+		}
+	} else if err != nil {
+		return attachment, http.StatusInternalServerError, err
 	}
-
-	s.publishTicketUpdated(ticketID)
-
-	writeJSON(w, http.StatusCreated, ticketAttachmentResponse{
-		ID:          attachmentID,
-		Name:        fileName,
-		MediaType:   mediaType,
-		Ext:         ext,
-		SizeBytes:   uploaded.Size,
-		UploadedAt:  timestamptzToRFC3339(uploadedAt),
-		DownloadURL: buildTicketAttachmentDownloadURL(ticketID.String(), attachmentID),
-	})
+	if err := tx.Commit(ctx); err != nil {
+		// Commit may have succeeded even when its response was lost. Preserve
+		// the object so the next request can safely return the stored record.
+		return attachment, http.StatusInternalServerError, err
+	}
+	attachment.UploadedAt = timestamptzToRFC3339(uploadedAt)
+	attachment.DownloadURL = buildTicketAttachmentDownloadURL(ticketID.String(), attachment.ID)
+	return attachment, status, nil
 }
 
 func (s *Server) handleTicketAttachmentDownload(w http.ResponseWriter, r *http.Request, ticketID pgtype.UUID, attachmentID string) {
@@ -257,29 +297,6 @@ func (s *Server) handleTicketAttachmentDownload(w http.ResponseWriter, r *http.R
 	if _, err := io.Copy(w, object); err != nil {
 		log.Printf("stream attachment failed: %v", err)
 	}
-}
-
-func (s *Server) canUploadTicketAttachment(ctx context.Context, ticketID pgtype.UUID, userID pgtype.UUID) (bool, bool, error) {
-	var status string
-	err := s.db.QueryRow(ctx, `
-		SELECT COALESCE(status, '')
-		FROM tickets
-		WHERE id = $1
-		  AND executor = $2
-	`, ticketID, userID).Scan(&status)
-	if err == nil {
-		return status == "worksDone" || status == "closed", true, nil
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return false, false, err
-	}
-
-	var ticketExists bool
-	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM tickets WHERE id = $1)`, ticketID).Scan(&ticketExists); err != nil {
-		return false, false, err
-	}
-
-	return false, ticketExists, nil
 }
 
 // Delete storage first so a storage failure leaves the database record available

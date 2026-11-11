@@ -143,7 +143,25 @@ snapshot. Legacy dump imports and PouchDB synchronization write directly to Post
 and intentionally do not publish these events. Broadcast failures are logged by the API
 but do not change the result of a ticket mutation that has already committed.
 
-The event's `ticket.attachments` array contains objects with only `id` and `path`.
+The event's `ticket.attachments` array is an incremental list of files not yet
+accepted by the Sidecar, with only `id` and `path` per file. It is not the full
+attachment list: an empty array on a later update does not remove existing files.
+Delivery receipts in PostgreSQL prevent successful sends from being repeated by
+subsequent uploads, ticket closure, editor updates, concurrent API instances, or
+API restarts. The regular ticket detail API still returns the full attachment list.
+Consumers must upsert attachments by `(ticket.id, attachment.id)` to handle the
+ambiguous case where the Sidecar accepts an event but its HTTP response is lost
+(or recording its delivery receipt fails). Failed broadcasts remain eligible for
+the next ticket update; there is no background delivery worker.
+
+New image uploads are deduplicated by SHA-256 of the uploaded bytes within each
+ticket, even when retried with a different filename. A repeat returns the original
+attachment with HTTP 200; a new upload returns HTTP 201. Apply
+`server/db/schema/028_attachment_deduplication.sql` before deploying this API.
+Existing attachment records are preserved; their content hashes are not backfilled.
+They enter the delivery ledger on their first successful event after this upgrade;
+existing duplicates are not deleted automatically.
+
 The `path` is an absolute download URL that works without an app login. Set `PUBLIC_BASE_URL`
 to the externally reachable Foxygen origin (for example, `https://foxygen.example.com`)
 in `server/.env` or the production environment. These links have no time-based
@@ -151,7 +169,7 @@ expiration: each contains a signature granting read access to that attachment.
 They remain valid while the file exists, the public URL is reachable, and `JWT_SECRET`
 is unchanged; rotating that secret invalidates previously issued links. The MinIO
 bucket can remain private. The regular ticket detail API keeps its authenticated
-download URLs. Tickets without attachments emit `attachments: []`. If attachments
+download URLs. Events with no pending attachments emit `attachments: []`. If pending attachments
 exist but `PUBLIC_BASE_URL` is missing, the event fails with a logged configuration
 error instead of emitting unusable URLs.
 

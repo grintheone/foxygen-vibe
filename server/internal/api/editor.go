@@ -2901,12 +2901,20 @@ func (s *Server) loadEditorTicketDetail(ctx context.Context, ticketID pgtype.UUI
 	return s.loadTicketDetail(ctx, ticketID, true)
 }
 
+type ticketDetailQuerier interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
 func (s *Server) loadTicketDetail(ctx context.Context, ticketID pgtype.UUID, visibleOnly bool) (editorTicketDetailResponse, bool, error) {
+	return s.loadTicketDetailUsing(ctx, s.db, ticketID, visibleOnly)
+}
+
+func (s *Server) loadTicketDetailUsing(ctx context.Context, query ticketDetailQuerier, ticketID pgtype.UUID, visibleOnly bool) (editorTicketDetailResponse, bool, error) {
 	if s.editorTicketDetailLoader != nil {
 		return s.editorTicketDetailLoader(ctx, ticketID)
 	}
 
-	row := s.db.QueryRow(ctx, `
+	row := query.QueryRow(ctx, `
 		SELECT
 			t.id,
 			t.app_version,
