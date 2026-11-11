@@ -80,9 +80,13 @@ function DisabledBadgeIcon() {
     );
 }
 
+function isMemberDisabled(member) {
+    return Boolean(member.isDisabled || member.latestTicketStatus === "disabled");
+}
+
 function MemberCard({ latestClientName, member, to, totalTickets }) {
     const status = member.latestTicketStatus;
-    const isDisabled = member.isDisabled || status === "disabled";
+    const isDisabled = isMemberDisabled(member);
     const isInWork = status === "inWork";
     const isDone = status === "worksDone";
     const pulseClass = isInWork ? "bg-[#6A3BF2]/55" : "bg-emerald-400/35";
@@ -170,6 +174,10 @@ export function CoordinatorDashboard({ department }) {
     } = useGetDepartmentMembersQuery(undefined, {
         ...dashboardQueryOptions,
     });
+
+    const sortedDepartmentMembers = useMemo(() => {
+        return [...departmentMembers].sort((a, b) => Number(isMemberDisabled(a)) - Number(isMemberDisabled(b)));
+    }, [departmentMembers]);
 
     const unassignedTickets = useMemo(() => {
         return sortByAssignedEndDesc(departmentTickets.filter((ticket) => ticket.status === "created"));
@@ -275,7 +283,7 @@ export function CoordinatorDashboard({ department }) {
                     </div>
                 ) : departmentMembers.length > 0 ? (
                     <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pt-1 scroll-px-1">
-                        {departmentMembers.map((member) => (
+                        {sortedDepartmentMembers.map((member) => (
                             <MemberCard
                                 key={member.id}
                                 latestClientName={latestClientNameByMemberId[member.id]}
