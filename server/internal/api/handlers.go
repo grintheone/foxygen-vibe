@@ -200,7 +200,7 @@ func parseArchiveDate(rawValue string) (*time.Time, error) {
 func queryArchiveClients(ctx context.Context, db *pgxpool.Pool, executorID, deviceID *pgtype.UUID, filters ticketListFilters) ([]ticketArchiveClientOption, error) {
 	rows, err := db.Query(ctx, `
         SELECT DISTINCT c.id::text, COALESCE(NULLIF(TRIM(c.title), ''), 'Клиент не указан') AS title
-        FROM tickets t
+        FROM visible_tickets t
         JOIN clients c ON c.id = t.client
         LEFT JOIN devices d ON d.id = t.device
         LEFT JOIN classificators cls ON cls.id = d.classificator
@@ -1435,7 +1435,7 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 
 		reasonTitles, err := queryFacetValues(ctx, s.db, `
 			SELECT DISTINCT COALESCE(NULLIF(tr.title, ''), 'Не указано') AS reason_title
-			FROM tickets t
+			FROM visible_tickets t
 			LEFT JOIN devices d ON d.id = t.device
 			LEFT JOIN classificators cls ON cls.id = d.classificator
 			LEFT JOIN ticket_reasons tr ON tr.id = t.reason
@@ -1455,7 +1455,7 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 
 		deviceNames, err := queryFacetValues(ctx, s.db, `
 			SELECT DISTINCT COALESCE(cls.title, '') AS device_name
-			FROM tickets t
+			FROM visible_tickets t
 			LEFT JOIN devices d ON d.id = t.device
 			LEFT JOIN classificators cls ON cls.id = d.classificator
 			LEFT JOIN ticket_reasons tr ON tr.id = t.reason
@@ -1502,7 +1502,7 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 		var total int
 		if err := s.db.QueryRow(ctx, `
 			SELECT COUNT(*)
-			FROM tickets t
+			FROM visible_tickets t
 			LEFT JOIN devices d ON d.id = t.device
 			LEFT JOIN classificators cls ON cls.id = d.classificator
 			LEFT JOIN ticket_reasons tr ON tr.id = t.reason
@@ -1551,7 +1551,7 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 				COALESCE(d.serial_number, ''),
 				COALESCE(c.title, ''),
 				COALESCE(c.address, '')
-			FROM tickets t
+			FROM visible_tickets t
 			LEFT JOIN clients c ON c.id = t.client
 			LEFT JOIN devices d ON d.id = t.device
 			LEFT JOIN classificators cls ON cls.id = d.classificator
@@ -1603,14 +1603,14 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 			COALESCE(u.logo, ''),
 			COALESCE(d.title, ''),
 			COALESCE(r.name, 'user'),
-			u.latest_ticket,
+			lt.id,
 			COALESCE(lt.status, '')
 		FROM accounts AS a
 		JOIN users AS u ON u.user_id = a.user_id
 		LEFT JOIN departments AS d ON d.id = u.department
 		LEFT JOIN account_roles AS ar ON ar.user_id = a.user_id
 		LEFT JOIN roles AS r ON r.id = ar.role_id
-		LEFT JOIN tickets AS lt ON lt.id = u.latest_ticket
+		LEFT JOIN visible_tickets AS lt ON lt.id = u.latest_ticket
 		WHERE a.user_id = $1
 		LIMIT 1
 	`, targetID)
@@ -1667,7 +1667,7 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 				  AND closed_at >= (date_trunc('month', NOW() AT TIME ZONE 'Europe/Moscow') AT TIME ZONE 'Europe/Moscow' AT TIME ZONE 'UTC')
 				  AND closed_at < ((date_trunc('month', NOW() AT TIME ZONE 'Europe/Moscow') + INTERVAL '1 month') AT TIME ZONE 'Europe/Moscow' AT TIME ZONE 'UTC')
 			) AS closed_this_month_count
-		FROM tickets
+		FROM visible_tickets
 		WHERE executor = $1
 	`, targetID).Scan(&stats.Total, &stats.Closed, &stats.Overdue, &stats.ClosedThisMonth); err != nil {
 		log.Printf("load profile ticket stats failed: %v", err)
@@ -1707,7 +1707,7 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 			COALESCE(d.serial_number, ''),
 			COALESCE(c.title, ''),
 			COALESCE(c.address, '')
-		FROM tickets t
+		FROM visible_tickets t
 		LEFT JOIN clients c ON c.id = t.client
 		LEFT JOIN devices d ON d.id = t.device
 		LEFT JOIN classificators cls ON cls.id = d.classificator
@@ -1839,7 +1839,7 @@ func (s *Server) canAccessReference(ctx context.Context, referenceID pgtype.UUID
 			SELECT 1
 			FROM tickets t
 			WHERE (
-				t.id = $1
+				(t.id = $1 AND EXISTS (SELECT 1 FROM visible_tickets v WHERE v.id = t.id))
 				OR t.client = $1
 				OR t.device = $1
 				OR EXISTS (
@@ -2205,7 +2205,7 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 
 		reasonTitles, err := queryFacetValues(ctx, s.db, `
 			SELECT DISTINCT COALESCE(NULLIF(tr.title, ''), 'Не указано') AS reason_title
-			FROM tickets t
+			FROM visible_tickets t
 			LEFT JOIN devices d ON d.id = t.device
 			LEFT JOIN classificators cls ON cls.id = d.classificator
 			LEFT JOIN ticket_reasons tr ON tr.id = t.reason
@@ -2225,7 +2225,7 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 
 		deviceNames, err := queryFacetValues(ctx, s.db, `
 			SELECT DISTINCT COALESCE(cls.title, '') AS device_name
-			FROM tickets t
+			FROM visible_tickets t
 			LEFT JOIN devices d ON d.id = t.device
 			LEFT JOIN classificators cls ON cls.id = d.classificator
 			LEFT JOIN ticket_reasons tr ON tr.id = t.reason
@@ -2284,7 +2284,7 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 		var total int
 		if err := s.db.QueryRow(ctx, `
 			SELECT COUNT(*)
-			FROM tickets t
+			FROM visible_tickets t
 			LEFT JOIN devices d ON d.id = t.device
 			LEFT JOIN classificators cls ON cls.id = d.classificator
 			LEFT JOIN ticket_reasons tr ON tr.id = t.reason
@@ -2334,7 +2334,7 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 				COALESCE(d.serial_number, ''),
 				COALESCE(c.title, ''),
 				COALESCE(c.address, '')
-			FROM tickets t
+			FROM visible_tickets t
 			LEFT JOIN clients c ON c.id = t.client
 			LEFT JOIN devices d ON d.id = t.device
 			LEFT JOIN classificators cls ON cls.id = d.classificator
@@ -2799,7 +2799,7 @@ func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 
 		reasonTitles, err := queryFacetValues(ctx, s.db, `
 			SELECT DISTINCT COALESCE(NULLIF(tr.title, ''), 'Не указано') AS reason_title
-			FROM tickets t
+			FROM visible_tickets t
 			LEFT JOIN devices d ON d.id = t.device
 			LEFT JOIN classificators cls ON cls.id = d.classificator
 			LEFT JOIN ticket_reasons tr ON tr.id = t.reason
@@ -2866,7 +2866,7 @@ func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 		var total int
 		if err := s.db.QueryRow(ctx, `
 			SELECT COUNT(*)
-			FROM tickets t
+			FROM visible_tickets t
 			LEFT JOIN devices d ON d.id = t.device
 			LEFT JOIN classificators cls ON cls.id = d.classificator
 			LEFT JOIN ticket_reasons tr ON tr.id = t.reason
@@ -2917,7 +2917,7 @@ func (s *Server) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 				COALESCE(d.serial_number, ''),
 				COALESCE(c.title, ''),
 				COALESCE(c.address, '')
-			FROM tickets t
+			FROM visible_tickets t
 			LEFT JOIN clients c ON c.id = t.client
 			LEFT JOIN devices d ON d.id = t.device
 			LEFT JOIN classificators cls ON cls.id = d.classificator
@@ -3353,12 +3353,12 @@ func (s *Server) handleDepartmentMembers(w http.ResponseWriter, r *http.Request)
 			COALESCE(d.title, ''),
 			COALESCE(u.logo, ''),
 			a.disabled,
-			u.latest_ticket,
+			lt.id,
 			COALESCE(lt.status, '')
 		FROM users u
 		JOIN accounts a ON a.user_id = u.user_id
 		LEFT JOIN departments d ON d.id = u.department
-		LEFT JOIN tickets lt ON lt.id = u.latest_ticket
+		LEFT JOIN visible_tickets lt ON lt.id = u.latest_ticket
 		WHERE u.department = (
 			SELECT department
 			FROM users
@@ -3651,7 +3651,7 @@ func (s *Server) handleTickets(w http.ResponseWriter, r *http.Request) {
 			COALESCE(d.serial_number, ''),
 			COALESCE(c.title, ''),
 			COALESCE(c.address, '')
-		FROM tickets t
+		FROM visible_tickets t
 		LEFT JOIN clients c ON c.id = t.client
 		LEFT JOIN devices d ON d.id = t.device
 		LEFT JOIN classificators cls ON cls.id = d.classificator
@@ -4247,9 +4247,9 @@ func (s *Server) handleTicketByID(w http.ResponseWriter, r *http.Request) {
 			TRIM(CONCAT(COALESCE(u_exec.first_name, ''), ' ', COALESCE(u_exec.last_name, ''))),
 			COALESCE(u_exec.logo, ''),
 			COALESCE(d_exec.title, ''),
-			t.reference_ticket,
+			(SELECT ref.id FROM visible_tickets ref WHERE ref.id = t.reference_ticket),
 			t.used_materials
-		FROM tickets t
+		FROM visible_tickets t
 		LEFT JOIN ticket_reasons tr ON tr.id = t.reason
 		LEFT JOIN ticket_types tt ON tt.type = t.ticket_type
 		LEFT JOIN ticket_statuses ts ON ts.type = t.status
@@ -5019,7 +5019,7 @@ func (s *Server) handleDepartmentTickets(w http.ResponseWriter, r *http.Request)
 			COALESCE(c.title, ''),
 			COALESCE(c.address, '')
 		FROM users u
-		JOIN tickets t ON t.department = u.department
+		JOIN visible_tickets t ON t.department = u.department
 		LEFT JOIN clients c ON c.id = t.client
 		LEFT JOIN devices d ON d.id = t.device
 		LEFT JOIN classificators cls ON cls.id = d.classificator

@@ -881,7 +881,7 @@ func (s *Server) handleEditorTickets(w http.ResponseWriter, r *http.Request) {
 			COALESCE(d.serial_number, ''),
 			COALESCE(t.urgent, FALSE),
 			t.created_at
-		FROM tickets t
+		FROM visible_tickets t
 		LEFT JOIN ticket_statuses ts ON ts.type = t.status
 		LEFT JOIN ticket_reasons tr ON tr.id = t.reason
 		LEFT JOIN clients c ON c.id = t.client
@@ -2898,6 +2898,10 @@ func (s *Server) loadEditorDeviceDetail(ctx context.Context, deviceID pgtype.UUI
 }
 
 func (s *Server) loadEditorTicketDetail(ctx context.Context, ticketID pgtype.UUID) (editorTicketDetailResponse, bool, error) {
+	return s.loadTicketDetail(ctx, ticketID, true)
+}
+
+func (s *Server) loadTicketDetail(ctx context.Context, ticketID pgtype.UUID, visibleOnly bool) (editorTicketDetailResponse, bool, error) {
 	if s.editorTicketDetailLoader != nil {
 		return s.editorTicketDetailLoader(ctx, ticketID)
 	}
@@ -2956,8 +2960,9 @@ func (s *Server) loadEditorTicketDetail(ctx context.Context, ticketID pgtype.UUI
 		LEFT JOIN users u_exec ON u_exec.user_id = t.executor
 		LEFT JOIN departments dpt ON dpt.id = t.department
 		WHERE t.id = $1
+		  AND (NOT $2::boolean OR EXISTS (SELECT 1 FROM visible_tickets v WHERE v.id = t.id))
 		LIMIT 1
-	`, ticketID)
+	`, ticketID, visibleOnly)
 
 	var (
 		appVersion         int64

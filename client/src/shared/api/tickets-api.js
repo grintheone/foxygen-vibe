@@ -1,5 +1,6 @@
 import { createApi } from "@reduxjs/toolkit/query/react";
 import { baseQueryWithAuth, fetchWithAuth } from "./authenticated-fetch";
+import { editorApi } from "./editor-api";
 
 async function readError(response, fallbackMessage) {
   const errorMessage = await response.text();
@@ -151,6 +152,7 @@ export const ticketsApi = createApi({
         try {
           const { data } = await queryFulfilled;
 
+          dispatch(editorApi.util.invalidateTags(["EditorTicket"]));
           dispatch(
             ticketsApi.util.updateQueryData("getProfileById", userId, (draft) => {
               if (!draft) {
@@ -182,6 +184,10 @@ export const ticketsApi = createApi({
       invalidatesTags: (_, __, { userId }) => [
         "DepartmentMember",
         "Profile",
+        "Ticket",
+        "Tickets",
+        "Client",
+        "Device",
         { type: "Profile", id: userId },
       ],
     }),

@@ -211,7 +211,7 @@ func (s *Server) handleTicketAttachmentDownload(w http.ResponseWriter, r *http.R
 	err := s.db.QueryRow(ctx, `
 		SELECT a.name, a.media_type
 		FROM attachments a
-		JOIN tickets t ON t.id = a.ref_id
+		JOIN visible_tickets t ON t.id = a.ref_id
 		WHERE a.ref_id = $1
 		  AND a.id = $2
 	`, ticketID, attachmentID).Scan(&name, &mediaType)

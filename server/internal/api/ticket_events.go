@@ -65,7 +65,7 @@ func (s *Server) broadcastTicketEvent(
 		return nil
 	}
 
-	ticket, found, err := s.loadEditorTicketDetail(ctx, ticketID)
+	ticket, found, err := s.loadTicketDetail(ctx, ticketID, false)
 	if err != nil {
 		return fmt.Errorf("load ticket event snapshot: %w", err)
 	}
