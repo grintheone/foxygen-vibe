@@ -1347,3 +1347,50 @@ func TestParseTicketListFiltersClientID(t *testing.T) {
 		})
 	}
 }
+
+func TestTicketListScope(t *testing.T) {
+	var requesterID pgtype.UUID
+	if err := requesterID.Scan("123e4567-e89b-12d3-a456-426614174000"); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		query          string
+		wantScope      string
+		wantExecutor   bool
+		wantDepartment bool
+		wantErr        bool
+	}{
+		{query: "", wantScope: "all"},
+		{query: "?scope=all", wantScope: "all"},
+		{query: "?scope=mine", wantScope: "mine", wantExecutor: true},
+		{query: "?scope=department", wantScope: "department", wantDepartment: true},
+		{query: "?scope=%20mine%20", wantScope: "mine", wantExecutor: true},
+		{query: "?scope=someone-else", wantErr: true},
+	} {
+		t.Run(tc.query, func(t *testing.T) {
+			filters, err := parseTicketListFilters(httptest.NewRequest(http.MethodGet, "/tickets"+tc.query, nil))
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("error = %v, wantErr %v", err, tc.wantErr)
+			}
+			if tc.wantErr {
+				return
+			}
+			if filters.Scope != tc.wantScope {
+				t.Fatalf("scope = %s, want %s", filters.Scope, tc.wantScope)
+			}
+			executor := filters.applyRequesterScope(requesterID)
+			if (executor != nil) != tc.wantExecutor {
+				t.Fatalf("executor = %v", executor)
+			}
+			if executor != nil && *executor != requesterID {
+				t.Fatal("executor must be authenticated user")
+			}
+			if filters.DepartmentRequesterID.Valid != tc.wantDepartment {
+				t.Fatalf("department requester = %v", filters.DepartmentRequesterID)
+			}
+			if tc.wantDepartment && filters.DepartmentRequesterID != requesterID {
+				t.Fatal("department must use authenticated user")
+			}
+		})
+	}
+}

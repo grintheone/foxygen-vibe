@@ -16,8 +16,9 @@ function normalizeTicketItems(response) {
   return response?.items || [];
 }
 
-function buildTicketListParams({ clientFilterId, deviceName, endDate, limit, offset, reasonTitle, sortBy, startDate, status }) {
+function buildTicketListParams({ clientFilterId, deviceName, endDate, limit, offset, reasonTitle, sortBy, startDate, status, scope }) {
   return {
+    ...(scope ? { scope } : {}),
     ...(limit ? { limit } : {}),
     ...(offset ? { offset } : {}),
     ...(status ? { status } : {}),
@@ -271,23 +272,23 @@ export const ticketsApi = createApi({
       providesTags: (_, __, { clientId }) => [{ type: "Client", id: clientId }],
     }),
     getDeviceTickets: builder.query({
-      query: ({ clientFilterId, deviceId, deviceName, endDate, limit, offset, reasonTitle, sortBy, startDate, status }) => ({
-        params: buildTicketListParams({ clientFilterId, deviceName, endDate, limit, offset, reasonTitle, sortBy, startDate, status }),
+      query: ({ clientFilterId, deviceId, deviceName, endDate, limit, offset, reasonTitle, sortBy, startDate, status, scope }) => ({
+        params: buildTicketListParams({ clientFilterId, deviceName, endDate, limit, offset, reasonTitle, sortBy, startDate, status, scope }),
         url: `api/devices/${deviceId}/tickets`,
       }),
       transformResponse: normalizeTicketItems,
       providesTags: (_, __, { deviceId }) => [{ type: "Device", id: deviceId }],
     }),
     getDeviceTicketsPage: builder.query({
-      query: ({ clientFilterId, deviceId, deviceName, endDate, limit, offset = 0, reasonTitle, sortBy, startDate, status }) => ({
-        params: buildTicketListParams({ clientFilterId, deviceName, endDate, limit, offset, reasonTitle, sortBy, startDate, status }),
+      query: ({ clientFilterId, deviceId, deviceName, endDate, limit, offset = 0, reasonTitle, sortBy, startDate, status, scope }) => ({
+        params: buildTicketListParams({ clientFilterId, deviceName, endDate, limit, offset, reasonTitle, sortBy, startDate, status, scope }),
         url: `api/devices/${deviceId}/tickets`,
       }),
       providesTags: (_, __, { deviceId }) => [{ type: "Device", id: deviceId }],
     }),
     getDeviceTicketArchiveFacets: builder.query({
-      query: ({ clientFilterId, deviceId, endDate, reasonTitle, startDate, status }) => ({
-        params: buildTicketListParams({ clientFilterId, endDate, reasonTitle, startDate, status }),
+      query: ({ clientFilterId, deviceId, endDate, reasonTitle, startDate, status, scope }) => ({
+        params: buildTicketListParams({ clientFilterId, endDate, reasonTitle, startDate, status, scope }),
         url: `api/devices/${deviceId}/tickets/facets`,
       }),
       providesTags: (_, __, { deviceId }) => [{ type: "Device", id: deviceId }],

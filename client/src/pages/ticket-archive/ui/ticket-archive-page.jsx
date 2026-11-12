@@ -369,6 +369,7 @@ function ArchiveFilterSheet({
     entityTitle,
     isOpen,
     isClientArchive,
+    isDeviceArchive,
     onApply,
     onClose,
     onDraftChange,
@@ -385,6 +386,19 @@ function ArchiveFilterSheet({
             panelClassName="lg:w-[38rem] xl:w-[42rem]"
         >
             <div className="mt-8 space-y-6 pb-28">
+                {isDeviceArchive ? (
+                    <FilterSection title="Тикеты" description="Показать все тикеты оборудования, только свои или тикеты своего отдела.">
+                        <SelectField
+                            name="ticket_scope"
+                            onChange={(event) => onDraftChange("scope", event.target.value)}
+                            value={draftFilters.scope}
+                        >
+                            <option value="all">Все</option>
+                            <option value="mine">Мои</option>
+                            <option value="department">Отдел</option>
+                        </SelectField>
+                    </FilterSection>
+                ) : null}
                 <FilterSection
                     title="Период"
                     description="Ограничьте архив выбранным диапазоном дат или вернитесь к полному периоду."
@@ -767,8 +781,10 @@ export function TicketArchivePage({ entityType }) {
     const [activeClientId, setActiveClientId] = useState("");
     const [activeDeviceName, setActiveDeviceName] = useState("");
     const [activeSortBy, setActiveSortBy] = useState("newest");
+    const [activeScope, setActiveScope] = useState("all");
     const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
     const [filterDraft, setFilterDraft] = useState({
+        scope: "all",
         clientFilterId: "",
         deviceName: "",
         endDate: "",
@@ -850,6 +866,7 @@ export function TicketArchivePage({ entityType }) {
         {
             clientFilterId: activeClientId,
             deviceId: entityId,
+            scope: activeScope,
             deviceName: activeDeviceName,
             endDate: activeEndDate,
             limit: ARCHIVE_PAGE_SIZE,
@@ -906,6 +923,7 @@ export function TicketArchivePage({ entityType }) {
         {
             clientFilterId: filterDraft.clientFilterId,
             deviceId: entityId,
+            scope: filterDraft.scope,
             endDate: draftEndDate,
             reasonTitle: filterDraft.reasonTitle,
             startDate: draftStartDate,
@@ -997,6 +1015,7 @@ export function TicketArchivePage({ entityType }) {
     useEffect(() => {
         setPage(1);
     }, [
+        activeScope,
         activeClientId,
         activeDeviceName,
         activeEndDate,
@@ -1027,6 +1046,7 @@ export function TicketArchivePage({ entityType }) {
 
     function handleResetDraft() {
         setFilterDraft({
+            scope: "all",
             clientFilterId: "",
             deviceName: "",
             endDate: "",
@@ -1039,6 +1059,7 @@ export function TicketArchivePage({ entityType }) {
     }
 
     function handleApplyDraft() {
+        setActiveScope(filterDraft.scope);
         setActiveClientId(filterDraft.clientFilterId);
         setActiveDeviceName(filterDraft.deviceName);
         setActiveGrouping(filterDraft.groupBy);
@@ -1104,6 +1125,7 @@ export function TicketArchivePage({ entityType }) {
                 entityTitle={entityTitle}
                 isOpen={isFilterSheetOpen}
                 isClientArchive={isClientArchive}
+                isDeviceArchive={entityType === "device"}
                 onApply={handleApplyDraft}
                 onClose={() => setIsFilterSheetOpen(false)}
                 onDraftChange={handleDraftChange}
