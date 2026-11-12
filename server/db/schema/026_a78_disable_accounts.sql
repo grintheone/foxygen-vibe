@@ -29,6 +29,12 @@ WHERE a.user_id = u.user_id
   AND LOWER(TRIM(u.first_name)) IN ('артем', 'артём')
   AND a.username::TEXT IS DISTINCT FROM 'chizhikov.artem';
 
+-- Identify Chingiz by ID: the stored names are reversed and the surname differs.
+UPDATE accounts AS a
+SET username = 'dzhelilov.chingiz'
+WHERE a.user_id = '8679a722-a5d8-11f1-8154-40b0765b1e01'::UUID
+  AND a.username::TEXT IS DISTINCT FROM 'dzhelilov.chingiz';
+
 UPDATE accounts AS a
 SET username = 'kozhadey.nikolay'
 FROM users AS u
