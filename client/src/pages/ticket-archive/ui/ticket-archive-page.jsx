@@ -369,7 +369,7 @@ function ArchiveFilterSheet({
     entityTitle,
     isOpen,
     isClientArchive,
-    isDeviceArchive,
+    showScopeFilter,
     onApply,
     onClose,
     onDraftChange,
@@ -386,8 +386,8 @@ function ArchiveFilterSheet({
             panelClassName="lg:w-[38rem] xl:w-[42rem]"
         >
             <div className="mt-8 space-y-6 pb-28">
-                {isDeviceArchive ? (
-                    <FilterSection title="Тикеты" description="Показать все тикеты оборудования, только свои или тикеты своего отдела.">
+                {showScopeFilter ? (
+                    <FilterSection title="Тикеты" description="Показать все тикеты, только свои или тикеты своего отдела.">
                         <SelectField
                             name="ticket_scope"
                             onChange={(event) => onDraftChange("scope", event.target.value)}
@@ -844,6 +844,7 @@ export function TicketArchivePage({ entityType }) {
     } = useGetClientTicketsPageQuery(
         {
             clientId: entityId,
+            scope: activeScope,
             deviceName: activeDeviceName,
             endDate: activeEndDate,
             limit: ARCHIVE_PAGE_SIZE,
@@ -907,6 +908,7 @@ export function TicketArchivePage({ entityType }) {
     } = useGetClientTicketArchiveFacetsQuery(
         {
             clientId: entityId,
+            scope: filterDraft.scope,
             deviceName: filterDraft.deviceName,
             endDate: draftEndDate,
             reasonTitle: filterDraft.reasonTitle,
@@ -1125,7 +1127,7 @@ export function TicketArchivePage({ entityType }) {
                 entityTitle={entityTitle}
                 isOpen={isFilterSheetOpen}
                 isClientArchive={isClientArchive}
-                isDeviceArchive={entityType === "device"}
+                showScopeFilter={isClientArchive || entityType === "device"}
                 onApply={handleApplyDraft}
                 onClose={() => setIsFilterSheetOpen(false)}
                 onDraftChange={handleDraftChange}

@@ -2214,17 +2214,7 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
 
-		executorFilter, err := s.requesterTicketExecutorFilter(ctx, requesterID)
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				http.Error(w, "profile not found", http.StatusNotFound)
-				return
-			}
-
-			log.Printf("load requester role failed: %v", err)
-			http.Error(w, "failed to load client ticket facets", http.StatusInternalServerError)
-			return
-		}
+		executorFilter := filters.applyRequesterScope(requesterID)
 
 		reasonTitles, err := queryFacetValues(ctx, s.db, `
 			SELECT DISTINCT COALESCE(NULLIF(tr.title, ''), 'Не указано') AS reason_title
@@ -2238,8 +2228,9 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 			  AND ($4::timestamp IS NULL OR COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) >= $4::timestamp)
 			  AND ($5::timestamp IS NULL OR COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) < $5::timestamp)
 			  AND ($6::uuid IS NULL OR t.executor = $6::uuid)
+			  AND ($7::uuid IS NULL OR t.department = (SELECT department FROM users WHERE user_id = $7::uuid))
 			ORDER BY reason_title ASC
-		`, clientID, filters.Status, filters.DeviceName, filters.StartDate, filters.EndDate, executorFilter)
+		`, clientID, filters.Status, filters.DeviceName, filters.StartDate, filters.EndDate, executorFilter, filters.DepartmentRequesterID)
 		if err != nil {
 			log.Printf("query client ticket reason facets failed: %v", err)
 			http.Error(w, "failed to load client ticket facets", http.StatusInternalServerError)
@@ -2258,8 +2249,9 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 			  AND ($4::timestamp IS NULL OR COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) >= $4::timestamp)
 			  AND ($5::timestamp IS NULL OR COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) < $5::timestamp)
 			  AND ($6::uuid IS NULL OR t.executor = $6::uuid)
+			  AND ($7::uuid IS NULL OR t.department = (SELECT department FROM users WHERE user_id = $7::uuid))
 			ORDER BY device_name ASC
-		`, clientID, filters.Status, filters.ReasonTitle, filters.StartDate, filters.EndDate, executorFilter)
+		`, clientID, filters.Status, filters.ReasonTitle, filters.StartDate, filters.EndDate, executorFilter, filters.DepartmentRequesterID)
 		if err != nil {
 			log.Printf("query client ticket device facets failed: %v", err)
 			http.Error(w, "failed to load client ticket facets", http.StatusInternalServerError)
@@ -2292,17 +2284,7 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
 
-		executorFilter, err := s.requesterTicketExecutorFilter(ctx, requesterID)
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				http.Error(w, "profile not found", http.StatusNotFound)
-				return
-			}
-
-			log.Printf("load requester role failed: %v", err)
-			http.Error(w, "failed to load client tickets", http.StatusInternalServerError)
-			return
-		}
+		executorFilter := filters.applyRequesterScope(requesterID)
 
 		var total int
 		if err := s.db.QueryRow(ctx, `
@@ -2318,7 +2300,8 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 			  AND ($5::timestamp IS NULL OR COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) >= $5::timestamp)
 			  AND ($6::timestamp IS NULL OR COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) < $6::timestamp)
 			  AND ($7::uuid IS NULL OR t.executor = $7::uuid)
-		`, clientID, filters.Status, filters.ReasonTitle, filters.DeviceName, filters.StartDate, filters.EndDate, executorFilter).Scan(&total); err != nil {
+			  AND ($8::uuid IS NULL OR t.department = (SELECT department FROM users WHERE user_id = $8::uuid))
+		`, clientID, filters.Status, filters.ReasonTitle, filters.DeviceName, filters.StartDate, filters.EndDate, executorFilter, filters.DepartmentRequesterID).Scan(&total); err != nil {
 			log.Printf("count client tickets failed: %v", err)
 			http.Error(w, "failed to load client tickets", http.StatusInternalServerError)
 			return
@@ -2371,6 +2354,7 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 			  AND ($5::timestamp IS NULL OR COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) >= $5::timestamp)
 			  AND ($6::timestamp IS NULL OR COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) < $6::timestamp)
 			  AND ($7::uuid IS NULL OR t.executor = $7::uuid)
+			  AND ($11::uuid IS NULL OR t.department = (SELECT department FROM users WHERE user_id = $11::uuid))
 			ORDER BY
 			  CASE WHEN $8 = 'oldest' THEN COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) END ASC NULLS FIRST,
 			  CASE WHEN $8 <> 'oldest' THEN COALESCE(t.closed_at, t.workfinished_at, t.assigned_end, t.workstarted_at) END DESC NULLS LAST,
@@ -2379,7 +2363,7 @@ func (s *Server) handleClientByID(w http.ResponseWriter, r *http.Request) {
 			  t.id ASC
 			LIMIT $9
 			OFFSET $10
-		`, clientID, filters.Status, filters.ReasonTitle, filters.DeviceName, filters.StartDate, filters.EndDate, executorFilter, filters.SortBy, limit, offset)
+		`, clientID, filters.Status, filters.ReasonTitle, filters.DeviceName, filters.StartDate, filters.EndDate, executorFilter, filters.SortBy, limit, offset, filters.DepartmentRequesterID)
 		if err != nil {
 			log.Printf("query client tickets failed: %v", err)
 			http.Error(w, "failed to load client tickets", http.StatusInternalServerError)

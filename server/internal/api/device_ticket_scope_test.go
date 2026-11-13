@@ -15,6 +15,15 @@ import (
 
 // Exercise the actual list/count/facet queries against isolated PostgreSQL fixtures.
 func TestDeviceTicketScopes(t *testing.T) {
+	testEntityTicketScopes(t, "device")
+}
+
+func TestClientTicketScopes(t *testing.T) {
+	testEntityTicketScopes(t, "client")
+}
+
+func testEntityTicketScopes(t *testing.T, entity string) {
+	t.Helper()
 	dsn := os.Getenv("TEST_DATABASE_URL")
 	if dsn == "" {
 		t.Skip("set TEST_DATABASE_URL to run PostgreSQL scope regression tests")
@@ -70,12 +79,27 @@ func TestDeviceTicketScopes(t *testing.T) {
 	if _, err = db.Exec(ctx, strings.Replace(string(schema), "CREATE OR REPLACE VIEW", "CREATE TEMP VIEW", 1)); err != nil {
 		t.Fatal(err)
 	}
+	if entity == "client" {
+		_, err = db.Exec(ctx, `
+   INSERT INTO classificators (id, title) SELECT id, title FROM clients;
+   INSERT INTO devices (id, classificator) SELECT id, id FROM clients;
+   UPDATE tickets SET device = id, client = CASE WHEN number = 6
+    THEN '00000000-0000-0000-0000-000000000099' ELSE '00000000-0000-0000-0000-000000000050' END::uuid;
+  `)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 	srv := &Server{db: db, auth: testAuthConfig()}
 	request := func(path, user string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		req.Header.Set("Authorization", "Bearer "+editorAccessToken(t, user))
 		rec := httptest.NewRecorder()
-		srv.handleDeviceByID(rec, req)
+		if entity == "client" {
+			srv.handleClientByID(rec, req)
+		} else {
+			srv.handleDeviceByID(rec, req)
+		}
 		if rec.Code != http.StatusOK {
 			t.Fatalf("%s: status %d: %s", path, rec.Code, rec.Body.String())
 		}
@@ -94,7 +118,7 @@ func TestDeviceTicketScopes(t *testing.T) {
 	} {
 		t.Run(tc.scope+tc.user, func(t *testing.T) {
 			user := "00000000-0000-0000-0000-00000000000" + tc.user
-			path := "/api/devices/00000000-0000-0000-0000-000000000050/tickets"
+			path := "/api/" + entity + "s/00000000-0000-0000-0000-000000000050/tickets"
 			var page struct {
 				Items   []struct{ Number int }
 				Total   int
@@ -114,7 +138,11 @@ func TestDeviceTicketScopes(t *testing.T) {
 			if err := json.Unmarshal(request(path+"/facets?scope="+tc.scope, user).Body.Bytes(), &facets); err != nil {
 				t.Fatal(err)
 			}
-			if len(facets.Clients) != len(tc.numbers) || len(facets.ReasonTitles) != len(tc.numbers) {
+			entityOptions := len(facets.Clients)
+			if entity == "client" {
+				entityOptions = len(facets.DeviceNames)
+			}
+			if entityOptions != len(tc.numbers) || len(facets.ReasonTitles) != len(tc.numbers) {
 				t.Fatalf("facets do not match scope: %+v", facets)
 			}
 			if len(tc.numbers) > 1 {

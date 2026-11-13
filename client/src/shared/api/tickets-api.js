@@ -232,23 +232,23 @@ export const ticketsApi = createApi({
       providesTags: (_, __, referenceId) => [{ type: "Comment", id: referenceId }],
     }),
     getClientTickets: builder.query({
-      query: ({ clientId, deviceName, endDate, limit, offset, reasonTitle, sortBy, startDate, status }) => ({
-        params: buildTicketListParams({ deviceName, endDate, limit, offset, reasonTitle, sortBy, startDate, status }),
+      query: ({ clientId, deviceName, endDate, limit, offset, reasonTitle, sortBy, startDate, status, scope }) => ({
+        params: buildTicketListParams({ deviceName, endDate, limit, offset, reasonTitle, sortBy, startDate, status, scope }),
         url: `api/clients/${clientId}/tickets`,
       }),
       transformResponse: normalizeTicketItems,
       providesTags: (_, __, { clientId }) => [{ type: "Client", id: clientId }],
     }),
     getClientTicketsPage: builder.query({
-      query: ({ clientId, deviceName, endDate, limit, offset = 0, reasonTitle, sortBy, startDate, status }) => ({
-        params: buildTicketListParams({ deviceName, endDate, limit, offset, reasonTitle, sortBy, startDate, status }),
+      query: ({ clientId, deviceName, endDate, limit, offset = 0, reasonTitle, sortBy, startDate, status, scope }) => ({
+        params: buildTicketListParams({ deviceName, endDate, limit, offset, reasonTitle, sortBy, startDate, status, scope }),
         url: `api/clients/${clientId}/tickets`,
       }),
       providesTags: (_, __, { clientId }) => [{ type: "Client", id: clientId }],
     }),
     getClientTicketArchiveFacets: builder.query({
-      query: ({ clientId, deviceName, endDate, reasonTitle, startDate, status }) => ({
-        params: buildTicketListParams({ deviceName, endDate, reasonTitle, startDate, status }),
+      query: ({ clientId, deviceName, endDate, reasonTitle, startDate, status, scope }) => ({
+        params: buildTicketListParams({ deviceName, endDate, reasonTitle, startDate, status, scope }),
         url: `api/clients/${clientId}/tickets/facets`,
       }),
       providesTags: (_, __, { clientId }) => [{ type: "Client", id: clientId }],
