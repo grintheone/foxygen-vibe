@@ -284,6 +284,20 @@ Useful notes:
 
 ## Run the client
 
+Authenticated pages include a floating search icon for client and equipment archives.
+It stays at the lower right while scrolling, above the bottom page actions.
+It opens an animated bottom sheet on mobile and a centered dialog on desktop, with
+Escape/backdrop dismissal and reduced-motion support. Results link directly to each
+entity's archive and include addresses or serial numbers to distinguish similar names.
+
+`GET /api/archive-search?q=...` requires an access token and a query of 2–100 characters.
+It matches all whitespace-separated words, case-insensitively, across client name,
+address and region, or equipment name, serial number, manufacturer and JSON properties.
+Search characters such as `%` and `_` are literal. The UI waits 300 ms after typing
+and shows up to 20 matches per entity type, asking users to narrow larger result sets.
+No schema migration is needed. To verify the search against PostgreSQL, set
+`TEST_DATABASE_URL` and run `go test ./internal/api -run TestArchiveSearch -v` from `server`.
+
 1. Install dependencies:
    `cd client && npm install`
 2. Start Vite:

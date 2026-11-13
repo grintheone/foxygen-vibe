@@ -106,6 +106,10 @@ export const ticketsApi = createApi({
   reducerPath: "ticketsApi",
   baseQuery: baseQueryWithAuth,
   endpoints: (builder) => ({
+    searchArchives: builder.query({
+      query: (q) => ({ url: "api/archive-search", params: { q } }),
+      keepUnusedDataFor: 0,
+    }),
     getMyProfile: builder.query({
       query: () => "api/profile",
       providesTags: ["Profile"],
@@ -484,6 +488,7 @@ export async function loadTicketAttachmentPreviewUrl(downloadUrl) {
 }
 
 export const {
+  useSearchArchivesQuery,
   useAddCommentMutation,
   useGetClientByIdQuery,
   useGetClientAgreementsQuery,

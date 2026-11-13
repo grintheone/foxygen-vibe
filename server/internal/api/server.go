@@ -210,6 +210,7 @@ func (s *Server) startPouchSync(config pouchsync.Config) {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/health", s.handleHealth)
+	mux.HandleFunc("/api/archive-search", s.handleArchiveSearch)
 	mux.HandleFunc("/api/accounts", s.handleAccounts)
 	mux.HandleFunc("/api/auth/login", s.handleLogin)
 	mux.HandleFunc("/api/auth/refresh", s.handleRefresh)
