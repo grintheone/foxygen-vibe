@@ -57,7 +57,7 @@ export function ArchiveSearch() {
   return (
     <>
       <button ref={triggerRef} type="button" onClick={() => setIsOpen(true)} aria-label="Поиск" title="Поиск по архивам" aria-haspopup="dialog" aria-expanded={isOpen}
-        className="fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] right-[calc(1rem+env(safe-area-inset-right))] z-30 inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/20 bg-slate-900/90 text-slate-100 shadow-lg shadow-black/30 backdrop-blur-md transition hover:bg-violet-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-violet-400 sm:right-[calc(1.5rem+env(safe-area-inset-right))]">
+        className="archive-search-trigger fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-[calc(1rem+env(safe-area-inset-right))] z-30 inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/20 bg-slate-900/90 text-slate-100 shadow-lg shadow-black/30 backdrop-blur-md transition hover:bg-violet-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-violet-400 sm:right-[calc(1.5rem+env(safe-area-inset-right))]">
         <SearchIcon />
       </button>
       <dialog ref={dialogRef} aria-labelledby="archive-search-title" className="archive-search-dialog text-slate-100"

@@ -53,6 +53,10 @@ body {
     min-height: 100dvh;
 }
 
+body:has([data-bottom-page-action]) .archive-search-trigger {
+    bottom: calc(6rem + env(safe-area-inset-bottom));
+}
+
 .archive-search-dialog {
     position: fixed;
     inset: 0;
