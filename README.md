@@ -58,6 +58,45 @@ Useful notes:
 - Use the local `with-minio` profile only when you are not connecting to an existing S3-compatible storage service.
 - Before deployment, ask infrastructure which RFC1918 ranges are already in use on that host and pick a Docker subnet outside them.
 
+## Recover from frontend asset or service worker failures
+
+`Failed to fetch dynamically imported module` can occur when an open tab requests
+a chunk from an older deployment. A simultaneous failure to fetch `/sw.js` also
+requires checking origin/reverse-proxy availability, TLS, and the client's network;
+a service worker cannot recover an uncached file while the origin is unreachable.
+
+From the affected network, inspect the responses:
+
+```sh
+curl -I https://me.int.best/
+curl -I https://me.int.best/sw.js
+curl -I https://me.int.best/assets/index-Cfnr0cwJ.js
+```
+
+The HTML and service worker must return HTTP 200 with the correct content types
+and `Cache-Control: no-cache`. An old chunk may legitimately return 404; a missing
+asset must never return the SPA's HTML. Ensure any outer proxy/CDN respects these
+headers and purge previously cached HTML or service worker responses if needed.
+
+Rebuild and replace only the frontend after updating this checkout:
+
+```sh
+docker compose --env-file deploy/production/.env -f docker-compose.production.yml up -d --build --no-deps client
+```
+
+For a browser still stuck after connectivity is restored, open DevTools →
+Application → Service Workers and unregister the worker for this origin. Delete
+only the `foxygen-*` entries under Cache Storage, close other tabs for this app,
+and reload. This does not require clearing cookies or local storage.
+
+The frontend uses cached fingerprinted chunks when available and attempts one
+automatic reload per minute after an online lazy-import failure. Keep previous
+deployment assets available at the hosting layer if open tabs must continue
+working without reloading, including chunks they have never fetched.
+
+Run the recovery regression checks from `client/` with
+`node --test src/shared/lib/service-worker.test.js`.
+
 ## Set up daily PostgreSQL backups
 
 The production database runs inside the `postgres` compose service, so the simplest reliable backup flow is:

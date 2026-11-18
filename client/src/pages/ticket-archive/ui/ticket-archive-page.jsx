@@ -132,7 +132,7 @@ function ArchiveTabButton({ isActive, label, onClick }) {
         <button
             type="button"
             onClick={onClick}
-            className={`min-h-12 rounded-[1rem] border px-5 py-3 text-sm font-semibold shadow-lg shadow-black/15 transition sm:min-h-14 sm:text-base ${
+            className={`min-h-11 shrink-0 whitespace-nowrap rounded-[1rem] border px-3 py-2 text-sm font-semibold shadow-lg shadow-black/15 transition sm:min-h-14 sm:px-5 sm:py-3 sm:text-base ${
                 isActive
                     ? "border-[#8C63FF] bg-gradient-to-r from-[#6E3EF2] to-[#8B4DFF] text-white shadow-[#6E3EF2]/35 hover:from-[#7649F4] hover:to-[#955EFF]"
                     : "border-slate-400/20 bg-[#343c4d] text-slate-100 hover:border-slate-300/30 hover:bg-[#3b4456] hover:text-white"
@@ -149,7 +149,7 @@ function ArchiveFilterButton({ onClick }) {
             type="button"
             onClick={onClick}
             aria-label="Открыть фильтры"
-            className="inline-flex h-12 w-12 items-center justify-center rounded-[1rem] border border-slate-400/20 bg-[#343c4d] text-slate-100 shadow-lg shadow-black/15 transition hover:border-slate-300/30 hover:bg-[#3b4456] hover:text-white sm:h-14 sm:w-14"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-[1rem] border border-slate-400/20 bg-[#343c4d] text-slate-100 shadow-lg shadow-black/15 transition hover:border-slate-300/30 hover:bg-[#3b4456] hover:text-white sm:h-14 sm:w-14"
         >
             <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -633,8 +633,8 @@ function ArchiveTicketsSection({
                 </p>
             ) : null}
 
-            <div className="flex items-center justify-between gap-3">
-                <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pr-2">
+            <div className="flex items-center justify-between gap-2 sm:gap-3">
+                <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto sm:pr-2">
                     {archiveTabs.map((tab) => (
                         <ArchiveTabButton
                             key={tab.id}
