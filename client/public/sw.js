@@ -1,5 +1,5 @@
-const STATIC_CACHE = "foxygen-static-v4";
-const RUNTIME_CACHE = "foxygen-runtime-v4";
+const STATIC_CACHE = "foxygen-static-v3";
+const RUNTIME_CACHE = "foxygen-runtime-v3";
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -25,7 +25,7 @@ self.addEventListener("activate", (event) => {
       .then((keys) =>
         Promise.all(
           keys
-            .filter((key) => key.startsWith("foxygen-") && key !== STATIC_CACHE && key !== RUNTIME_CACHE)
+            .filter((key) => key !== STATIC_CACHE && key !== RUNTIME_CACHE)
             .map((key) => caches.delete(key)),
         ),
       )
@@ -64,9 +64,10 @@ self.addEventListener("fetch", (event) => {
 
 async function handleNavigationRequest(request) {
   try {
-    const response = await fetch(request, { cache: "no-cache" });
+    const response = await fetch(request);
+    const cache = await caches.open(RUNTIME_CACHE);
 
-    await cacheResponse(request, response);
+    cache.put(request, response.clone());
 
     return response;
   } catch (error) {
@@ -87,14 +88,13 @@ async function handleNavigationRequest(request) {
 }
 
 async function handleStaticAssetRequest(request, url) {
-  // Vite fingerprints these URLs: cached chunks remain valid across deploys.
-  // An open tab may still need a chunk removed from the current server image.
+  if (shouldPreferFreshAsset(request, url)) {
+    return fetchAndCache(request);
+  }
+
   const cachedResponse = await caches.match(request);
 
-  if (cachedResponse && (
-    url.pathname.startsWith("/assets/") ||
-    request.destination === "image" || request.destination === "font"
-  )) {
+  if (cachedResponse) {
     return cachedResponse;
   }
 
@@ -105,15 +105,10 @@ async function fetchAndCache(request) {
   try {
     const response = await fetch(request);
 
-    if (!response.ok) {
-      const cachedResponse = await caches.match(request);
-
-      if (cachedResponse) {
-        return cachedResponse;
-      }
+    if (response.ok) {
+      const cache = await caches.open(RUNTIME_CACHE);
+      cache.put(request, response.clone());
     }
-
-    await cacheResponse(request, response);
 
     return response;
   } catch (error) {
@@ -137,15 +132,10 @@ function isStaticAssetRequest(request, url) {
   );
 }
 
-async function cacheResponse(request, response) {
-  if (!response.ok) {
-    return;
-  }
-
-  try {
-    const cache = await caches.open(RUNTIME_CACHE);
-    await cache.put(request, response.clone());
-  } catch {
-    // Storage exhaustion or disabled caching must not discard a network response.
-  }
+function shouldPreferFreshAsset(request, url) {
+  return (
+    request.destination === "script" ||
+    request.destination === "style" ||
+    url.pathname.startsWith("/assets/")
+  );
 }
