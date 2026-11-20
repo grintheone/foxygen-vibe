@@ -55,8 +55,26 @@ Useful notes:
 - Equipment and client ticket lists and archive filters default to all visible tickets for that entity. `/api/devices/{id}/tickets` and `/api/devices/{id}/tickets/facets` and the corresponding `/api/clients/{id}/tickets` endpoints accept `scope=all|mine|department`: `mine` matches the authenticated executor; `department` matches the ticket department to the authenticated user’s department (including unassigned tickets). Users without a department receive no results for `department`.
 - App ticket reads use `027_visible_tickets.sql` to hide tickets whose executor account is disabled, including archives, counts, filters, and direct ticket links. Unassigned tickets remain visible. Stored tickets are preserved and become visible again when the executor account is re-enabled. Apply this schema file before running an updated API outside the production bootstrap. To run the PostgreSQL visibility regression test, set `TEST_DATABASE_URL` and run `go test ./internal/api -run TestTicketVisibility -v` from `server`.
 - On every API startup, `server/db/schema/024_account_access_policy.sql` disables accounts outside `Сервис ВББ`, `Сервис А78`, and `Сервис КПД`, except the test accounts `ivanova.anna.01` and `petrov.ivan.02`. Accounts without a department are also disabled. Exempt accounts keep their current status. This runs after the seeds and is included in rebuilt API images; changing the policy requires updating this SQL file.
+- `server/db/schema/028_close_pre2026_tickets.sql` closes every ticket created before January 1, 2026 (UTC), including canceled tickets and tickets belonging to disabled users. It runs on API startup after rebuilding the image. Affected rows are saved as JSON in `ticket_pre2026_closure_backup` in the same transaction, existing closure timestamps and work details are preserved, and `app_version` is incremented to reject stale legacy sync writes. Already closed tickets are unchanged. On later startups the same rule also closes any newly imported or reopened pre-2026 tickets. This database cleanup does not broadcast Sidecar events.
 - Use the local `with-minio` profile only when you are not connecting to an existing S3-compatible storage service.
 - Before deployment, ask infrastructure which RFC1918 ranges are already in use on that host and pick a Docker subnet outside them.
+
+## Deploy the pre-2026 ticket cleanup
+
+On the production host, from the updated checkout, rebuild and restart the API:
+
+```sh
+docker compose --env-file deploy/production/.env -f docker-compose.production.yml up -d --build --no-deps server
+```
+
+Startup applies `028_close_pre2026_tickets.sql` automatically to the production database. It includes canceled tickets and all users. Original rows are retained in `ticket_pre2026_closure_backup`; later startups retain the first backup for each ticket. Closed tickets are skipped, but reopened or newly imported tickets before the cutoff are closed on the next startup. No production change occurs until this updated code is deployed.
+
+The PostgreSQL regression test runs in an isolated schema and rolls back all its changes:
+
+```sh
+cd server
+TEST_DATABASE_URL='postgres://user@localhost:5432/testdb?sslmode=disable' go test ./internal/dbinit -run TestPre2026Closure -v
+```
 
 ## Set up daily PostgreSQL backups
 
