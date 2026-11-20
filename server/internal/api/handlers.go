@@ -4540,6 +4540,40 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 	defer tx.Rollback(ctx)
 
 	switch input.Status {
+	case "cancelled":
+		var requesterDepartment pgtype.UUID
+		var requesterRole string
+		if err := tx.QueryRow(ctx, `
+			SELECT u.department, COALESCE(r.name, 'user')
+			FROM users u
+			LEFT JOIN account_roles ar ON ar.user_id = u.user_id
+			LEFT JOIN roles r ON r.id = ar.role_id
+			WHERE u.user_id = $1
+		`, userID).Scan(&requesterDepartment, &requesterRole); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				http.Error(w, "profile not found", http.StatusNotFound)
+				return
+			}
+			log.Printf("load cancellation requester failed: %v", err)
+			http.Error(w, "failed to update ticket", http.StatusInternalServerError)
+			return
+		}
+		if requesterRole != "coordinator" || !requesterDepartment.Valid {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+
+		closedAt := time.Now().UTC()
+		conflictMessage = "ticket must belong to your department and be in created status"
+		result, err = tx.Exec(ctx, `
+			UPDATE tickets
+			SET app_version = app_version + 1,
+				status = $1,
+				closed_at = $2
+			WHERE id = $3 AND department = $4 AND status = 'created'
+		`, input.Status, closedAt, ticketID, requesterDepartment)
+		formatted := closedAt.Format(time.RFC3339)
+		response.ClosedAt = &formatted
 	case "assigned":
 		if input.Description == "" {
 			http.Error(w, "description is required", http.StatusBadRequest)
@@ -4871,7 +4905,7 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 			}
 		}
 	default:
-		http.Error(w, "supported transitions: created->assigned, assigned->inWork, inWork->worksDone, worksDone->closed", http.StatusBadRequest)
+		http.Error(w, "supported transitions: created->assigned, created->cancelled, assigned->inWork, inWork->worksDone, worksDone->closed", http.StatusBadRequest)
 		return
 	}
 
@@ -4883,7 +4917,7 @@ func (s *Server) handleTicketByIDPatch(w http.ResponseWriter, r *http.Request, t
 
 	if result.RowsAffected() == 0 {
 		var ticketExists bool
-		if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM tickets WHERE id = $1)`, ticketID).Scan(&ticketExists); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM tickets WHERE id = $1)`, ticketID).Scan(&ticketExists); err != nil {
 			log.Printf("check ticket existence failed: %v", err)
 			http.Error(w, "failed to update ticket", http.StatusInternalServerError)
 			return

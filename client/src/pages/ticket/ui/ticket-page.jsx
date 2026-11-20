@@ -12,6 +12,7 @@ import { PageShell } from "../../../shared/ui/page-shell";
 import { useTicketViewModel } from "../lib/use-ticket-view-model";
 import { buildTicketPatchPayload, resolveTicketActionState } from "../model/ticket-action-widget-model";
 import { TicketClientSection } from "./components/ticket-client-section";
+import { TicketCancellationSheet } from "./components/ticket-cancellation-sheet";
 import { TicketContactCard } from "./components/ticket-contact-card";
 import { TicketDeviceSection } from "./components/ticket-device-section";
 import { TicketHeader } from "./components/ticket-header";
@@ -49,6 +50,8 @@ export function TicketPage() {
     const { ticketId } = useParams();
     const { session } = useAuth();
     const [actionError, setActionError] = useState("");
+    const [isCancellationSheetOpen, setIsCancellationSheetOpen] = useState(false);
+    const [cancellationError, setCancellationError] = useState("");
     const [assignmentSubmitError, setAssignmentSubmitError] = useState("");
     const [isAssignmentSheetOpen, setIsAssignmentSheetOpen] = useState(false);
     const [reportSubmitError, setReportSubmitError] = useState("");
@@ -178,6 +181,20 @@ export function TicketPage() {
         }
     }
 
+    async function handleCancelTicket() {
+        if (!ticket?.id || !actionState?.canCancel || isPatching) {
+            return;
+        }
+
+        setCancellationError("");
+        try {
+            await patchTicket({ ticketId: ticket.id, patch: { status: "cancelled" } }).unwrap();
+            setIsCancellationSheetOpen(false);
+        } catch (error) {
+            setCancellationError(resolveActionErrorMessage(error));
+        }
+    }
+
     async function handleCloseTicketReport(patch) {
         if (!ticket?.id) {
             return null;
@@ -227,7 +244,7 @@ export function TicketPage() {
         <PageShell>
             <section
                 className={`w-full space-y-6 transition ${hasVisibleActionWidget ? "pb-[4.5rem]" : ""} ${
-                    isReportSheetOpen || isAssignmentSheetOpen ? "brightness-75" : ""
+                    isReportSheetOpen || isAssignmentSheetOpen || isCancellationSheetOpen ? "brightness-75" : ""
                 }`}
             >
                 <TicketHeader
@@ -324,7 +341,21 @@ export function TicketPage() {
                 errorMessage={actionError}
                 isLoading={isPatching}
                 onSubmit={handleTicketAction}
+                onCancel={() => {
+                    setCancellationError("");
+                    setIsCancellationSheetOpen(true);
+                }}
             />
+
+            {isCancellationSheetOpen ? (
+                <TicketCancellationSheet
+                    isSubmitting={isPatching}
+                    onClose={() => setIsCancellationSheetOpen(false)}
+                    onConfirm={handleCancelTicket}
+                    submitError={cancellationError}
+                    ticketNumber={ticketNumber}
+                />
+            ) : null}
 
             {isAssignmentSheetOpen ? (
                 <Suspense fallback={null}>

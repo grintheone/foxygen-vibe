@@ -5,6 +5,7 @@ export function TicketStatusActionWidget({
   errorMessage,
   isLoading,
   onSubmit,
+  onCancel,
 }) {
   if (!actionState?.isVisible) {
     return null;
@@ -16,6 +17,7 @@ export function TicketStatusActionWidget({
       disabled={!actionState.isEnabled || isLoading}
       errorMessage={errorMessage}
       onClick={onSubmit}
+      secondaryAction={actionState.canCancel ? { title: "Отменить тикет", onClick: onCancel } : null}
     >
       {isLoading ? (
         "Сохраняем..."

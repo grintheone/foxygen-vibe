@@ -64,7 +64,7 @@ function applyTicketPatchToDraft(draft, patch, response) {
     draft.assigned_end = response?.assigned_end || patch.assigned_end || draft.assigned_end;
   }
 
-  if (Object.prototype.hasOwnProperty.call(patch, "closed_at")) {
+  if (response?.closed_at || Object.prototype.hasOwnProperty.call(patch, "closed_at")) {
     draft.closed_at = response?.closed_at || patch.closed_at || draft.closed_at;
   }
 

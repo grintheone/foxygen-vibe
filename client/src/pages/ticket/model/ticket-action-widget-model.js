@@ -25,6 +25,7 @@ export function resolveTicketActionState({
     return {
       colorClassName: "bg-[#6A3BF2] hover:bg-[#7C52F5]",
       actionType: "openAssignmentSheet",
+      canCancel: true,
       isEnabled: true,
       isVisible: true,
       title: "Назначить инженера",
