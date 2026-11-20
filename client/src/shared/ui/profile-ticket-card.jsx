@@ -90,6 +90,7 @@ export function ProfileTicketCard({ ticket, onOpenTicket }) {
             <p className="truncate text-sm font-semibold text-slate-100">{reasonValue}</p>
           </div>
           <p className="text-base font-semibold text-white">{ticket?.deviceName || "Устройство не указано"}</p>
+          <p className="text-sm font-semibold text-white">С/Н: {ticket?.deviceSerialNumber?.trim() || "Не указан"}</p>
           <p className="text-sm text-slate-300">{detailsValue || "Описание не указано"}</p>
         </div>
 
